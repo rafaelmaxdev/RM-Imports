@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
-import { TAMANHOS, PRECOS_BASE, PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda } from "./types";
+import { TAMANHOS, PRECOS_BASE, PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda, proxyImageUrl } from "./types";
 
 interface CartModalProps {
   produto: {
@@ -66,7 +66,7 @@ export default function CartModal({ produto, onClose }: CartModalProps) {
 
         <div className="modal-produto-info">
           <img
-            src={produto.imagem_url || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23eee'/%3E%3C/svg%3E"}
+            src={proxyImageUrl(produto.imagem_url) || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23eee'/%3E%3C/svg%3E"}
             alt={produto.nome}
             className="modal-produto-img"
           />

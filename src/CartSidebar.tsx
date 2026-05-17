@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useCart } from "./CartContext";
 import type { OrderAddress } from "./types";
-import { formatarMoeda } from "./types";
+import { formatarMoeda, proxyImageUrl } from "./types";
 
 interface CartSidebarProps {
   onClose: () => void;
@@ -70,7 +70,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
               {cart.map((item, i) => (
                 <div key={i} className="cart-item">
                   <img
-                    src={item.imagemUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Crect width='50' height='50' fill='%23eee'/%3E%3C/svg%3E"}
+                    src={proxyImageUrl(item.imagemUrl) || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Crect width='50' height='50' fill='%23eee'/%3E%3C/svg%3E"}
                     alt={item.nome}
                     className="cart-item-img"
                   />

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import type { DbProduto } from "./lib/db";
 import CartModal from "./CartModal";
-import { formatarMoeda, PRECOS_BASE } from "./types";
+import { formatarMoeda, PRECOS_BASE, proxyImageUrl } from "./types";
 
 const CATEGORIAS = [
   "Todas",
@@ -102,7 +102,7 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
                 <img
                   className="produto-img-store"
                   src={
-                    p.imagem_url ||
+                    proxyImageUrl(p.imagem_url) ||
                     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='14'%3ESem imagem%3C/text%3E%3C/svg%3E"
                   }
                   alt={p.nome}

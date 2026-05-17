@@ -3,7 +3,7 @@ import axios from "axios";
 import { supabase } from "./lib/supabase";
 import { addProduto, updateProduto, deleteProduto } from "./lib/db";
 import type { DbProduto } from "./lib/db";
-import { FABRICANTES } from "./types";
+import { FABRICANTES, proxyImageUrl } from "./types";
 
 interface Time {
   id: string;
@@ -86,6 +86,7 @@ function montarNome(
   if (!time || !tipo || !periodo) return "";
   if (nomeCustom) return nomeCustom;
   const loc = localizacao ? ` (${localizacao})` : "";
+  if (tipo === "Retrô") return `${time} ${periodo} Retrô${loc}`;
   return `${time} ${periodo} Versão ${tipo}${loc}`;
 }
 
@@ -534,7 +535,7 @@ export default function ProdutoForm({
                 <img
                   className="produto-img"
                   src={
-                    p.imagem_url ||
+                    proxyImageUrl(p.imagem_url) ||
                     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23eee'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='10'%3ESem imagem%3C/text%3E%3C/svg%3E"
                   }
                   alt={p.nome}

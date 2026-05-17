@@ -7,6 +7,7 @@ import AdminOrders from "./AdminOrders";
 import AdminHistory from "./AdminHistory";
 import OrderConfirmation from "./OrderConfirmation";
 import CartSidebar from "./CartSidebar";
+import NotFound from "./NotFound";
 import { CartProvider, useCart } from "./CartContext";
 import { getProdutos } from "./lib/db";
 import type { DbProduto } from "./lib/db";
@@ -57,6 +58,7 @@ function AppContent() {
             }
           />
           <Route path="/pedido/:id" element={<OrderConfirmation />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       )}
 

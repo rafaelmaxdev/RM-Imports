@@ -1356,3 +1356,23 @@ body {
 .order-item-name {
   font-weight: 600;
 }
+
+/* 404 page */
+.not-found-page {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 4rem 1rem;
+  text-align: center;
+}
+
+.not-found-page h1 {
+  font-size: 6rem;
+  color: var(--primary);
+  margin-bottom: 1rem;
+}
+
+.not-found-page p {
+  font-size: 1.25rem;
+  color: var(--text-light);
+  margin-bottom: 2rem;
+}

@@ -139,3 +139,9 @@ export function montarMensagemFornecedor(order: Order): string {
 
   return msg;
 }
+
+export function proxyImageUrl(url: string): string {
+  if (!url) return "";
+  if (url.startsWith("data:")) return url;
+  return `/api/image?url=${encodeURIComponent(url)}`;
+}

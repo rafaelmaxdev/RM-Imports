@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
-import { TAMANHOS, PRECOS_BASE, PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, calcularPreco, formatarMoeda } from "./types";
+import { TAMANHOS, PRECOS_BASE, PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda } from "./types";
 
 interface CartModalProps {
   produto: {

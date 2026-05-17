@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import type { DbProduto } from "./lib/db";
 import CartModal from "./CartModal";
-import { useCart } from "./CartContext";
 import { formatarMoeda, PRECOS_BASE } from "./types";
 
 const CATEGORIAS = [
@@ -31,7 +30,6 @@ function normalizeNome(nome: string): string {
 }
 
 export default function Loja({ produtos }: { produtos: DbProduto[] }) {
-  const { cart } = useCart();
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("Todas");
   const [filtroTime, setFiltroTime] = useState("");
   const [produtoSelecionado, setProdutoSelecionado] = useState<DbProduto | null>(null);

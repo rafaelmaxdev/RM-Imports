@@ -238,13 +238,14 @@ export default function ProdutoForm({
   }
 
   async function handleAdd() {
-    if (!nomeFinal || saving) return;
+    const nome = nomeCustom || montarNome(time, tipo, periodo, "", localizacao);
+    if (!nome || saving) return;
     setSaving(true);
 
     try {
       const novo = await addProduto(
         toDbProduto({
-          nome: nomeFinal,
+          nome,
           liga,
           time,
           tipo,
@@ -271,25 +272,29 @@ export default function ProdutoForm({
     setTime(normalizedTime);
     setPeriodo(fp.temporada);
     setTipo(fp.tipo);
-    setLocalizacao("");
-    setFabricante("");
-    setNomeCustom(
-      fp.nome !== montarNome(normalizedTime, fp.tipo, fp.temporada, "", "") ? fp.nome : ""
-    );
     setImagemUrl(fp.imagemUrl);
     setYupooUrl(fp.yupooUrl);
     setEditandoId(fp.id);
+
+    const locMatch = fp.nome.match(/\((Casa|Fora)\)/);
+    const loc = locMatch ? locMatch[1] : "";
+    setLocalizacao(loc);
+
+    const nomeGerado = montarNome(normalizedTime, fp.tipo, fp.temporada, "", loc);
+    setNomeCustom(fp.nome !== nomeGerado ? fp.nome : "");
+    setFabricante("");
   }
 
   async function handleSave() {
-    if (!nomeFinal || !editandoId || saving) return;
+    const nome = nomeCustom || montarNome(time, tipo, periodo, "", localizacao);
+    if (!nome || !editandoId || saving) return;
     setSaving(true);
 
     try {
       const atualizado = await updateProduto(
         editandoId,
         toDbProduto({
-          nome: nomeFinal,
+          nome,
           liga,
           time,
           tipo,

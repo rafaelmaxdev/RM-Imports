@@ -19,7 +19,14 @@ export async function getProdutos(): Promise<DbProduto[]> {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data || [];
+  if (!data) return [];
+
+  const seen = new Set<string>();
+  return data.filter((p) => {
+    if (seen.has(p.id)) return false;
+    seen.add(p.id);
+    return true;
+  });
 }
 
 export async function addProduto(p: Omit<DbProduto, "id" | "created_at">): Promise<DbProduto> {

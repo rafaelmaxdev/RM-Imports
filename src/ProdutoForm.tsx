@@ -304,9 +304,7 @@ export default function ProdutoForm({
         })
       );
 
-      setProdutos((prev) =>
-        prev.map((p) => (p.id === editandoId ? atualizado : p))
-      );
+      setProdutos((prev) => prev.map((p) => (p.id === editandoId ? atualizado : p)));
       limparForm();
     } catch (err) {
       console.error("Erro ao salvar:", err);
@@ -340,30 +338,34 @@ export default function ProdutoForm({
 
   const todosTimes = useMemo(() => {
     const set = new Set<string>();
-    produtos.forEach((p) => set.add(p.time));
+    produtos.forEach((p) => set.add(p.time.trim()));
     return Array.from(set).sort();
   }, [produtos]);
 
-  if (loadingTimes) return <div className="loading-page">Carregando times...</div>;
+  if (loadingTimes) return <div className="text-center py-16 text-text-muted text-lg">Carregando times...</div>;
 
   return (
-    <div className="admin-container">
-      <div className="admin-header">
-        <h2>{editandoId ? "Editar Produto" : "Adicionar Produto"}</h2>
-        <button className="btn btn-logout" onClick={handleLogout}>
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl text-primary m-0">{editandoId ? "Editar Produto" : "Adicionar Produto"}</h2>
+        <button
+          className="bg-transparent text-text-muted border border-border px-4 py-1.5 text-sm rounded-md hover:bg-border hover:text-text-main transition-colors"
+          onClick={handleLogout}
+        >
           Sair
         </button>
       </div>
 
-      <div className="form-grid">
-        <div className="field">
-          <label>Liga</label>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-text-muted">Liga</label>
           <select
             value={liga}
             onChange={(e) => {
               setLiga(e.target.value);
               setTime("");
             }}
+            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
           >
             <option value="">Selecione a liga</option>
             {ligas.map((l) => (
@@ -374,12 +376,13 @@ export default function ProdutoForm({
           </select>
         </div>
 
-        <div className="field">
-          <label>Time</label>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-text-muted">Time</label>
           <select
             value={time}
             onChange={(e) => setTime(e.target.value)}
             disabled={!liga}
+            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg disabled:opacity-50"
           >
             <option value="">Selecione o time</option>
             {timesDaLiga.map((t) => (
@@ -390,21 +393,30 @@ export default function ProdutoForm({
           </select>
         </div>
 
-        <div className="field">
-          <label>{isAno ? "Ano" : "Temporada"}</label>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-text-muted">{isAno ? "Ano" : "Temporada"}</label>
           <input
             type="text"
             value={periodo}
             onChange={(e) => setPeriodo(formatarValor(e.target.value, isAno))}
             placeholder={isAno ? "ex: 2026" : "ex: 25/26"}
+            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
           />
         </div>
 
-        <div className="field">
-          <label>
-            Tipo {retro && (isAno ? "(apenas Retrô para 2022 ou anterior)" : "(apenas Retrô para 21/22 ou anterior)")}
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-text-muted">
+            Tipo{" "}
+            {retro &&
+              (isAno
+                ? "(apenas Retrô para 2022 ou anterior)"
+                : "(apenas Retrô para 21/22 ou anterior)")}
           </label>
-          <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+          <select
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value)}
+            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+          >
             {tiposDisponiveis.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -413,76 +425,92 @@ export default function ProdutoForm({
           </select>
         </div>
 
-        <div className="field">
-          <label>Localização (opcional)</label>
-          <select value={localizacao} onChange={(e) => setLocalizacao(e.target.value)}>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-text-muted">Localização (opcional)</label>
+          <select
+            value={localizacao}
+            onChange={(e) => setLocalizacao(e.target.value)}
+            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+          >
             <option value="">Padrão</option>
             <option value="Casa">Casa</option>
             <option value="Fora">Fora</option>
           </select>
         </div>
 
-        <div className="field">
-          <label>Nome personalizado (opcional)</label>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-text-muted">Nome personalizado (opcional)</label>
           <input
             type="text"
             value={nomeCustom}
             onChange={(e) => setNomeCustom(e.target.value)}
             placeholder="Sobrescreve o nome gerado"
+            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
           />
         </div>
 
-        <div className="field">
-          <label>Link da imagem</label>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-text-muted">Link da imagem</label>
           <input
             type="text"
             value={imagemUrl}
             onChange={(e) => setImagemUrl(e.target.value)}
             placeholder="https://..."
+            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
           />
         </div>
 
-        <div className="field">
-          <label>Link da loja Yupoo</label>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-text-muted">Link da loja Yupoo</label>
           <input
             type="text"
             value={yupooUrl}
             onChange={(e) => setYupooUrl(e.target.value)}
             placeholder="https://..."
+            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
           />
         </div>
 
-        <div className="field">
-          <label>Fabricante (visível apenas no admin)</label>
-          <select value={fabricante} onChange={(e) => setFabricante(e.target.value)}>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-text-muted">Fabricante (visível apenas no admin)</label>
+          <select
+            value={fabricante}
+            onChange={(e) => setFabricante(e.target.value)}
+            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+          >
             <option value="">Selecione</option>
             {FABRICANTES.map((f) => (
-              <option key={f} value={f}>{f}</option>
+              <option key={f} value={f}>
+                {f}
+              </option>
             ))}
           </select>
         </div>
 
-        <div className="nome-preview">
+        <div className="px-3 py-3 bg-blue-50 rounded-md font-medium text-primary">
           {nomeFinal || "Preencha os campos acima"}
         </div>
 
-        <div className="form-actions">
+        <div className="flex gap-3">
           {editandoId ? (
             <>
               <button
-                className="btn btn-save"
+                className="flex-1 py-3 text-base font-semibold bg-green-500 text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleSave}
                 disabled={!nomeFinal || saving}
               >
                 {saving ? "Salvando..." : "Salvar"}
               </button>
-              <button className="btn btn-cancel" onClick={limparForm}>
+              <button
+                className="px-6 py-3 text-base font-semibold bg-border text-text-main rounded-md cursor-pointer transition-colors hover:bg-gray-300"
+                onClick={limparForm}
+              >
                 Cancelar
               </button>
             </>
           ) : (
             <button
-              className="btn btn-add"
+              className="flex-1 py-3 text-base font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleAdd}
               disabled={!nomeFinal || saving}
             >
@@ -493,13 +521,14 @@ export default function ProdutoForm({
       </div>
 
       {produtos.length > 0 && (
-        <div className="produtos-section">
-          <h3>Produtos ({produtos.length})</h3>
+        <div className="mt-8">
+          <h3 className="text-xl mb-4 text-primary">Produtos ({produtos.length})</h3>
 
-          <div className="filtros">
+          <div className="flex gap-2 mb-4 flex-wrap">
             <select
               value={filtroTime}
               onChange={(e) => setFiltroTime(e.target.value)}
+              className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
             >
               <option value="">Todos os times</option>
               {todosTimes.map((t) => (
@@ -512,6 +541,7 @@ export default function ProdutoForm({
             <select
               value={filtroTipo}
               onChange={(e) => setFiltroTipo(e.target.value)}
+              className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
             >
               <option value="">Todos os tipos</option>
               {["Torcedor", "Jogador", "Manga Longa", "Retrô"].map((t) => (
@@ -523,7 +553,7 @@ export default function ProdutoForm({
 
             {(filtroTime || filtroTipo) && (
               <button
-                className="btn btn-clear"
+                className="px-3 py-2 text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90"
                 onClick={() => {
                   setFiltroTime("");
                   setFiltroTipo("");
@@ -534,11 +564,11 @@ export default function ProdutoForm({
             )}
           </div>
 
-          <div className="produtos-list">
+          <div className="flex flex-col gap-3">
             {produtosFiltrados.map((p) => (
-              <div key={p.id} className="produto-card">
+              <div key={p.id} className="flex gap-4 p-3 bg-card-bg rounded-md shadow-card items-start">
                 <img
-                  className="produto-img"
+                  className="w-20 h-20 object-cover rounded-md bg-gray-100 flex-shrink-0"
                   src={
                     proxyImageUrl(p.imagem_url) ||
                     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23eee'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='10'%3ESem imagem%3C/text%3E%3C/svg%3E"
@@ -549,9 +579,9 @@ export default function ProdutoForm({
                       "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23eee'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='10'%3EErro%3C/text%3E%3C/svg%3E";
                   }}
                 />
-                <div className="produto-info">
-                  <div className="produto-nome">{p.nome}</div>
-                  <div className="produto-detalhes">
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-[0.95rem]">{p.nome}</div>
+                  <div className="text-sm text-text-muted mt-1">
                     {p.liga} • {p.time} • {p.tipo} • {p.temporada}
                   </div>
                   {p.yupoo_url && (
@@ -559,21 +589,21 @@ export default function ProdutoForm({
                       href={p.yupoo_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="produto-link"
+                      className="text-sm text-accent no-underline inline-block mt-1 hover:underline"
                     >
                       Link Yupoo
                     </a>
                   )}
                 </div>
-                <div className="produto-actions">
+                <div className="flex flex-col gap-2 flex-shrink-0">
                   <button
-                    className="btn btn-edit"
+                    className="bg-yellow-400 text-text-main px-3 py-1.5 text-sm rounded-md cursor-pointer hover:opacity-90"
                     onClick={() => handleEdit(p)}
                   >
                     Editar
                   </button>
                   <button
-                    className="btn btn-remove"
+                    className="bg-red-500 text-white px-3 py-1.5 text-sm rounded-md cursor-pointer hover:opacity-90"
                     onClick={() => handleRemove(p.id)}
                   >
                     Remover
@@ -582,7 +612,7 @@ export default function ProdutoForm({
               </div>
             ))}
             {produtosFiltrados.length === 0 && (
-              <p className="empty-msg">
+              <p className="text-center text-text-muted py-8">
                 Nenhum produto encontrado com os filtros selecionados.
               </p>
             )}

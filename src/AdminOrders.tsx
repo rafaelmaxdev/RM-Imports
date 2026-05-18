@@ -16,39 +16,45 @@ export default function AdminOrders() {
   });
 
   return (
-    <div className="admin-container">
-      <div className="admin-header-row">
-        <h2>Pedidos ({filteredOrders.length})</h2>
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl text-primary m-0">Pedidos ({filteredOrders.length})</h2>
         <input
           type="text"
           placeholder="Buscar por ID, nome ou telefone..."
-          className="search-input"
+          className="px-3 py-2 border border-border rounded-md text-sm w-72"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
       {filteredOrders.length === 0 ? (
-        <p className="empty-msg">Nenhum pedido encontrado.</p>
+        <p className="text-center text-text-muted py-8">Nenhum pedido encontrado.</p>
       ) : (
-        <div className="orders-list">
+        <div className="flex flex-col gap-4">
           {filteredOrders.map((order) => {
             const msg = montarMensagemFornecedor(order);
             const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
 
             return (
-              <div key={order.id} className="order-card">
-                <div className="order-card-header">
+              <div key={order.id} className="bg-card-bg rounded-md p-4 shadow-card">
+                <div className="flex justify-between items-start mb-4">
                   <div>
-                    <span className="order-id">{order.id}</span>
-                    <span className={`order-status ${order.status}`}>
+                    <span className="font-bold text-lg text-primary">{order.id}</span>
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ml-2 ${
+                        order.status === "pendente"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-green-100 text-green-800"
+                      }`}
+                    >
                       {order.status === "pendente" ? "Pendente" : "Confirmado"}
                     </span>
                   </div>
-                  <div className="order-header-right">
-                    <div className="order-date">{order.data} {order.hora}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm text-text-muted">{order.data} {order.hora}</div>
                     <button
-                      className="btn-delete-order"
+                      className="bg-none border-none text-text-muted cursor-pointer text-sm leading-none hover:text-accent transition-colors"
                       onClick={() => {
                         if (confirm(`Excluir pedido ${order.id}? Esta ação não pode ser desfeita.`)) {
                           deleteOrder(order.id);
@@ -61,13 +67,13 @@ export default function AdminOrders() {
                   </div>
                 </div>
 
-                <div className="order-card-items">
+                <div className="flex flex-col gap-2 mb-4">
                   {order.itens.map((item, i) => (
-                    <div key={i} className="order-card-item">
-                      <span className="order-item-name">{item.nome}</span>
+                    <div key={i} className="flex flex-col gap-1 p-2 bg-bg-base rounded-md text-sm">
+                      <span className="font-semibold">{item.nome}</span>
                       <span>{item.tipo} • {item.tamanho} • {item.genero}</span>
                       {item.personalizado && (
-                        <span className="order-personalizado">
+                        <span className="text-accent font-semibold">
                           Personalizado: {item.nomePersonalizado} #{item.numeroPersonalizado}
                         </span>
                       )}
@@ -76,20 +82,20 @@ export default function AdminOrders() {
                 </div>
 
                 {order.endereco && (
-                  <div className="order-address">
+                  <div className="text-sm text-text-muted p-2 bg-bg-base rounded-md mb-4">
                     <strong>Entrega:</strong> {order.endereco.rua}, {order.endereco.numero}
-                    {order.endereco.complemento ? ` - ${order.endereco.complemento}` : ""}
-                    {" "}- {order.endereco.bairro}, {order.endereco.cidade}/{order.endereco.estado}
-                    {" "}| Tel: {order.endereco.telefone}
+                    {order.endereco.complemento ? ` - ${order.endereco.complemento}` : ""}{" "}
+                    - {order.endereco.bairro}, {order.endereco.cidade}/{order.endereco.estado} |
+                    Tel: {order.endereco.telefone}
                   </div>
                 )}
 
-                <div className="order-card-footer">
-                  <div className="order-card-total">Total: {formatarMoeda(order.total)}</div>
-                  <div className="order-card-actions">
+                <div className="flex justify-between items-center pt-3 border-t border-border flex-wrap gap-3">
+                  <div className="font-bold text-lg">Total: {formatarMoeda(order.total)}</div>
+                  <div className="flex gap-2">
                     {order.status === "pendente" && (
                       <button
-                        className="order-action-btn order-action-confirm"
+                        className="inline-flex items-center justify-center px-4 py-2.5 rounded-md border-none text-sm font-semibold cursor-pointer transition-opacity hover:opacity-85 text-white bg-green-500 min-h-[38px] whitespace-nowrap"
                         onClick={() => updateOrderStatus(order.id, "confirmado")}
                       >
                         Confirmar Pagamento
@@ -97,11 +103,16 @@ export default function AdminOrders() {
                     )}
                     {order.status === "confirmado" && (
                       <>
-                        <a href={whatsappUrl} target="_blank" rel="noreferrer" className="order-action-btn order-action-whatsapp">
+                        <a
+                          href={whatsappUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center px-4 py-2.5 rounded-md border-none text-sm font-semibold cursor-pointer transition-opacity hover:opacity-85 text-white bg-green-500 min-h-[38px] whitespace-nowrap no-underline"
+                        >
                           Enviar ao Fornecedor
                         </a>
                         <button
-                          className="order-action-btn order-action-delivery"
+                          className="inline-flex items-center justify-center px-4 py-2.5 rounded-md border-none text-sm font-semibold cursor-pointer transition-opacity hover:opacity-85 text-white bg-cyan-500 min-h-[38px] whitespace-nowrap"
                           onClick={() => {
                             if (confirm(`Confirmar entrega do pedido ${order.id}?`)) {
                               confirmDelivery(order.id);

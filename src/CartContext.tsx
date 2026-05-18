@@ -121,7 +121,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const order = prev.find((o) => o.id === id);
       if (order) {
         const updated = { ...order, status: "entregue" as const };
-        setHistory((h) => [updated, ...h]);
+        setHistory((h) => {
+          if (h.some((o) => o.id === id)) return h;
+          return [updated, ...h];
+        });
         return prev.filter((o) => o.id !== id);
       }
       return prev;

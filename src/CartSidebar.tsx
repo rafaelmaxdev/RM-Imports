@@ -61,7 +61,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[1000]" onClick={onClose}>
-      <div className="absolute right-0 top-0 bottom-0 w-full max-w-[400px] bg-card-bg flex flex-col shadow-[-4px_0_16px_rgba(0,0,0,0.1)]" onClick={(e) => e.stopPropagation()}>
+      <div className="absolute right-0 top-0 bottom-0 w-full max-w-100 bg-card-bg flex flex-col shadow-[-4px_0_16px_rgba(0,0,0,0.1)]" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center px-6 py-4 border-b border-border">
           <h3 className="m-0 text-primary font-semibold">
             {step === "cart" ? `Carrinho (${cart.length})` : "Endereço de Entrega"}
@@ -86,7 +86,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                       "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Crect width='50' height='50' fill='%23eee'/%3E%3C/svg%3E"
                     }
                     alt={item.nome}
-                    className="w-[50px] h-[50px] object-cover rounded-md"
+                    className="w-12.5 h-12.5 object-cover rounded-md"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-sm whitespace-nowrap overflow-hidden text-ellipsis">

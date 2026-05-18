@@ -95,7 +95,7 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
           <select
             value={filtroTime}
             onChange={(e) => setFiltroTime(e.target.value)}
-            className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm min-w-[200px]"
+            className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm min-w-50"
           >
             <option value="">Todos os times</option>
             {timesDisponiveis.map((t) => (
@@ -152,7 +152,7 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
                 </div>
 
                 <button
-                  className="w-full py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 mt-3 flex-shrink-0 h-[44px] flex items-center justify-center"
+                  className="w-full py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 mt-3 flex-shrink-0 h-11 flex items-center justify-center"
                   onClick={() => setProdutoSelecionado(p)}
                 >
                   Adicionar ao Carrinho
@@ -176,7 +176,7 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
 
       <div
         className={`fixed bottom-8 left-1/2 bg-primary text-white px-6 py-3 rounded-md shadow-lg text-sm font-semibold z-[2000] pointer-events-none transition-all duration-300 ${
-          toastVisible ? "animate-toast opacity-100" : "opacity-0 translate-y-[100px]"
+          toastVisible ? "animate-toast opacity-100" : "opacity-0 translate-y-25"
         }`}
       >
         ✓ {toastProduto} adicionado ao carrinho

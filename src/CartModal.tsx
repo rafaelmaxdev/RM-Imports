@@ -82,7 +82,7 @@ export default function CartModal({ produto, onClose, onAdded }: CartModalProps)
               "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23eee'/%3E%3C/svg%3E"
             }
             alt={produto.nome}
-            className="w-[60px] h-[60px] object-cover rounded-md"
+            className="w-15 h-15 object-cover rounded-md"
           />
           <div>
             <div className="font-semibold text-sm">{produto.nome}</div>

@@ -48,7 +48,7 @@ function AppContent() {
         >
           🛒
           {cart.length > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 bg-accent text-white text-xs font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center">
+            <span className="absolute -top-1.5 -right-1.5 bg-accent text-white text-xs font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center">
               {cart.length}
             </span>
           )}

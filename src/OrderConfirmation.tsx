@@ -29,7 +29,7 @@ export default function OrderConfirmation() {
   return (
     <div className="max-w-lg mx-auto px-4 py-8 text-center">
       <div className="mb-8">
-        <div className="w-[60px] h-[60px] bg-green-500 text-white rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
+        <div className="w-15 h-15 bg-green-500 text-white rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
           ✓
         </div>
         <h2 className="text-primary mb-2">Pedido Confirmado!</h2>

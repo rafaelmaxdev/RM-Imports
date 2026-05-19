@@ -25,8 +25,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const contentType = response.headers.get('content-type') || 'image/jpeg';
 
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('CDN-Cache-Control', 'public, max-age=2592000');
 
     res.send(Buffer.from(buffer));
   } catch {

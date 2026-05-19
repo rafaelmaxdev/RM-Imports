@@ -131,7 +131,9 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
             >
               <div className="aspect-square bg-gray-100 overflow-hidden">
                 <ImageCarousel
-                  images={parseImageUrls(p.imagem_urls)}
+                  images={parseImageUrls(p.imagem_urls).map((url) =>
+                    url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")
+                  )}
                   alt={p.nome}
                 />
               </div>

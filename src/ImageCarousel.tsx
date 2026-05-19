@@ -4,7 +4,7 @@ import { proxyImageUrl } from "./types";
 interface ImageCarouselProps {
   images: string[];
   alt: string;
-  /** Extra CSS class for the outer container (e.g. aspect-ratio overrides) */
+  /** Extra CSS class for the outer container */
   className?: string;
 }
 
@@ -14,7 +14,56 @@ const PLACEHOLDER =
 const ERROR_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='14'%3EErro%3C/text%3E%3C/svg%3E";
 
-export default function ImageCarousel({ images, alt, className = "" }: ImageCarouselProps) {
+/** Skeleton placeholder while image loads */
+function ImageWithLoader({
+  src,
+  alt,
+  className,
+  loading,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  loading?: "lazy" | "eager";
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
+
+  if (errored) {
+    return (
+      <img
+        src={ERROR_IMG}
+        alt={alt}
+        className={className}
+        draggable={false}
+      />
+    );
+  }
+
+  return (
+    <>
+      {/* Skeleton placeholder shown while image loads */}
+      {!loaded && (
+        <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-sm" />
+      )}
+      <img
+        src={src}
+        alt={alt}
+        className={`${className} transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+        loading={loading}
+        draggable={false}
+        onLoad={() => setLoaded(true)}
+        onError={() => setErrored(true)}
+      />
+    </>
+  );
+}
+
+export default function ImageCarousel({
+  images,
+  alt,
+  className = "",
+}: ImageCarouselProps) {
   const [current, setCurrent] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
@@ -33,14 +82,12 @@ export default function ImageCarousel({ images, alt, className = "" }: ImageCaro
   /* ---- Single image ---- */
   if (validImages.length === 1) {
     return (
-      <div className={`aspect-square bg-gray-100 overflow-hidden ${className}`}>
-        <img
+      <div className={`aspect-square bg-gray-100 overflow-hidden relative ${className}`}>
+        <ImageWithLoader
           src={proxyImageUrl(validImages[0])}
           alt={alt}
           className="w-full h-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = ERROR_IMG;
-          }}
+          loading="lazy"
         />
       </div>
     );
@@ -74,6 +121,17 @@ export default function ImageCarousel({ images, alt, className = "" }: ImageCaro
     touchStartY.current = null;
   };
 
+  /**
+   * Only load images that are the current slide or adjacent (±1).
+   * Other slides use a transparent placeholder to avoid unnecessary downloads.
+   */
+  const shouldLoad = (index: number) => {
+    const diff = Math.abs(index - current);
+    // Wrap-around distance for circular carousel
+    const wrapDiff = validImages.length - diff;
+    return diff <= 1 || wrapDiff <= 1;
+  };
+
   return (
     <div
       className={`relative aspect-square bg-gray-100 overflow-hidden group ${className}`}
@@ -86,16 +144,17 @@ export default function ImageCarousel({ images, alt, className = "" }: ImageCaro
         style={{ transform: `translateX(-${current * 100}%)` }}
       >
         {validImages.map((url, i) => (
-          <div key={i} className="w-full h-full flex-shrink-0">
-            <img
-              src={proxyImageUrl(url)}
-              alt={`${alt} ${i + 1}`}
-              className="w-full h-full object-cover select-none"
-              draggable={false}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = ERROR_IMG;
-              }}
-            />
+          <div key={i} className="w-full h-full flex-shrink-0 relative">
+            {shouldLoad(i) ? (
+              <ImageWithLoader
+                src={proxyImageUrl(url)}
+                alt={`${alt} ${i + 1}`}
+                className="w-full h-full object-cover select-none"
+                loading={i === current ? "eager" : "lazy"}
+              />
+            ) : (
+              <div className="w-full h-full bg-gray-100" />
+            )}
           </div>
         ))}
       </div>

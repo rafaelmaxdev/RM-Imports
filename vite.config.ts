@@ -43,7 +43,7 @@ function imageProxyPlugin(): Plugin {
             const contentType =
               response.headers.get("content-type") || "image/jpeg";
             res.setHeader("Content-Type", contentType);
-            res.setHeader("Cache-Control", "public, max-age=86400");
+            res.setHeader("Cache-Control", "public, max-age=2592000, stale-while-revalidate=86400");
             res.end(Buffer.from(buffer));
           } catch {
             res.statusCode = 500;

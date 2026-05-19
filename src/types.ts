@@ -145,3 +145,17 @@ export function proxyImageUrl(url: string): string {
   if (url.startsWith("data:")) return url;
   return `/api/image?url=${encodeURIComponent(url)}`;
 }
+
+/**
+ * Converte URL de imagem Yupoo para um tamanho menor.
+ * Yupoo suporta: small.jpg, medium.jpg, large.jpg
+ * Usa "small" para grid (thumbnails) e "medium" para detalhes.
+ */
+export function yupooThumbnailUrl(url: string, size: "small" | "medium" | "large" = "small"): string {
+  if (!url) return "";
+  if (url.startsWith("data:")) return url;
+  // Substitui o tamanho na URL do Yupoo
+  // Ex: https://photo.yupoo.com/minkang/fc499d7c97/medium.jpg → .../small.jpg
+  const replaced = url.replace(/\/(small|medium|large)\.jpg$/i, `/${size}.jpg`);
+  return `/api/image?url=${encodeURIComponent(replaced)}`;
+}

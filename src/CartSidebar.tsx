@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useCart } from "./CartContext";
 import type { OrderAddress } from "./types";
 import { formatarMoeda, proxyImageUrl } from "./types";
@@ -13,9 +13,47 @@ const ESTADOS = [
   "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 ];
 
+interface ViaCepResponse {
+  cep: string;
+  logradouro: string;
+  bairro: string;
+  localidade: string;
+  uf: string;
+  erro?: boolean;
+}
+
+interface RuaSugestao {
+  cep: string;
+  logradouro: string;
+  bairro: string;
+  localidade: string;
+  uf: string;
+}
+
+function formatarCep(valor: string): string {
+  const digits = valor.replace(/\D/g, "").slice(0, 8);
+  if (digits.length > 5) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+  return digits;
+}
+
+function formatarTelefone(valor: string): string {
+  const digits = valor.replace(/\D/g, "").slice(0, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
 export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   const { cart, removeFromCart, total } = useCart();
   const [step, setStep] = useState<"cart" | "address">("cart");
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState("");
+  const [ruaSugestoes, setRuaSugestoes] = useState<RuaSugestao[]>([]);
+  const [ruaLoading, setRuaLoading] = useState(false);
+  const [showSugestoes, setShowSugestoes] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ruaRef = useRef<HTMLDivElement>(null);
 
   const [endereco, setEndereco] = useState<OrderAddress>({
     nome: "",
@@ -30,6 +68,84 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   });
 
   const [erro, setErro] = useState("");
+
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ruaRef.current && !ruaRef.current.contains(e.target as Node)) {
+        setShowSugestoes(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const buscarCep = useCallback(async (cepDigits: string) => {
+    setCepLoading(true);
+    setCepError("");
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cepDigits}/json/`);
+      const data: ViaCepResponse = await res.json();
+      if (data.erro) {
+        setCepError("CEP não encontrado.");
+        return;
+      }
+      setEndereco((prev) => ({
+        ...prev,
+        rua: data.logradouro || prev.rua,
+        bairro: data.bairro || prev.bairro,
+        cidade: data.localidade || prev.cidade,
+        estado: data.uf || prev.estado,
+      }));
+    } catch {
+      setCepError("Erro ao buscar CEP. Verifique a conexão.");
+    } finally {
+      setCepLoading(false);
+    }
+  }, []);
+
+  const buscarRuas = useCallback(async (query: string, uf: string, cidade: string) => {
+    if (query.length < 3 || !uf || !cidade) {
+      setRuaSugestoes([]);
+      setShowSugestoes(false);
+      return;
+    }
+    setRuaLoading(true);
+    try {
+      const res = await fetch(
+        `https://viacep.com.br/ws/${uf}/${encodeURIComponent(cidade)}/${encodeURIComponent(query)}/json/`
+      );
+      const data: RuaSugestao[] = await res.json();
+      setRuaSugestoes(Array.isArray(data) ? data.slice(0, 8) : []);
+      setShowSugestoes(true);
+    } catch {
+      setRuaSugestoes([]);
+    } finally {
+      setRuaLoading(false);
+    }
+  }, []);
+
+  function handleRuaChange(value: string) {
+    updateField("rua", value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      buscarRuas(value, endereco.estado, endereco.cidade);
+    }, 350);
+  }
+
+  function selecionarRua(sug: RuaSugestao) {
+    setEndereco((prev) => ({
+      ...prev,
+      rua: sug.logradouro,
+      bairro: sug.bairro || prev.bairro,
+      cidade: sug.localidade || prev.cidade,
+      estado: sug.uf || prev.estado,
+      cep: sug.cep ? formatarCep(sug.cep) : prev.cep,
+    }));
+    setRuaSugestoes([]);
+    setShowSugestoes(false);
+    setErro("");
+  }
 
   function handleNext() {
     setStep("address");
@@ -57,6 +173,17 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   function updateField(field: keyof OrderAddress, value: string) {
     setEndereco((prev) => ({ ...prev, [field]: value }));
     setErro("");
+  }
+
+  function handleCepChange(rawValue: string) {
+    const formatted = formatarCep(rawValue);
+    const digits = rawValue.replace(/\D/g, "").slice(0, 8);
+    updateField("cep", formatted);
+    setCepError("");
+
+    if (digits.length === 8) {
+      buscarCep(digits);
+    }
   }
 
   return (
@@ -139,31 +266,67 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                 <input
                   type="tel"
                   value={endereco.telefone}
-                  onChange={(e) => updateField("telefone", e.target.value)}
+                  onChange={(e) => updateField("telefone", formatarTelefone(e.target.value))}
                   placeholder="(11) 99999-9999"
+                  maxLength={15}
                   className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                 />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-text-muted mb-1">CEP *</label>
-                <input
-                  type="text"
-                  value={endereco.cep}
-                  onChange={(e) => updateField("cep", e.target.value.replace(/[^0-9-]/g, ""))}
-                  placeholder="00000-000"
-                  className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={endereco.cep}
+                    onChange={(e) => handleCepChange(e.target.value)}
+                    placeholder="00000-000"
+                    maxLength={9}
+                    className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg pr-9"
+                  />
+                  {cepLoading && (
+                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                  )}
+                </div>
+                {cepError && <p className="text-xs text-accent mt-1">{cepError}</p>}
+                {!endereco.cep && (
+                  <p className="text-[11px] text-text-muted mt-0.5">Preencha o CEP primeiro para buscar a rua automaticamente</p>
+                )}
               </div>
               <div className="flex gap-2">
-                <div className="flex-1">
+                <div className="flex-1 relative" ref={ruaRef}>
                   <label className="block text-sm font-semibold text-text-muted mb-1">Rua *</label>
                   <input
                     type="text"
                     value={endereco.rua}
-                    onChange={(e) => updateField("rua", e.target.value)}
-                    placeholder="Nome da rua"
+                    onChange={(e) => handleRuaChange(e.target.value)}
+                    onFocus={() => ruaSugestoes.length > 0 && setShowSugestoes(true)}
+                    placeholder="Comece a digitar a rua..."
+                    autoComplete="off"
                     className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                   />
+                  {ruaLoading && (
+                    <div className="absolute right-2.5 top-[34px] w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                  )}
+                  {showSugestoes && ruaSugestoes.length > 0 && (
+                    <ul className="absolute z-50 left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto bg-card-bg border border-border rounded-md shadow-lg list-none m-0 p-0">
+                      {ruaSugestoes.map((sug, i) => (
+                        <li
+                          key={i}
+                          className="px-3 py-2 text-sm cursor-pointer hover:bg-border transition-colors border-b border-border last:border-b-0"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            selecionarRua(sug);
+                          }}
+                        >
+                          <div className="font-medium text-text-main">{sug.logradouro}</div>
+                          <div className="text-xs text-text-muted">{sug.bairro} — {sug.localidade}/{sug.uf} · CEP {sug.cep}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {endereco.estado && endereco.cidade && (
+                    <p className="text-[11px] text-text-muted mt-0.5">Buscando em {endereco.cidade}/{endereco.estado}</p>
+                  )}
                 </div>
                 <div className="w-20">
                   <label className="block text-sm font-semibold text-text-muted mb-1">Número *</label>

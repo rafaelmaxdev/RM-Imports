@@ -1,20 +1,21 @@
 import { useState } from "react";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
+import ImageCarousel from "./ImageCarousel";
+import { parseImageUrls } from "./lib/db";
 import {
   TAMANHOS,
   PRECOS_BASE,
   PRECO_PERSONALIZACAO,
   ADICIONAL_TAMANHO,
   formatarMoeda,
-  proxyImageUrl,
 } from "./types";
 
 interface CartModalProps {
   produto: {
     id: string;
     nome: string;
-    imagem_url: string;
+    imagem_urls: string[];
     yupoo_url: string;
     tipo: string;
     temporada: string;
@@ -50,7 +51,7 @@ export default function CartModal({ produto, onClose, onAdded }: CartModalProps)
     const item: CartItem = {
       productId: produto.id,
       nome: produto.nome,
-      imagemUrl: produto.imagem_url,
+      imagemUrl: parseImageUrls(produto.imagem_urls)[0] || "",
       yupooUrl: produto.yupoo_url,
       tipo: produto.tipo,
       temporada: produto.temporada,
@@ -75,19 +76,16 @@ export default function CartModal({ produto, onClose, onAdded }: CartModalProps)
         </button>
         <h3 className="mb-4 text-primary font-semibold text-lg">Adicionar ao Carrinho</h3>
 
-        <div className="flex gap-4 items-center mb-4 pb-4 border-b border-border">
-          <img
-            src={
-              proxyImageUrl(produto.imagem_url) ||
-              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23eee'/%3E%3C/svg%3E"
-            }
+        <div className="mb-4 -mx-6 -mt-2">
+          <ImageCarousel
+            images={parseImageUrls(produto.imagem_urls)}
             alt={produto.nome}
-            className="w-15 h-15 object-cover rounded-md"
           />
-          <div>
-            <div className="font-semibold text-sm">{produto.nome}</div>
-            <div className="text-accent font-bold">{formatarMoeda(precoBase)}</div>
-          </div>
+        </div>
+
+        <div className="mb-4 pb-4 border-b border-border">
+          <div className="font-semibold">{produto.nome}</div>
+          <div className="text-accent font-bold text-lg">{formatarMoeda(precoBase)}</div>
         </div>
 
         <div className="mb-4">

@@ -7,9 +7,16 @@ export interface DbProduto {
   time: string;
   tipo: string;
   temporada: string;
-  imagem_url: string;
+  imagem_urls: string[];
   yupoo_url: string;
   created_at: string;
+}
+
+/** Normaliza imagem_urls vindo do Supabase (jsonb) ou formato antigo (string) */
+export function parseImageUrls(value: string[] | string | null | undefined): string[] {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string" && value) return [value];
+  return [];
 }
 
 export async function getProdutos(): Promise<DbProduto[]> {

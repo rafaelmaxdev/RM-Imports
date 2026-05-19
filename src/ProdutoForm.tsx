@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
 import { supabase } from "./lib/supabase";
-import { addProduto, updateProduto, deleteProduto } from "./lib/db";
+import { addProduto, updateProduto, deleteProduto, parseImageUrls } from "./lib/db";
 import type { DbProduto } from "./lib/db";
 import { FABRICANTES, proxyImageUrl } from "./types";
 
@@ -122,7 +122,7 @@ function toDbProduto(p: {
   time: string;
   tipo: string;
   temporada: string;
-  imagemUrl: string;
+  imagemUrls: string[];
   yupooUrl: string;
 }): Omit<DbProduto, "id" | "created_at"> {
   return {
@@ -131,7 +131,7 @@ function toDbProduto(p: {
     time: p.time,
     tipo: p.tipo,
     temporada: p.temporada,
-    imagem_url: p.imagemUrl,
+    imagem_urls: p.imagemUrls.filter(Boolean),
     yupoo_url: p.yupooUrl,
   };
 }
@@ -139,9 +139,216 @@ function toDbProduto(p: {
 function fromDbProduto(p: DbProduto) {
   return {
     ...p,
-    imagemUrl: p.imagem_url,
+    imagemUrls: parseImageUrls(p.imagem_urls),
     yupooUrl: p.yupoo_url,
   };
+}
+
+const PLACEHOLDER_IMG =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='14'%3ESem imagem%3C/text%3E%3C/svg%3E";
+
+const ERROR_IMG =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='14'%3EErro%3C/text%3E%3C/svg%3E";
+
+function AdminProductCard({
+  p,
+  onEdit,
+  onRemove,
+}: {
+  p: DbProduto;
+  onEdit: (p: DbProduto) => void;
+  onRemove: (id: string) => void;
+}) {
+  const imgs = parseImageUrls(p.imagem_urls);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [lightbox, setLightbox] = useState(false);
+
+  const activeImg = imgs.length > 0 ? proxyImageUrl(imgs[activeIdx]) : PLACEHOLDER_IMG;
+
+  const goNext = useCallback(() => {
+    if (imgs.length > 1) setActiveIdx((i) => (i < imgs.length - 1 ? i + 1 : 0));
+  }, [imgs.length]);
+
+  const goPrev = useCallback(() => {
+    if (imgs.length > 1) setActiveIdx((i) => (i > 0 ? i - 1 : imgs.length - 1));
+  }, [imgs.length]);
+
+  return (
+    <>
+      <div className="bg-card-bg rounded-md overflow-hidden shadow-card flex flex-col">
+        {/* Main image — clickable to open lightbox */}
+        <div
+          className="aspect-square bg-gray-100 overflow-hidden relative group cursor-pointer"
+          onClick={() => imgs.length > 0 && setLightbox(true)}
+        >
+          <img
+            className="w-full h-full object-cover"
+            src={activeImg}
+            alt={p.nome}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = ERROR_IMG;
+            }}
+          />
+          {imgs.length > 1 && (
+            <>
+              {/* Nav arrows */}
+              <button
+                onClick={(e) => { e.stopPropagation(); goPrev(); }}
+                className="absolute left-1 top-1/2 -translate-y-1/2 w-6 h-6 bg-white/80 hover:bg-white rounded-full flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
+                aria-label="Anterior"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); goNext(); }}
+                className="absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 bg-white/80 hover:bg-white rounded-full flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
+                aria-label="Próxima"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+              {/* Dot indicators */}
+              <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+                {imgs.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={(e) => { e.stopPropagation(); setActiveIdx(i); }}
+                    className={`w-1.5 h-1.5 rounded-full cursor-pointer transition-all ${
+                      i === activeIdx ? "bg-white scale-125" : "bg-white/60 hover:bg-white/80"
+                    }`}
+                    aria-label={`Imagem ${i + 1}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+          {imgs.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="text-text-muted text-xs">Sem imagem</span>
+            </div>
+          )}
+        </div>
+
+        {/* Thumbnail strip */}
+        {imgs.length > 1 && (
+          <div className="flex gap-1 px-2 pt-2 overflow-x-auto">
+            {imgs.map((url, i) => (
+              <button
+                key={i}
+                onClick={() => setActiveIdx(i)}
+                className={`flex-shrink-0 rounded border-2 transition-all cursor-pointer p-0 overflow-hidden ${
+                  i === activeIdx ? "border-accent" : "border-border hover:border-primary/40"
+                }`}
+              >
+                <img
+                  className="w-10 h-10 object-cover"
+                  src={proxyImageUrl(url)}
+                  alt={`${p.nome} ${i + 1}`}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%23eee'/%3E%3C/svg%3E";
+                  }}
+                />
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="p-3 flex flex-col flex-1">
+          <div className="font-semibold text-sm line-clamp-2 mb-1">{p.nome}</div>
+          <div className="text-xs text-text-muted mb-2">
+            {p.liga} • {p.tipo} • {p.temporada}
+          </div>
+          <div className="mt-auto flex gap-2">
+            <button
+              className="flex-1 bg-yellow-400 text-text-main px-2 py-1.5 text-xs font-semibold rounded-md cursor-pointer hover:opacity-90"
+              onClick={() => onEdit(p)}
+            >
+              Editar
+            </button>
+            <button
+              className="flex-1 bg-red-500 text-white px-2 py-1.5 text-xs font-semibold rounded-md cursor-pointer hover:opacity-90"
+              onClick={() => onRemove(p.id)}
+            >
+              Remover
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Lightbox */}
+      {lightbox && imgs.length > 0 && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-[2000]"
+          onClick={() => setLightbox(false)}
+        >
+          <div className="relative max-w-lg w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setLightbox(false)}
+              className="absolute -top-10 right-0 text-white text-2xl cursor-pointer bg-none border-none hover:opacity-80"
+            >
+              ✕
+            </button>
+
+            <div className="relative">
+              <img
+                className="w-full rounded-md"
+                src={proxyImageUrl(imgs[activeIdx])}
+                alt={p.nome}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = ERROR_IMG;
+                }}
+              />
+
+              {imgs.length > 1 && (
+                <>
+                  <button
+                    onClick={goPrev}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md cursor-pointer"
+                    aria-label="Anterior"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                  </button>
+                  <button
+                    onClick={goNext}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md cursor-pointer"
+                    aria-label="Próxima"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                  </button>
+
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+                    {imgs.map((url, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setActiveIdx(i)}
+                        className={`w-14 h-14 rounded border-2 overflow-hidden cursor-pointer transition-all ${
+                          i === activeIdx ? "border-white scale-110 shadow-lg" : "border-white/40 hover:border-white/70 opacity-70 hover:opacity-100"
+                        }`}
+                      >
+                        <img
+                          className="w-full h-full object-cover"
+                          src={proxyImageUrl(url)}
+                          alt={`${p.nome} ${i + 1}`}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Crect width='56' height='56' fill='%23eee'/%3E%3C/svg%3E";
+                          }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="text-white text-center text-sm mt-2">
+              {activeIdx + 1} / {imgs.length}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 export default function ProdutoForm({
@@ -160,7 +367,7 @@ export default function ProdutoForm({
   const [tipo, setTipo] = useState("Torcedor");
   const [localizacao, setLocalizacao] = useState("");
   const [nomeCustom, setNomeCustom] = useState("");
-  const [imagemUrl, setImagemUrl] = useState("");
+  const [imagemUrls, setImagemUrls] = useState<string[]>([""]);
   const [yupooUrl, setYupooUrl] = useState("");
   const [fabricante, setFabricante] = useState("");
 
@@ -169,6 +376,7 @@ export default function ProdutoForm({
 
   const [filtroTime, setFiltroTime] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
+  const [filtroBusca, setFiltroBusca] = useState("");
 
   const isAno = liga === "Seleções";
 
@@ -232,7 +440,7 @@ export default function ProdutoForm({
     setLocalizacao("");
     setFabricante("");
     setNomeCustom("");
-    setImagemUrl("");
+    setImagemUrls([""]);
     setYupooUrl("");
     setEditandoId(null);
   }
@@ -250,7 +458,7 @@ export default function ProdutoForm({
           time,
           tipo,
           temporada: periodo,
-          imagemUrl,
+          imagemUrls,
           yupooUrl,
         })
       );
@@ -272,7 +480,7 @@ export default function ProdutoForm({
     setTime(normalizedTime);
     setPeriodo(fp.temporada);
     setTipo(fp.tipo);
-    setImagemUrl(fp.imagemUrl);
+    setImagemUrls(fp.imagemUrls.length > 0 ? [...fp.imagemUrls] : [""]);
     setYupooUrl(fp.yupooUrl);
     setEditandoId(fp.id);
 
@@ -299,7 +507,7 @@ export default function ProdutoForm({
           time,
           tipo,
           temporada: periodo,
-          imagemUrl,
+          imagemUrls,
           yupooUrl,
         })
       );
@@ -329,12 +537,17 @@ export default function ProdutoForm({
   }
 
   const produtosFiltrados = useMemo(() => {
+    const busca = filtroBusca.toLowerCase().trim();
     return produtos.filter((p) => {
       if (filtroTime && p.time !== filtroTime) return false;
       if (filtroTipo && p.tipo !== filtroTipo) return false;
+      if (busca) {
+        const campos = [p.nome, p.time, p.liga, p.tipo, p.temporada].join(" ").toLowerCase();
+        if (!campos.includes(busca)) return false;
+      }
       return true;
     });
-  }, [produtos, filtroTime, filtroTipo]);
+  }, [produtos, filtroTime, filtroTipo, filtroBusca]);
 
   const todosTimes = useMemo(() => {
     const set = new Set<string>();
@@ -449,15 +662,40 @@ export default function ProdutoForm({
           />
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-text-muted">Link da imagem</label>
-          <input
-            type="text"
-            value={imagemUrl}
-            onChange={(e) => setImagemUrl(e.target.value)}
-            placeholder="https://..."
-            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-          />
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-text-muted">Links das imagens</label>
+          {imagemUrls.map((url, i) => (
+            <div key={i} className="flex gap-2">
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => {
+                  const newUrls = [...imagemUrls];
+                  newUrls[i] = e.target.value;
+                  setImagemUrls(newUrls);
+                }}
+                placeholder="https://..."
+                className="flex-1 px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+              />
+              {imagemUrls.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setImagemUrls(imagemUrls.filter((_, j) => j !== i))}
+                  className="px-2.5 text-red-500 hover:bg-red-50 rounded-md border border-red-200 text-sm cursor-pointer transition-colors"
+                  aria-label="Remover imagem"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setImagemUrls([...imagemUrls, ""])}
+            className="text-sm text-accent hover:underline cursor-pointer self-start"
+          >
+            + Adicionar imagem
+          </button>
         </div>
 
         <div className="flex flex-col gap-1">
@@ -524,7 +762,15 @@ export default function ProdutoForm({
         <div className="mt-8">
           <h3 className="text-xl mb-4 text-primary">Produtos ({produtos.length})</h3>
 
-          <div className="flex gap-2 mb-4 flex-wrap">
+          <div className="flex gap-2 mb-4 flex-wrap items-center">
+            <input
+              type="text"
+              value={filtroBusca}
+              onChange={(e) => setFiltroBusca(e.target.value)}
+              placeholder="Buscar por nome, time, liga..."
+              className="flex-1 min-w-48 px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
+            />
+
             <select
               value={filtroTime}
               onChange={(e) => setFiltroTime(e.target.value)}
@@ -551,72 +797,31 @@ export default function ProdutoForm({
               ))}
             </select>
 
-            {(filtroTime || filtroTipo) && (
+            {(filtroTime || filtroTipo || filtroBusca) && (
               <button
                 className="px-3 py-2 text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90"
                 onClick={() => {
                   setFiltroTime("");
                   setFiltroTipo("");
+                  setFiltroBusca("");
                 }}
               >
-                Limpar filtros
+                Limpar
               </button>
             )}
           </div>
 
-          <div className="flex flex-col gap-3">
-            {produtosFiltrados.map((p) => (
-              <div key={p.id} className="flex gap-4 p-3 bg-card-bg rounded-md shadow-card items-start">
-                <img
-                  className="w-20 h-20 object-cover rounded-md bg-gray-100 flex-shrink-0"
-                  src={
-                    proxyImageUrl(p.imagem_url) ||
-                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23eee'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='10'%3ESem imagem%3C/text%3E%3C/svg%3E"
-                  }
-                  alt={p.nome}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23eee'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='10'%3EErro%3C/text%3E%3C/svg%3E";
-                  }}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-[0.95rem]">{p.nome}</div>
-                  <div className="text-sm text-text-muted mt-1">
-                    {p.liga} • {p.time} • {p.tipo} • {p.temporada}
-                  </div>
-                  {p.yupoo_url && (
-                    <a
-                      href={p.yupoo_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm text-accent no-underline inline-block mt-1 hover:underline"
-                    >
-                      Link Yupoo
-                    </a>
-                  )}
-                </div>
-                <div className="flex flex-col gap-2 flex-shrink-0">
-                  <button
-                    className="bg-yellow-400 text-text-main px-3 py-1.5 text-sm rounded-md cursor-pointer hover:opacity-90"
-                    onClick={() => handleEdit(p)}
-                  >
-                    Editar
-                  </button>
-                  <button
-                    className="bg-red-500 text-white px-3 py-1.5 text-sm rounded-md cursor-pointer hover:opacity-90"
-                    onClick={() => handleRemove(p.id)}
-                  >
-                    Remover
-                  </button>
-                </div>
-              </div>
-            ))}
-            {produtosFiltrados.length === 0 && (
-              <p className="text-center text-text-muted py-8">
-                Nenhum produto encontrado com os filtros selecionados.
-              </p>
-            )}
-          </div>
+          {produtosFiltrados.length === 0 ? (
+            <p className="text-center text-text-muted py-8">
+              Nenhum produto encontrado com os filtros selecionados.
+            </p>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+              {produtosFiltrados.map((p) => (
+                <AdminProductCard key={p.id} p={p} onEdit={handleEdit} onRemove={handleRemove} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

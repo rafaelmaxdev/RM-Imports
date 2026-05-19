@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import type { DbProduto } from "./lib/db";
+import { parseImageUrls } from "./lib/db";
 import CartModal from "./CartModal";
-import { formatarMoeda, PRECOS_BASE, proxyImageUrl } from "./types";
+import ImageCarousel from "./ImageCarousel";
+import { formatarMoeda, PRECOS_BASE } from "./types";
 
 const CATEGORIAS = [
   "Todas",
@@ -60,9 +62,18 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
   }, [produtos, categoriaSelecionada, filtroTime]);
 
   const timesDisponiveis = useMemo(() => {
-    const times = produtosFiltrados.map((p) => p.time);
+    let res = produtos.map((p) => ({
+      ...p,
+      nome: normalizeNome(p.nome),
+      time: normalizeNome(p.time),
+      liga: normalizeNome(p.liga),
+    }));
+    if (categoriaSelecionada !== "Todas") {
+      res = res.filter((p) => p.liga === categoriaSelecionada);
+    }
+    const times = res.map((p) => p.time);
     return Array.from(new Set(times)).sort((a, b) => a.localeCompare(b));
-  }, [produtosFiltrados]);
+  }, [produtos, categoriaSelecionada]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -119,17 +130,9 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
               className="bg-card-bg rounded-md overflow-hidden shadow-card hover:-translate-y-1 hover:shadow-card-hover transition-all cursor-default flex flex-col h-full"
             >
               <div className="aspect-square bg-gray-100 overflow-hidden">
-                <img
-                  className="w-full h-full object-cover"
-                  src={
-                    proxyImageUrl(p.imagem_url) ||
-                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='14'%3ESem imagem%3C/text%3E%3C/svg%3E"
-                  }
+                <ImageCarousel
+                  images={parseImageUrls(p.imagem_urls)}
                   alt={p.nome}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='14'%3EErro%3C/text%3E%3C/svg%3E";
-                  }}
                 />
               </div>
 

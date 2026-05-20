@@ -179,12 +179,12 @@ export function getPrecoProduto(
 export const PRECO_PERSONALIZACAO = 25.00;
 
 export const ADICIONAL_TAMANHO: Record<string, number> = {
-  "2XL": 10.00,
-  "3XL": 15.00,
-  "4XL": 20.00,
+  "G1": 10.00,
+  "G2": 15.00,
+  "G3": 20.00,
 };
 
-export const TAMANHOS = ["P", "M", "G", "GG", "XG", "2XL", "3XL", "4XL"];
+export const TAMANHOS = ["P", "M", "G", "GG", "G1", "G2", "G3"];
 
 export const FABRICANTES = ["Nike", "Adidas", "Puma", "New Balance", "Umbro", "Kappa", "Joma", "Outro"];
 

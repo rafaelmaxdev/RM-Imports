@@ -54,3 +54,40 @@ create policy "Apenas autenticados podem atualizar"
 create policy "Apenas autenticados podem deletar"
   on produtos for delete
   using (auth.role() = 'authenticated');
+
+-- ============================================================
+-- Tabela de pedidos
+-- ============================================================
+create table pedidos (
+  id text primary key,
+  data text not null,
+  hora text not null,
+  itens jsonb not null default '[]'::jsonb,
+  total numeric not null,
+  status text not null default 'pendente',
+  endereco jsonb,
+  created_at timestamptz default now()
+);
+
+-- Habilitar RLS
+alter table pedidos enable row level security;
+
+-- Qualquer um pode criar pedidos (cliente finaliza compra)
+create policy "Qualquer um pode criar pedidos"
+  on pedidos for insert
+  with check (true);
+
+-- Qualquer um pode ler pedidos (IDs são aleatórios, confirmação por URL)
+create policy "Qualquer um pode ler pedidos"
+  on pedidos for select
+  using (true);
+
+-- Apenas autenticados podem atualizar status (admin)
+create policy "Apenas autenticados podem atualizar pedidos"
+  on pedidos for update
+  using (auth.role() = 'authenticated');
+
+-- Apenas autenticados podem deletar pedidos (admin)
+create policy "Apenas autenticados podem deletar pedidos"
+  on pedidos for delete
+  using (auth.role() = 'authenticated');

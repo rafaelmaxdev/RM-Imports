@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import type { CartItem, Order, OrderAddress } from "./types";
 import { gerarId } from "./types";
+import { createPedido } from "./lib/db";
 
 interface CartContextType {
   cart: CartItem[];
@@ -8,13 +9,7 @@ interface CartContextType {
   removeFromCart: (index: number) => void;
   clearCart: () => void;
   total: number;
-  orders: Order[];
-  history: Order[];
-  createOrder: (endereco: OrderAddress) => Order | null;
-  deleteOrder: (id: string) => void;
-  updateOrderStatus: (id: string, status: "pendente" | "confirmado") => void;
-  confirmDelivery: (id: string) => void;
-  deleteHistoryOrder: (id: string) => void;
+  createOrder: (endereco: OrderAddress) => Promise<Order | null>;
 }
 
 const CartContext = createContext<CartContextType | null>(null);
@@ -29,35 +24,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try {
-      const saved = localStorage.getItem("ul_orders");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [history, setHistory] = useState<Order[]>(() => {
-    try {
-      const saved = localStorage.getItem("ul_history");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
   useEffect(() => {
     localStorage.setItem("ul_cart", JSON.stringify(cart));
   }, [cart]);
-
-  useEffect(() => {
-    localStorage.setItem("ul_orders", JSON.stringify(orders));
-  }, [orders]);
-
-  useEffect(() => {
-    localStorage.setItem("ul_history", JSON.stringify(history));
-  }, [history]);
 
   const addToCart = useCallback((item: CartItem) => {
     setCart((prev) => [...prev, item]);
@@ -73,7 +42,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const total = cart.reduce((sum, item) => sum + item.preco, 0);
 
-  const createOrder = useCallback((endereco: OrderAddress): Order | null => {
+  const createOrder = useCallback(async (endereco: OrderAddress): Promise<Order | null> => {
     if (cart.length === 0) return null;
 
     const now = new Date();
@@ -101,42 +70,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
       endereco,
     };
 
-    setOrders((prev) => [order, ...prev]);
-    setCart([]);
-    return order;
+    try {
+      const saved = await createPedido(order);
+      setCart([]);
+      return saved;
+    } catch (err) {
+      console.error("Erro ao criar pedido:", err);
+      return null;
+    }
   }, [cart, total]);
 
-  const deleteOrder = useCallback((id: string) => {
-    setOrders((prev) => prev.filter((o) => o.id !== id));
-  }, []);
-
-  const updateOrderStatus = useCallback((id: string, status: "pendente" | "confirmado") => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status } : o))
-    );
-  }, []);
-
-  const confirmDelivery = useCallback((id: string) => {
-    setOrders((prev) => {
-      const order = prev.find((o) => o.id === id);
-      if (order) {
-        const updated = { ...order, status: "entregue" as const };
-        setHistory((h) => {
-          if (h.some((o) => o.id === id)) return h;
-          return [updated, ...h];
-        });
-        return prev.filter((o) => o.id !== id);
-      }
-      return prev;
-    });
-  }, []);
-
-  const deleteHistoryOrder = useCallback((id: string) => {
-    setHistory((prev) => prev.filter((o) => o.id !== id));
-  }, []);
-
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, clearCart, total, orders, history, createOrder, deleteOrder, updateOrderStatus, confirmDelivery, deleteHistoryOrder }}>
+    <CartContext.Provider value={{ cart, addToCart, removeFromCart, clearCart, total, createOrder }}>
       {children}
     </CartContext.Provider>
   );

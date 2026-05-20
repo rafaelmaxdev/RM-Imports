@@ -32,8 +32,8 @@ function AppContent() {
     ]).finally(() => setLoading(false));
   }, []);
 
-  function handleCheckout(endereco: OrderAddress) {
-    const order = createOrder(endereco);
+  async function handleCheckout(endereco: OrderAddress) {
+    const order = await createOrder(endereco);
     if (order) {
       setShowCart(false);
       navigate(`/pedido/${order.id}`);

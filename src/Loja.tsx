@@ -35,10 +35,13 @@ function normalizeNome(nome: string): string {
   return result;
 }
 
+type Ordenacao = "time" | "preco-asc" | "preco-desc" | "categoria";
+
 export default function Loja({ produtos, config }: { produtos: DbProduto[]; config: LojaConfig }) {
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("Todas");
   const [filtroTime, setFiltroTime] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>("time");
   const [produtoSelecionado, setProdutoSelecionado] = useState<DbProduto | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduto, setToastProduto] = useState("");
@@ -50,13 +53,17 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     }
   }, [toastVisible]);
 
-  const produtosFiltrados = useMemo(() => {
-    let res = produtos.map((p) => ({
+  const produtosNormalizados = useMemo(() => {
+    return produtos.map((p) => ({
       ...p,
       nome: normalizeNome(p.nome),
       time: normalizeNome(p.time),
       liga: normalizeNome(p.liga),
     }));
+  }, [produtos]);
+
+  const produtosFiltrados = useMemo(() => {
+    let res = [...produtosNormalizados];
     if (categoriaSelecionada !== "Todas") {
       res = res.filter((p) => p.liga === categoriaSelecionada);
     }
@@ -66,30 +73,51 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     if (filtroTipo) {
       res = res.filter((p) => p.tipo === filtroTipo);
     }
+
+    // Sort
+    switch (ordenacao) {
+      case "time":
+        res.sort((a, b) => a.time.localeCompare(b.time) || a.nome.localeCompare(b.nome));
+        break;
+      case "preco-asc": {
+        res.sort((a, b) => {
+          const priceA = getPrecoProduto(a.tipo, config, a.preco_customizado, (a.promocao_tipo as PromocaoTipo) ?? undefined, a.promocao_valor);
+          const priceB = getPrecoProduto(b.tipo, config, b.preco_customizado, (b.promocao_tipo as PromocaoTipo) ?? undefined, b.promocao_valor);
+          const valA = priceA.promo ?? priceA.base;
+          const valB = priceB.promo ?? priceB.base;
+          return valA - valB;
+        });
+        break;
+      }
+      case "preco-desc": {
+        res.sort((a, b) => {
+          const priceA = getPrecoProduto(a.tipo, config, a.preco_customizado, (a.promocao_tipo as PromocaoTipo) ?? undefined, a.promocao_valor);
+          const priceB = getPrecoProduto(b.tipo, config, b.preco_customizado, (b.promocao_tipo as PromocaoTipo) ?? undefined, b.promocao_valor);
+          const valA = priceA.promo ?? priceA.base;
+          const valB = priceB.promo ?? priceB.base;
+          return valB - valA;
+        });
+        break;
+      }
+      case "categoria":
+        res.sort((a, b) => a.tipo.localeCompare(b.tipo) || a.time.localeCompare(b.time) || a.nome.localeCompare(b.nome));
+        break;
+    }
+
     return res;
-  }, [produtos, categoriaSelecionada, filtroTime, filtroTipo]);
+  }, [produtosNormalizados, categoriaSelecionada, filtroTime, filtroTipo, ordenacao, config]);
 
   const timesDisponiveis = useMemo(() => {
-    let res = produtos.map((p) => ({
-      ...p,
-      nome: normalizeNome(p.nome),
-      time: normalizeNome(p.time),
-      liga: normalizeNome(p.liga),
-    }));
+    let res = [...produtosNormalizados];
     if (categoriaSelecionada !== "Todas") {
       res = res.filter((p) => p.liga === categoriaSelecionada);
     }
     const times = res.map((p) => p.time);
     return Array.from(new Set(times)).sort((a, b) => a.localeCompare(b));
-  }, [produtos, categoriaSelecionada]);
+  }, [produtosNormalizados, categoriaSelecionada]);
 
   const tiposDisponiveis = useMemo(() => {
-    let res = produtos.map((p) => ({
-      ...p,
-      nome: normalizeNome(p.nome),
-      time: normalizeNome(p.time),
-      liga: normalizeNome(p.liga),
-    }));
+    let res = [...produtosNormalizados];
     if (categoriaSelecionada !== "Todas") {
       res = res.filter((p) => p.liga === categoriaSelecionada);
     }
@@ -98,7 +126,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     }
     const tipos = res.map((p) => p.tipo);
     return Array.from(new Set(tipos)).sort();
-  }, [produtos, categoriaSelecionada, filtroTime]);
+  }, [produtosNormalizados, categoriaSelecionada, filtroTime]);
 
   const destaquesEPromos = useMemo(() => {
     return produtos.filter((p) => p.destaque || (p.promocao && p.promocao_tipo));
@@ -136,48 +164,57 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
         ))}
       </nav>
 
-      {(timesDisponiveis.length > 0 || tiposDisponiveis.length > 0) && (
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {timesDisponiveis.length > 0 && (
-            <select
-              value={filtroTime}
-              onChange={(e) => setFiltroTime(e.target.value)}
-              className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm min-w-44"
-            >
-              <option value="">Todos os times</option>
-              {timesDisponiveis.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          )}
+      <div className="flex gap-2 mb-6 flex-wrap items-center">
+        {timesDisponiveis.length > 0 && (
+          <select
+            value={filtroTime}
+            onChange={(e) => setFiltroTime(e.target.value)}
+            className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm min-w-44"
+          >
+            <option value="">Todos os times</option>
+            {timesDisponiveis.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        )}
 
-          {tiposDisponiveis.length > 0 && (
-            <select
-              value={filtroTipo}
-              onChange={(e) => setFiltroTipo(e.target.value)}
-              className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm min-w-44"
-            >
-              <option value="">Todos os tipos</option>
-              {tiposDisponiveis.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          )}
+        {tiposDisponiveis.length > 0 && (
+          <select
+            value={filtroTipo}
+            onChange={(e) => setFiltroTipo(e.target.value)}
+            className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm min-w-44"
+          >
+            <option value="">Todos os tipos</option>
+            {tiposDisponiveis.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        )}
 
-          {(filtroTime || filtroTipo) && (
-            <button
-              className="px-3 py-2 text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90"
-              onClick={() => { setFiltroTime(""); setFiltroTipo(""); }}
-            >
-              Limpar filtros
-            </button>
-          )}
-        </div>
-      )}
+        <select
+          value={ordenacao}
+          onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
+          className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
+        >
+          <option value="time">Ordenar: Time / Nome</option>
+          <option value="preco-asc">Menor preço</option>
+          <option value="preco-desc">Maior preço</option>
+          <option value="categoria">Categoria</option>
+        </select>
+
+        {(filtroTime || filtroTipo) && (
+          <button
+            className="px-3 py-2 text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90"
+            onClick={() => { setFiltroTime(""); setFiltroTipo(""); }}
+          >
+            Limpar filtros
+          </button>
+        )}
+      </div>
 
       {produtosFiltrados.length === 0 ? (
         <div className="text-center py-16 text-text-muted">

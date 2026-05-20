@@ -135,3 +135,95 @@ export async function updateProdutoCustomPrice(id: string, preco_customizado: nu
 
   if (error) throw error;
 }
+
+// ── Pedidos ──
+
+export interface DbPedido {
+  id: string;
+  data: string;
+  hora: string;
+  itens: string; // JSONB stored as string from Supabase
+  total: number;
+  status: string;
+  endereco: string | null; // JSONB stored as string from Supabase
+  created_at: string;
+}
+
+function dbPedidoToOrder(db: DbPedido): import("../types").Order {
+  return {
+    id: db.id,
+    data: db.data,
+    hora: db.hora,
+    itens: typeof db.itens === "string" ? JSON.parse(db.itens) : db.itens,
+    total: db.total,
+    status: db.status as import("../types").Order["status"],
+    endereco: db.endereco
+      ? (typeof db.endereco === "string" ? JSON.parse(db.endereco) : db.endereco)
+      : undefined,
+  };
+}
+
+export async function createPedido(order: import("../types").Order): Promise<import("../types").Order> {
+  const row = {
+    id: order.id,
+    data: order.data,
+    hora: order.hora,
+    itens: JSON.stringify(order.itens),
+    total: order.total,
+    status: order.status,
+    endereco: order.endereco ? JSON.stringify(order.endereco) : null,
+  };
+
+  const { data, error } = await supabase
+    .from("pedidos")
+    .insert(row)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return dbPedidoToOrder(data as DbPedido);
+}
+
+export async function getPedidos(): Promise<import("../types").Order[]> {
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  if (!data) return [];
+  return (data as DbPedido[]).map(dbPedidoToOrder);
+}
+
+export async function getPedidoById(id: string): Promise<import("../types").Order | null> {
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null; // not found
+    throw error;
+  }
+  if (!data) return null;
+  return dbPedidoToOrder(data as DbPedido);
+}
+
+export async function updatePedidoStatus(id: string, status: string): Promise<void> {
+  const { error } = await supabase
+    .from("pedidos")
+    .update({ status })
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function deletePedido(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("pedidos")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+}

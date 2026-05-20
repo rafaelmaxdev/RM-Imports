@@ -5,27 +5,31 @@ import Loja from "./Loja";
 import AdminGate from "./AdminGate";
 import AdminOrders from "./AdminOrders";
 import AdminHistory from "./AdminHistory";
+import AdminDestaques from "./AdminDestaques";
+import AdminPromocoes from "./AdminPromocoes";
 import OrderConfirmation from "./OrderConfirmation";
 import CartSidebar from "./CartSidebar";
 import NotFound from "./NotFound";
 import { CartProvider, useCart } from "./CartContext";
-import { getProdutos } from "./lib/db";
+import { getProdutos, getLojaConfig } from "./lib/db";
 import type { DbProduto } from "./lib/db";
-import type { OrderAddress } from "./types";
+import type { OrderAddress, LojaConfig } from "./types";
+import { DEFAULT_CONFIG } from "./types";
 import "./index.css";
 
 function AppContent() {
   const [produtos, setProdutos] = useState<DbProduto[]>([]);
+  const [config, setConfig] = useState<LojaConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [showCart, setShowCart] = useState(false);
   const navigate = useNavigate();
   const { cart, createOrder } = useCart();
 
   useEffect(() => {
-    getProdutos()
-      .then(setProdutos)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    Promise.all([
+      getProdutos().then(setProdutos).catch(console.error),
+      getLojaConfig().then(setConfig).catch(console.error),
+    ]).finally(() => setLoading(false));
   }, []);
 
   function handleCheckout(endereco: OrderAddress) {
@@ -38,7 +42,7 @@ function AppContent() {
 
   return (
     <>
-      <nav className="flex items-center justify-between px-4 sm:px-8 py-4 bg-primary text-white">
+      <nav className="sticky top-0 z-50 flex items-center justify-between px-4 sm:px-8 py-4 bg-primary text-white shadow-md">
         <Link to="/" className="text-lg font-bold tracking-tight text-white no-underline">
           RM Imports
         </Link>
@@ -59,12 +63,12 @@ function AppContent() {
         <div className="text-center py-16 text-text-muted text-lg">Carregando...</div>
       ) : (
         <Routes>
-          <Route path="/" element={<Loja produtos={produtos} />} />
+          <Route path="/" element={<Loja produtos={produtos} config={config} />} />
           <Route
             path="/admin"
             element={
               <AdminGate>
-                <AdminPanel produtos={produtos} setProdutos={setProdutos} />
+                <AdminPanel produtos={produtos} setProdutos={setProdutos} config={config} setConfig={setConfig} />
               </AdminGate>
             }
           />
@@ -80,29 +84,43 @@ function AppContent() {
   );
 }
 
+type AdminTab = "produtos" | "destaques" | "promocoes" | "pedidos" | "historico";
+
 function AdminPanel({
   produtos,
   setProdutos,
+  config,
+  setConfig,
 }: {
   produtos: DbProduto[];
   setProdutos: React.Dispatch<React.SetStateAction<DbProduto[]>>;
+  config: LojaConfig;
+  setConfig: React.Dispatch<React.SetStateAction<LojaConfig>>;
 }) {
-  const [tab, setTab] = useState<"produtos" | "pedidos" | "historico">("produtos");
+  const [tab, setTab] = useState<AdminTab>("produtos");
+
+  const tabs: { key: AdminTab; label: string }[] = [
+    { key: "produtos", label: "Produtos" },
+    { key: "destaques", label: "Destaques" },
+    { key: "promocoes", label: "Promoções" },
+    { key: "pedidos", label: "Pedidos" },
+    { key: "historico", label: "Histórico" },
+  ];
 
   return (
     <div className="max-w-3xl mx-auto px-4 pt-8">
-      <div className="flex gap-2 mb-6 pb-4 border-b border-border">
-        {(["produtos", "pedidos", "historico"] as const).map((t) => (
+      <div className="flex gap-2 mb-6 pb-4 border-b border-border flex-wrap">
+        {tabs.map((t) => (
           <button
-            key={t}
+            key={t.key}
             className={`px-4 py-2 border border-border bg-card-bg rounded-md cursor-pointer text-sm font-semibold transition-colors ${
-              tab === t
+              tab === t.key
                 ? "bg-primary text-white border-primary"
                 : "text-text-main hover:bg-gray-100"
             }`}
-            onClick={() => setTab(t)}
+            onClick={() => setTab(t.key)}
           >
-            {t === "produtos" ? "Produtos" : t === "pedidos" ? "Pedidos" : "Histórico"}
+            {t.label}
           </button>
         ))}
         <Link
@@ -115,6 +133,10 @@ function AdminPanel({
 
       {tab === "produtos" ? (
         <ProdutoForm produtos={produtos} setProdutos={setProdutos} />
+      ) : tab === "destaques" ? (
+        <AdminDestaques produtos={produtos} setProdutos={setProdutos} />
+      ) : tab === "promocoes" ? (
+        <AdminPromocoes produtos={produtos} setProdutos={setProdutos} config={config} setConfig={setConfig} />
       ) : tab === "pedidos" ? (
         <AdminOrders />
       ) : (

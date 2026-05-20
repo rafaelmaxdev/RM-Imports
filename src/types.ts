@@ -49,11 +49,110 @@ export interface Order {
 }
 
 export const PRECOS_BASE: Record<string, number> = {
-  "Torcedor": 89.90,
-  "Jogador": 129.90,
-  "Retrô": 129.90,
-  "Manga Longa": 99.90,
+  "Torcedor": 129.90,
+  "Jogador": 169.90,
+  "Retrô": 169.90,
+  "Manga Longa": 159.90,
 };
+
+export interface LojaConfig {
+  precos_base: Record<string, number>;
+  precos_promocao: Record<string, number>;
+  promocao_ativa: Record<string, boolean>;
+}
+
+export const DEFAULT_CONFIG: LojaConfig = {
+  precos_base: {
+    "Torcedor": 129.90,
+    "Jogador": 169.90,
+    "Retrô": 169.90,
+    "Manga Longa": 159.90,
+  },
+  precos_promocao: {
+    "Torcedor": 109.90,
+    "Jogador": 139.90,
+    "Retrô": 149.90,
+    "Manga Longa": 139.90,
+  },
+  promocao_ativa: {
+    "Torcedor": false,
+    "Jogador": false,
+    "Retrô": false,
+    "Manga Longa": false,
+  },
+};
+
+export const TIPOS_CATEGORIA = ["Torcedor", "Jogador", "Retrô", "Manga Longa"] as const;
+
+export type PromocaoTipo = "porcentagem" | "novo_preco" | "leve_pague" | null;
+
+export interface PromocaoInfo {
+  base: number;
+  promo: number | null;
+  emPromocao: boolean;
+  promocaoTipo: PromocaoTipo;
+  promocaoValor: number | null;
+  badge: string | null;
+}
+
+export function getPrecoProduto(
+  tipo: string,
+  config: LojaConfig,
+  precoCustomizado?: number | null,
+  promocaoTipo?: PromocaoTipo,
+  promocaoValor?: number | null,
+): PromocaoInfo {
+  const base = precoCustomizado ?? config.precos_base[tipo] ?? 89.90;
+
+  // Individual product promo takes priority
+  if (promocaoTipo === "porcentagem" && promocaoValor) {
+    const desconto = base * (promocaoValor / 100);
+    const promoPrice = Math.round((base - desconto) * 100) / 100;
+    return {
+      base,
+      promo: promoPrice,
+      emPromocao: true,
+      promocaoTipo,
+      promocaoValor,
+      badge: `${promocaoValor}% OFF`,
+    };
+  }
+
+  if (promocaoTipo === "novo_preco" && precoCustomizado != null) {
+    const originalBase = config.precos_base[tipo] ?? 89.90;
+    return {
+      base: originalBase,
+      promo: precoCustomizado,
+      emPromocao: true,
+      promocaoTipo,
+      promocaoValor: null,
+      badge: "PROMO",
+    };
+  }
+
+  if (promocaoTipo === "leve_pague") {
+    return {
+      base,
+      promo: null,
+      emPromocao: true,
+      promocaoTipo,
+      promocaoValor: null,
+      badge: "LEVE 1 PAGUE 2",
+    };
+  }
+
+  // Category-level promo
+  const emPromocao = config.promocao_ativa[tipo] ?? false;
+  const promo = emPromocao ? (config.precos_promocao[tipo] ?? base) : null;
+  return {
+    base,
+    promo,
+    emPromocao,
+    promocaoTipo: null,
+    promocaoValor: null,
+    badge: emPromocao ? "PROMO" : null,
+  };
+}
 
 export const PRECO_PERSONALIZACAO = 25.00;
 
@@ -78,8 +177,17 @@ export function gerarId(): string {
   return result;
 }
 
-export function calcularPreco(tipo: string, tamanho: string, personalizado: boolean): number {
-  let preco = PRECOS_BASE[tipo] || 89.90;
+export function calcularPreco(
+  tipo: string,
+  tamanho: string,
+  personalizado: boolean,
+  config?: LojaConfig,
+  precoCustomizado?: number | null,
+  promocaoTipo?: PromocaoTipo,
+  promocaoValor?: number | null,
+): number {
+  const { promo, base } = getPrecoProduto(tipo, config ?? DEFAULT_CONFIG, precoCustomizado, promocaoTipo, promocaoValor);
+  let preco = promo ?? base;
   if (ADICIONAL_TAMANHO[tamanho]) preco += ADICIONAL_TAMANHO[tamanho];
   if (personalizado) preco += PRECO_PERSONALIZACAO;
   return preco;

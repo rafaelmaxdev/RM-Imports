@@ -3,7 +3,9 @@ import type { DbProduto } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
 import CartModal from "./CartModal";
 import ImageCarousel from "./ImageCarousel";
-import { formatarMoeda, PRECOS_BASE } from "./types";
+import DestaqueCarousel from "./DestaqueCarousel";
+import type { LojaConfig, PromocaoTipo } from "./types";
+import { formatarMoeda, getPrecoProduto } from "./types";
 
 const CATEGORIAS = [
   "Todas",
@@ -31,9 +33,10 @@ function normalizeNome(nome: string): string {
   return result;
 }
 
-export default function Loja({ produtos }: { produtos: DbProduto[] }) {
+export default function Loja({ produtos, config }: { produtos: DbProduto[]; config: LojaConfig }) {
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("Todas");
   const [filtroTime, setFiltroTime] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("");
   const [produtoSelecionado, setProdutoSelecionado] = useState<DbProduto | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduto, setToastProduto] = useState("");
@@ -58,8 +61,11 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
     if (filtroTime) {
       res = res.filter((p) => p.time === filtroTime);
     }
+    if (filtroTipo) {
+      res = res.filter((p) => p.tipo === filtroTipo);
+    }
     return res;
-  }, [produtos, categoriaSelecionada, filtroTime]);
+  }, [produtos, categoriaSelecionada, filtroTime, filtroTipo]);
 
   const timesDisponiveis = useMemo(() => {
     let res = produtos.map((p) => ({
@@ -75,13 +81,39 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
     return Array.from(new Set(times)).sort((a, b) => a.localeCompare(b));
   }, [produtos, categoriaSelecionada]);
 
-  return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <header className="text-center mb-6">
-        <h1 className="text-3xl font-extrabold text-primary tracking-tight">RM Imports</h1>
-        <p className="text-text-muted mt-1">As melhores camisas de futebol</p>
-      </header>
+  const tiposDisponiveis = useMemo(() => {
+    let res = produtos.map((p) => ({
+      ...p,
+      nome: normalizeNome(p.nome),
+      time: normalizeNome(p.time),
+      liga: normalizeNome(p.liga),
+    }));
+    if (categoriaSelecionada !== "Todas") {
+      res = res.filter((p) => p.liga === categoriaSelecionada);
+    }
+    if (filtroTime) {
+      res = res.filter((p) => p.time === filtroTime);
+    }
+    const tipos = res.map((p) => p.tipo);
+    return Array.from(new Set(tipos)).sort();
+  }, [produtos, categoriaSelecionada, filtroTime]);
 
+  const destaquesEPromos = useMemo(() => {
+    return produtos.filter((p) => p.destaque || (p.promocao && p.promocao_tipo));
+  }, [produtos]);
+
+  return (
+    <>
+      {/* Destaques & Promoções carousel — full width */}
+      {destaquesEPromos.length > 0 && (
+        <DestaqueCarousel
+          produtos={destaquesEPromos}
+          config={config}
+          onSelect={(p) => setProdutoSelecionado(p)}
+        />
+      )}
+
+      <div className="max-w-5xl mx-auto px-4 pt-4 pb-8">
       <nav className="flex justify-center gap-2 flex-wrap pb-2 mb-4">
         {CATEGORIAS.map((cat) => (
           <button
@@ -94,6 +126,7 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
             onClick={() => {
               setCategoriaSelecionada(cat);
               setFiltroTime("");
+              setFiltroTipo("");
             }}
           >
             {cat}
@@ -101,20 +134,46 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
         ))}
       </nav>
 
-      {timesDisponiveis.length > 0 && (
-        <div className="mb-6">
-          <select
-            value={filtroTime}
-            onChange={(e) => setFiltroTime(e.target.value)}
-            className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm min-w-50"
-          >
-            <option value="">Todos os times</option>
-            {timesDisponiveis.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+      {(timesDisponiveis.length > 0 || tiposDisponiveis.length > 0) && (
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {timesDisponiveis.length > 0 && (
+            <select
+              value={filtroTime}
+              onChange={(e) => setFiltroTime(e.target.value)}
+              className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm min-w-44"
+            >
+              <option value="">Todos os times</option>
+              {timesDisponiveis.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {tiposDisponiveis.length > 0 && (
+            <select
+              value={filtroTipo}
+              onChange={(e) => setFiltroTipo(e.target.value)}
+              className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm min-w-44"
+            >
+              <option value="">Todos os tipos</option>
+              {tiposDisponiveis.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {(filtroTime || filtroTipo) && (
+            <button
+              className="px-3 py-2 text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90"
+              onClick={() => { setFiltroTime(""); setFiltroTipo(""); }}
+            >
+              Limpar filtros
+            </button>
+          )}
         </div>
       )}
 
@@ -123,54 +182,84 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
           <p>Nenhum produto disponível nesta categoria.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-6 items-stretch">
-          {produtosFiltrados.map((p) => (
-            <div
-              key={p.id}
-              className="bg-card-bg rounded-md overflow-hidden shadow-card hover:-translate-y-1 hover:shadow-card-hover transition-all cursor-default flex flex-col h-full"
-            >
-              <div className="aspect-square bg-gray-100 overflow-hidden">
-                <ImageCarousel
-                  images={parseImageUrls(p.imagem_urls).map((url) =>
-                    url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")
-                  )}
-                  alt={p.nome}
-                />
-              </div>
+        <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 sm:gap-6 items-stretch">
+          {produtosFiltrados.map((p) => {
+            const priceInfo = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor);
+            const { base, promo, emPromocao, badge } = priceInfo;
 
-              <div className="p-4 flex flex-col flex-1">
-                <div className="font-semibold text-[0.95rem] mb-2 line-clamp-2">
-                  {p.nome}
-                </div>
-
-                <div className="flex gap-2 mb-2">
-                  <span className="text-xs px-2 py-0.5 bg-primary text-white rounded">
-                    {p.tipo}
+            return (
+              <div
+                key={p.id}
+                className="bg-card-bg rounded-md overflow-hidden shadow-card hover:-translate-y-1 hover:shadow-card-hover transition-all cursor-default flex flex-col h-full relative"
+              >
+                {/* Promo/destaque tags */}
+                {emPromocao && (
+                  <span className="animate-promo-pulse absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-accent text-white text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-sm shadow-md uppercase tracking-wider z-10">
+                    {badge || "PROMO"}
                   </span>
-                  <span className="text-xs px-2 py-0.5 bg-primary text-white rounded">
-                    {p.temporada}
+                )}
+                {p.destaque && !emPromocao && (
+                  <span className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 bg-yellow-400 text-primary text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-sm shadow-md uppercase tracking-wider z-10">
+                    ★ DESTAQUE
                   </span>
+                )}
+
+                <div className="aspect-square bg-gray-100 overflow-hidden">
+                  <ImageCarousel
+                    images={parseImageUrls(p.imagem_urls).map((url) =>
+                      url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")
+                    )}
+                    alt={p.nome}
+                  />
                 </div>
 
-                <div className="font-bold text-lg text-accent mt-auto">
-                  {formatarMoeda(PRECOS_BASE[p.tipo] || 89.90)}
-                </div>
+                <div className="p-2.5 sm:p-4 flex flex-col flex-1">
+                  <div className="font-semibold text-xs sm:text-[0.95rem] mb-1 sm:mb-2 line-clamp-2">
+                    {p.nome}
+                  </div>
 
-                <button
-                  className="w-full py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 mt-3 flex-shrink-0 h-11 flex items-center justify-center"
-                  onClick={() => setProdutoSelecionado(p)}
-                >
-                  Adicionar ao Carrinho
-                </button>
+                  <div className="flex gap-1 sm:gap-2 mb-1.5 sm:mb-2">
+                    <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-primary text-white rounded">
+                      {p.tipo}
+                    </span>
+                    <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-primary text-white rounded">
+                      {p.temporada}
+                    </span>
+                  </div>
+
+                  <div className="mt-auto">
+                    {promo !== null ? (
+                      <div>
+                        <div className="flex items-baseline gap-1 sm:gap-2">
+                          <span className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(promo)}</span>
+                          <span className="text-text-muted text-[10px] sm:text-sm line-through">{formatarMoeda(base)}</span>
+                        </div>
+                        {badge && (
+                          <span className="inline-block mt-0.5 text-[9px] sm:text-[10px] font-bold text-accent">{badge}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(base)}</div>
+                    )}
+                  </div>
+
+                  <button
+                    className="w-full py-2 sm:py-3 text-xs sm:text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 mt-2 sm:mt-3 flex-shrink-0 h-9 sm:h-11 flex items-center justify-center"
+                    onClick={() => setProdutoSelecionado(p)}
+                  >
+                    Adicionar ao Carrinho
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {produtoSelecionado && (
         <CartModal
           produto={produtoSelecionado}
+          config={config}
           onClose={() => setProdutoSelecionado(null)}
           onAdded={(nome) => {
             setToastProduto(nome);
@@ -186,6 +275,7 @@ export default function Loja({ produtos }: { produtos: DbProduto[] }) {
       >
         ✓ {toastProduto} adicionado ao carrinho
       </div>
-    </div>
+      </div>
+    </>
   );
 }

@@ -34,3 +34,41 @@
 .animate-toast {
   animation: toast-in 0.3s ease forwards;
 }
+
+/* Marquee animations - smooth infinite scroll, no flickering */
+@keyframes marquee-left {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes marquee-right {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+.animate-marquee-left {
+  animation: marquee-left 50s linear infinite;
+}
+
+.animate-marquee-right {
+  animation: marquee-right 50s linear infinite;
+}
+
+/* Gentle promo pulse - subtle, not epileptic */
+@keyframes promo-pulse {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.animate-promo-pulse {
+  animation: promo-pulse 2s ease-in-out infinite;
+}
+
+/* Hide scrollbar for carousel */
+.carousel-scroll::-webkit-scrollbar {
+  display: none;
+}
+.carousel-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

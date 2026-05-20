@@ -124,6 +124,11 @@ function toDbProduto(p: {
   temporada: string;
   imagemUrls: string[];
   yupooUrl: string;
+  destaque?: boolean;
+  preco_customizado?: number | null;
+  promocao?: boolean;
+  promocao_tipo?: string | null;
+  promocao_valor?: number | null;
 }): Omit<DbProduto, "id" | "created_at"> {
   return {
     nome: p.nome,
@@ -133,6 +138,11 @@ function toDbProduto(p: {
     temporada: p.temporada,
     imagem_urls: p.imagemUrls.filter(Boolean),
     yupoo_url: p.yupooUrl,
+    destaque: p.destaque ?? false,
+    preco_customizado: p.preco_customizado ?? null,
+    promocao: p.promocao ?? false,
+    promocao_tipo: p.promocao_tipo ?? null,
+    promocao_valor: p.promocao_valor ?? null,
   };
 }
 
@@ -370,6 +380,11 @@ export default function ProdutoForm({
   const [imagemUrls, setImagemUrls] = useState<string[]>([""]);
   const [yupooUrl, setYupooUrl] = useState("");
   const [fabricante, setFabricante] = useState("");
+  const [destaque, setDestaque] = useState(false);
+  const [promocao, setPromocao] = useState(false);
+  const [promocaoTipo, setPromocaoTipo] = useState<string>("");
+  const [promocaoValor, setPromocaoValor] = useState("");
+  const [precoCustomizado, setPrecoCustomizado] = useState("");
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -442,6 +457,11 @@ export default function ProdutoForm({
     setNomeCustom("");
     setImagemUrls([""]);
     setYupooUrl("");
+    setDestaque(false);
+    setPromocao(false);
+    setPromocaoTipo("");
+    setPromocaoValor("");
+    setPrecoCustomizado("");
     setEditandoId(null);
   }
 
@@ -460,6 +480,11 @@ export default function ProdutoForm({
           temporada: periodo,
           imagemUrls,
           yupooUrl,
+          destaque,
+          promocao,
+          promocao_tipo: promocao ? promocaoTipo || null : null,
+          promocao_valor: promocao && promocaoTipo === "porcentagem" ? parseFloat(promocaoValor) || null : null,
+          preco_customizado: precoCustomizado ? parseFloat(precoCustomizado) : null,
         })
       );
 
@@ -482,6 +507,11 @@ export default function ProdutoForm({
     setTipo(fp.tipo);
     setImagemUrls(fp.imagemUrls.length > 0 ? [...fp.imagemUrls] : [""]);
     setYupooUrl(fp.yupooUrl);
+    setDestaque(p.destaque);
+    setPromocao(p.promocao);
+    setPromocaoTipo(p.promocao_tipo ?? "");
+    setPromocaoValor(p.promocao_valor != null ? String(p.promocao_valor) : "");
+    setPrecoCustomizado(p.preco_customizado != null ? String(p.preco_customizado) : "");
     setEditandoId(fp.id);
 
     const locMatch = fp.nome.match(/\((Casa|Fora)\)/);
@@ -509,6 +539,11 @@ export default function ProdutoForm({
           temporada: periodo,
           imagemUrls,
           yupooUrl,
+          destaque,
+          promocao,
+          promocao_tipo: promocao ? promocaoTipo || null : null,
+          promocao_valor: promocao && promocaoTipo === "porcentagem" ? parseFloat(promocaoValor) || null : null,
+          preco_customizado: precoCustomizado ? parseFloat(precoCustomizado) : null,
         })
       );
 
@@ -723,6 +758,18 @@ export default function ProdutoForm({
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-text-muted">Preço customizado (opcional — sobrescreve o preço da categoria)</label>
+          <input
+            type="number"
+            step="0.01"
+            value={precoCustomizado}
+            onChange={(e) => setPrecoCustomizado(e.target.value)}
+            placeholder="Deixe vazio para usar o preço padrão"
+            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+          />
         </div>
 
         <div className="px-3 py-3 bg-blue-50 rounded-md font-medium text-primary">

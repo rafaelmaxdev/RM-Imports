@@ -1,15 +1,10 @@
 import { useState } from "react";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
+import type { LojaConfig, PromocaoTipo } from "./types";
+import { TAMANHOS, PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto } from "./types";
 import ImageCarousel from "./ImageCarousel";
 import { parseImageUrls } from "./lib/db";
-import {
-  TAMANHOS,
-  PRECOS_BASE,
-  PRECO_PERSONALIZACAO,
-  ADICIONAL_TAMANHO,
-  formatarMoeda,
-} from "./types";
 
 interface CartModalProps {
   produto: {
@@ -19,12 +14,16 @@ interface CartModalProps {
     yupoo_url: string;
     tipo: string;
     temporada: string;
+    preco_customizado?: number | null;
+    promocao_tipo?: string | null;
+    promocao_valor?: number | null;
   };
+  config: LojaConfig;
   onClose: () => void;
   onAdded: (nome: string) => void;
 }
 
-export default function CartModal({ produto, onClose, onAdded }: CartModalProps) {
+export default function CartModal({ produto, config, onClose, onAdded }: CartModalProps) {
   const { addToCart } = useCart();
   const [tamanho, setTamanho] = useState("");
   const [genero, setGenero] = useState("Masculino");
@@ -33,10 +32,16 @@ export default function CartModal({ produto, onClose, onAdded }: CartModalProps)
   const [numeroPersonalizado, setNumeroPersonalizado] = useState("");
   const [erro, setErro] = useState("");
 
-  const precoBase = PRECOS_BASE[produto.tipo] || 89.90;
+  const { base: precoBase, promo: precoPromo, emPromocao, badge } = getPrecoProduto(
+    produto.tipo,
+    config,
+    produto.preco_customizado,
+    (produto.promocao_tipo as PromocaoTipo) ?? undefined,
+    produto.promocao_valor
+  );
   const adicionalTam = ADICIONAL_TAMANHO[tamanho] || 0;
   const adicionalPers = personalizado ? PRECO_PERSONALIZACAO : 0;
-  const precoFinal = precoBase + adicionalTam + adicionalPers;
+  const precoFinal = (precoPromo ?? precoBase) + adicionalTam + adicionalPers;
 
   function handleConfirm() {
     if (!tamanho) {
@@ -85,7 +90,19 @@ export default function CartModal({ produto, onClose, onAdded }: CartModalProps)
 
         <div className="mb-4 pb-4 border-b border-border">
           <div className="font-semibold">{produto.nome}</div>
-          <div className="text-accent font-bold text-lg">{formatarMoeda(precoBase)}</div>
+          {emPromocao && badge && (
+            <span className="inline-block mt-1 text-[10px] font-extrabold px-2 py-0.5 bg-accent text-white rounded-sm uppercase tracking-wider">
+              {badge}
+            </span>
+          )}
+          {emPromocao ? (
+            <div className="flex items-baseline gap-2">
+              <span className="text-accent font-bold text-lg">{formatarMoeda(precoPromo!)}</span>
+              <span className="text-text-muted text-sm line-through">{formatarMoeda(precoBase)}</span>
+            </div>
+          ) : (
+            <div className="text-accent font-bold text-lg">{formatarMoeda(precoBase)}</div>
+          )}
         </div>
 
         <div className="mb-4">
@@ -196,8 +213,19 @@ export default function CartModal({ produto, onClose, onAdded }: CartModalProps)
         {erro && <div className="text-accent text-sm mb-3 text-center">{erro}</div>}
 
         <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 p-3 bg-bg-base rounded-md mb-3 text-sm">
-          <span>Preço base:</span>
-          <span>{formatarMoeda(precoBase)}</span>
+          {emPromocao ? (
+            <>
+              <span className="line-through text-text-muted">Preço base:</span>
+              <span className="line-through text-text-muted">{formatarMoeda(precoBase)}</span>
+              <span className="text-accent font-semibold">Preço promocional:</span>
+              <span className="text-accent font-semibold">{formatarMoeda(precoPromo!)}</span>
+            </>
+          ) : (
+            <>
+              <span>Preço base:</span>
+              <span>{formatarMoeda(precoBase)}</span>
+            </>
+          )}
           {adicionalTam > 0 && (
             <>
               <span>Tamanho {tamanho}:</span>

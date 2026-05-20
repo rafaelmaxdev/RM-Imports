@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
 import type { LojaConfig, PromocaoTipo } from "./types";
-import { TAMANHOS, PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto } from "./types";
+import { TAMANHOS, PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto, TIPOS_SEM_PERSONALIZACAO, TIPOS_SEM_FEMININO } from "./types";
 import ImageCarousel from "./ImageCarousel";
 import { parseImageUrls } from "./lib/db";
 
@@ -31,6 +31,9 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
   const [nomePersonalizado, setNomePersonalizado] = useState("");
   const [numeroPersonalizado, setNumeroPersonalizado] = useState("");
   const [erro, setErro] = useState("");
+
+  const semFeminino = TIPOS_SEM_FEMININO.includes(produto.tipo);
+  const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo);
 
   const { base: precoBase, promo: precoPromo, emPromocao, badge } = getPrecoProduto(
     produto.tipo,
@@ -147,7 +150,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
         <div className="mb-4">
           <label className="block text-sm font-semibold text-text-muted mb-2">Modelo</label>
           <div className="flex gap-2">
-            {["Masculino", "Feminino"].map((g) => (
+            {["Masculino", ...(semFeminino ? [] : ["Feminino"] as const)].map((g) => (
               <button
                 key={g}
                 className={`px-4 py-2 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors ${
@@ -161,6 +164,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
           </div>
         </div>
 
+        {!semPersonalizacao && (
         <div className="mb-4">
           <div className="flex items-center gap-1">
             <input
@@ -178,6 +182,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
             </label>
           </div>
         </div>
+      )}
 
         {personalizado && (
           <>

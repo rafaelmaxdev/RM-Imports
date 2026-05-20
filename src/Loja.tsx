@@ -15,12 +15,14 @@ const CATEGORIAS = [
   "La Liga",
   "Ligue 1",
   "MLS",
+  "NBA",
   "Premier League",
   "Serie A",
   "Seleções",
 ].sort((a, b) => (a === "Todas" ? -1 : b === "Todas" ? 1 : a.localeCompare(b)));
 
 const renomear: Record<string, string> = {
+  "Inter Milan": "Inter de Milão",
   "Ceara Sporting": "Ceará",
   "Ceará Sporting": "Ceará",
 };
@@ -234,9 +236,9 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                           <span className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(promo)}</span>
                           <span className="text-text-muted text-[10px] sm:text-sm line-through">{formatarMoeda(base)}</span>
                         </div>
-                        {badge && (
-                          <span className="inline-block mt-0.5 text-[9px] sm:text-[10px] font-bold text-accent">{badge}</span>
-                        )}
+{badge && (
+                              <span className="inline-block mt-0.5 text-[9px] sm:text-[10px] font-extrabold px-1.5 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">{badge}</span>
+                            )}
                       </div>
                     ) : (
                       <div className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(base)}</div>

@@ -53,6 +53,10 @@ export const PRECOS_BASE: Record<string, number> = {
   "Jogador": 169.90,
   "Retrô": 169.90,
   "Manga Longa": 159.90,
+  "Goleiro": 129.90,
+  "Treinamento": 139.90,
+  "Polo": 139.90,
+  "NBA": 189.90,
 };
 
 export interface LojaConfig {
@@ -67,24 +71,42 @@ export const DEFAULT_CONFIG: LojaConfig = {
     "Jogador": 169.90,
     "Retrô": 169.90,
     "Manga Longa": 159.90,
+    "Goleiro": 129.90,
+    "Treinamento": 139.90,
+    "Polo": 139.90,
+    "NBA": 189.90,
   },
   precos_promocao: {
     "Torcedor": 109.90,
     "Jogador": 139.90,
     "Retrô": 149.90,
     "Manga Longa": 139.90,
+    "Goleiro": 109.90,
+    "Treinamento": 119.90,
+    "Polo": 119.90,
+    "NBA": 169.90,
   },
   promocao_ativa: {
     "Torcedor": false,
     "Jogador": false,
     "Retrô": false,
     "Manga Longa": false,
+    "Goleiro": false,
+    "Treinamento": false,
+    "Polo": false,
+    "NBA": false,
   },
 };
 
-export const TIPOS_CATEGORIA = ["Torcedor", "Jogador", "Retrô", "Manga Longa"] as const;
+export const TIPOS_CATEGORIA = ["Torcedor", "Jogador", "Retrô", "Manga Longa", "Goleiro", "Treinamento", "Polo", "NBA"] as const;
 
 export type PromocaoTipo = "porcentagem" | "novo_preco" | "leve_pague" | null;
+
+/** Tipos que NÃO permitem personalização (nome/número) */
+export const TIPOS_SEM_PERSONALIZACAO = ["Polo"];
+
+/** Tipos que NÃO têm opção feminina */
+export const TIPOS_SEM_FEMININO = ["NBA", "Polo", "Treinamento", "Goleiro"];
 
 export interface PromocaoInfo {
   base: number;

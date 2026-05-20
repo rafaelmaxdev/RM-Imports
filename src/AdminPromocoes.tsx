@@ -23,6 +23,15 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
   const [filtroTipo, setFiltroTipo] = useState("");
   const [savingProduto, setSavingProduto] = useState<string | null>(null);
 
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTipo, setEditTipo] = useState("");
+  const [editValor, setEditValor] = useState("");
+  const [editNovoPreco, setEditNovoPreco] = useState("");
+
+  // Filter state
+  const [promoFilter, setPromoFilter] = useState<"ativas" | "todas" | "inativas">("ativas");
+
   useEffect(() => {
     const pb: Record<string, string> = {};
     const pp: Record<string, string> = {};
@@ -142,17 +151,95 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
     }
   }
 
+  async function handleToggleProductPromo(id: string, ativa: boolean) {
+    setSavingProduto(id);
+    try {
+      const updated = await updateProduto(id, { promocao: ativa });
+      setProdutos((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      setMessage(ativa ? "Promoção ativada!" : "Promoção desativada");
+      setTimeout(() => setMessage(""), 3000);
+    } catch (err) {
+      console.error("Erro ao toggle promoção do produto:", err);
+      setMessage("Erro ao atualizar promoção.");
+      setTimeout(() => setMessage(""), 3000);
+    } finally {
+      setSavingProduto(null);
+    }
+  }
+
+  function handleStartEdit(p: DbProduto) {
+    setEditingId(p.id);
+    setEditTipo(p.promocao_tipo ?? "");
+    setEditValor(p.promocao_valor != null ? String(p.promocao_valor) : "");
+    setEditNovoPreco(p.preco_customizado != null ? String(p.preco_customizado) : "");
+  }
+
+  function handleCancelEdit() {
+    setEditingId(null);
+    setEditTipo("");
+    setEditValor("");
+    setEditNovoPreco("");
+  }
+
+  async function handleEditProductPromo(id: string) {
+    setSavingProduto(id);
+    try {
+      const promocaoTipo = (editTipo || null) as PromocaoTipo;
+      let promocaoValor: number | null = null;
+      let precoCustomizado: number | null = null;
+
+      if (editTipo === "porcentagem") {
+        promocaoValor = parseFloat(editValor) || null;
+      } else if (editTipo === "novo_preco") {
+        precoCustomizado = parseFloat(editNovoPreco) || null;
+      }
+
+      const updated = await updateProduto(id, {
+        promocao_tipo: promocaoTipo,
+        promocao_valor: promocaoValor,
+        preco_customizado: precoCustomizado,
+      });
+      setProdutos((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      setEditingId(null);
+      setMessage("Promoção atualizada!");
+      setTimeout(() => setMessage(""), 3000);
+    } catch (err) {
+      console.error("Erro ao editar promoção:", err);
+      setMessage("Erro ao atualizar promoção.");
+      setTimeout(() => setMessage(""), 3000);
+    } finally {
+      setSavingProduto(null);
+    }
+  }
+
   const allActive = TIPOS_CATEGORIA.every((t) => config.promocao_ativa[t]);
 
-  const produtosEmPromocao = useMemo(
-    () => produtos.filter((p) => p.promocao && p.promocao_tipo),
+  // Products with individual promo config (promocao_tipo !== null)
+  const produtosComPromocao = useMemo(
+    () => produtos.filter((p) => p.promocao_tipo !== null),
     [produtos]
   );
+
+  // Filtered view
+  const produtosFiltrados = useMemo(() => {
+    switch (promoFilter) {
+      case "ativas":
+        return produtosComPromocao.filter((p) => p.promocao);
+      case "inativas":
+        return produtosComPromocao.filter((p) => !p.promocao);
+      case "todas":
+        return produtosComPromocao;
+    }
+  }, [produtosComPromocao, promoFilter]);
+
+  // Stats
+  const promosAtivasCategoria = TIPOS_CATEGORIA.filter((t) => config.promocao_ativa[t]).length;
+  const promosAtivasProduto = produtosComPromocao.filter((p) => p.promocao).length;
 
   const resultadosBusca = useMemo(() => {
     const q = busca.toLowerCase().trim();
     return produtos.filter((p) => {
-      if (p.promocao && p.promocao_tipo) return false;
+      if (p.promocao_tipo) return false;
       if (filtroTipo && p.tipo !== filtroTipo) return false;
       if (q) {
         const campos = [p.nome, p.time, p.liga, p.tipo, p.temporada].join(" ").toLowerCase();
@@ -161,6 +248,13 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
       return true;
     }).slice(0, 20);
   }, [produtos, busca, filtroTipo]);
+
+  function getPromoLabel(p: DbProduto): string {
+    if (p.promocao_tipo === "porcentagem") return `${p.promocao_valor}% OFF`;
+    if (p.promocao_tipo === "novo_preco") return `Por ${formatarMoeda(p.preco_customizado ?? 0)}`;
+    if (p.promocao_tipo === "leve_pague") return "Leve 1 Pague 2";
+    return p.promocao_tipo ?? "";
+  }
 
   return (
     <div className="pb-16">
@@ -171,6 +265,18 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
           {message}
         </div>
       )}
+
+      {/* ── Summary ── */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="p-3 bg-accent/10 border border-accent/30 rounded-lg text-center">
+          <div className="text-2xl font-bold text-accent">{promosAtivasCategoria}</div>
+          <div className="text-xs text-text-muted mt-0.5">Categorias em promoção</div>
+        </div>
+        <div className="p-3 bg-accent/10 border border-accent/30 rounded-lg text-center">
+          <div className="text-2xl font-bold text-accent">{promosAtivasProduto}</div>
+          <div className="text-xs text-text-muted mt-0.5">Produtos em promoção</div>
+        </div>
+      </div>
 
       {/* Toggle all */}
       <div className="flex gap-2 mb-6">
@@ -304,45 +410,179 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
       <div className="border-t border-border pt-6">
         <h4 className="text-lg font-bold text-primary mb-2">Promoção por Produto</h4>
         <p className="text-sm text-text-muted mb-4">
-          Crie promoções individuais: desconto por %, novo preço fixo ou Leve 1 Pague 2.
+          Gerencie promoções individuais: ative, desative, edite ou remova.
         </p>
 
         {/* Current product promos */}
-        {produtosEmPromocao.length > 0 && (
+        {produtosComPromocao.length > 0 && (
           <div className="mb-6">
-            <h5 className="text-sm font-semibold text-text-muted mb-2">
-              Produtos em promoção individual ({produtosEmPromocao.length})
-            </h5>
-            <div className="flex flex-col gap-2">
-              {produtosEmPromocao.map((p) => {
-                const imgs = parseImageUrls(p.imagem_urls);
-                const img = imgs.length > 0 ? proxyImageUrl(imgs[0].replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")) : "";
-                const tipoLabel =
-                  p.promocao_tipo === "porcentagem" ? `${p.promocao_valor}% OFF` :
-                  p.promocao_tipo === "novo_preco" ? `Por ${formatarMoeda(p.preco_customizado ?? 0)}` :
-                  p.promocao_tipo === "leve_pague" ? "Leve 1 Pague 2" : p.promocao_tipo;
+            <div className="flex items-center justify-between mb-3">
+              <h5 className="text-sm font-semibold text-text-muted">
+                Promoções individuais ({produtosComPromocao.length})
+              </h5>
+              <div className="flex gap-1 bg-bg-base rounded-md p-0.5">
+                {(["ativas", "todas", "inativas"] as const).map((f) => (
+                  <button
+                    key={f}
+                    className={`px-3 py-1 text-xs font-semibold rounded cursor-pointer transition-colors ${
+                      promoFilter === f
+                        ? "bg-accent text-white"
+                        : "text-text-muted hover:text-primary"
+                    }`}
+                    onClick={() => setPromoFilter(f)}
+                  >
+                    {f === "ativas" ? "Ativas" : f === "todas" ? "Todas" : "Inativas"}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                return (
-                  <div key={p.id} className="flex items-center gap-3 p-2 bg-card-bg rounded-md border border-accent/30">
-                    {img ? (
-                      <img src={img} alt={p.nome} className="w-10 h-10 object-cover rounded" />
-                    ) : (
-                      <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-text-muted text-xs">—</div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{p.nome}</div>
-                      <div className="text-xs text-accent font-semibold">{tipoLabel}</div>
-                    </div>
-                    <button
-                      className="px-3 py-1.5 text-xs font-semibold bg-red-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
-                      onClick={() => handleRemoveProductPromo(p.id)}
-                      disabled={savingProduto === p.id}
+            <div className="flex flex-col gap-2">
+              {produtosFiltrados.length === 0 ? (
+                <p className="text-text-muted text-sm text-center py-4">
+                  {promoFilter === "ativas" ? "Nenhuma promoção ativa." : promoFilter === "inativas" ? "Nenhuma promoção inativa." : "Nenhuma promoção cadastrada."}
+                </p>
+              ) : (
+                produtosFiltrados.map((p) => {
+                  const imgs = parseImageUrls(p.imagem_urls);
+                  const img = imgs.length > 0 ? proxyImageUrl(imgs[0].replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")) : "";
+                  const isEditing = editingId === p.id;
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`p-3 rounded-lg border-2 transition-colors ${
+                        p.promocao
+                          ? "border-accent/40 bg-accent/5"
+                          : "border-border bg-card-bg opacity-70"
+                      }`}
                     >
-                      Remover
-                    </button>
-                  </div>
-                );
-              })}
+                      {/* Card header */}
+                      <div className="flex items-center gap-3">
+                        {img ? (
+                          <img src={img} alt={p.nome} className="w-10 h-10 object-cover rounded" />
+                        ) : (
+                          <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-text-muted text-xs">—</div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{p.nome}</div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-semibold ${p.promocao ? "text-accent" : "text-text-muted"}`}>
+                              {getPromoLabel(p)}
+                            </span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                              p.promocao
+                                ? "bg-green-100 text-green-700"
+                                : "bg-gray-100 text-gray-500"
+                            }`}>
+                              {p.promocao ? "ATIVA" : "INATIVA"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Toggle switch */}
+                        <button
+                          className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer flex-shrink-0 ${
+                            p.promocao ? "bg-accent" : "bg-gray-300"
+                          }`}
+                          onClick={() => handleToggleProductPromo(p.id, !p.promocao)}
+                          disabled={savingProduto === p.id}
+                          title={p.promocao ? "Desativar promoção" : "Ativar promoção"}
+                        >
+                          <span
+                            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                              p.promocao ? "left-[22px]" : "left-0.5"
+                            }`}
+                          />
+                        </button>
+
+                        {/* Edit button */}
+                        <button
+                          className="px-2 py-1 text-xs font-semibold bg-blue-500 text-white rounded cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+                          onClick={() => isEditing ? handleCancelEdit() : handleStartEdit(p)}
+                          disabled={savingProduto === p.id}
+                          title="Editar promoção"
+                        >
+                          {isEditing ? "✕" : "✎"}
+                        </button>
+
+                        {/* Remove button */}
+                        <button
+                          className="px-2 py-1 text-xs font-semibold bg-red-500 text-white rounded cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+                          onClick={() => handleRemoveProductPromo(p.id)}
+                          disabled={savingProduto === p.id}
+                          title="Remover promoção"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Edit form */}
+                      {isEditing && (
+                        <div className="mt-3 pt-3 border-t border-border">
+                          <div className="flex flex-col gap-2">
+                            <select
+                              value={editTipo}
+                              onChange={(e) => { setEditTipo(e.target.value); setEditValor(""); setEditNovoPreco(""); }}
+                              className="px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                            >
+                              <option value="">Tipo de promoção</option>
+                              <option value="porcentagem">Desconto por %</option>
+                              <option value="novo_preco">Novo preço fixo</option>
+                              <option value="leve_pague">Leve 1 Pague 2</option>
+                            </select>
+
+                            {editTipo === "porcentagem" && (
+                              <input
+                                type="number"
+                                min="1"
+                                max="99"
+                                value={editValor}
+                                onChange={(e) => setEditValor(e.target.value)}
+                                placeholder="Desconto em % (ex: 20)"
+                                className="px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                              />
+                            )}
+
+                            {editTipo === "novo_preco" && (
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={editNovoPreco}
+                                onChange={(e) => setEditNovoPreco(e.target.value)}
+                                placeholder="Novo preço (ex: 99.90)"
+                                className="px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                              />
+                            )}
+
+                            {editTipo === "leve_pague" && (
+                              <div className="text-xs text-accent font-medium px-1">
+                                O cliente leva 2 unidades pelo preço de 1
+                              </div>
+                            )}
+
+                            <div className="flex gap-2">
+                              <button
+                                className="flex-1 py-2 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+                                onClick={() => handleEditProductPromo(p.id)}
+                                disabled={savingProduto === p.id || !editTipo}
+                              >
+                                {savingProduto === p.id ? "Salvando..." : "Salvar"}
+                              </button>
+                              <button
+                                className="px-4 py-2 text-sm font-semibold bg-gray-200 text-gray-700 rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={handleCancelEdit}
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         )}
@@ -364,7 +604,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
               className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
             >
               <option value="">Todos os tipos</option>
-              {["Torcedor", "Jogador", "Manga Longa", "Retrô"].map((t) => (
+              {["Torcedor", "Jogador", "Manga Longa", "Retrô", "Goleiro", "Treinamento", "Polo", "NBA"].map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
@@ -481,7 +721,7 @@ function ProductPromoRow({
 
         {tipo === "leve_pague" && (
           <div className="text-xs text-accent font-medium px-1">
-            🏷️ O cliente leva 2 unidades pelo preço de 1
+            O cliente leva 2 unidades pelo preço de 1
           </div>
         )}
 

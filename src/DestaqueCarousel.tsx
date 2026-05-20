@@ -40,6 +40,12 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
   const trackRef = useRef<HTMLDivElement>(null);
   const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Touch/drag state
+  const touchStartX = useRef(0);
+  const touchCurrentX = useRef(0);
+  const isDragging = useRef(false);
+  const dragOffset = useRef(0);
+
   // Measure container
   useEffect(() => {
     const measure = () => {
@@ -67,7 +73,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
     if (produtos.length <= visibleCards) return;
 
     autoPlayRef.current = setInterval(() => {
-      if (isPaused) return;
+      if (isPaused || isDragging.current) return;
       setIsTransitioning(true);
       setCurrentIndex((prev) => {
         if (prev >= maxIndex) return 0;
@@ -102,6 +108,65 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
     setCurrentIndex((prev) => prev >= maxIndex ? 0 : prev + 1);
   }, [maxIndex]);
 
+  // Touch handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchCurrentX.current = e.touches[0].clientX;
+    isDragging.current = true;
+    dragOffset.current = 0;
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isDragging.current) return;
+    touchCurrentX.current = e.touches[0].clientX;
+    dragOffset.current = touchCurrentX.current - touchStartX.current;
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    const diff = dragOffset.current;
+    dragOffset.current = 0;
+
+    if (Math.abs(diff) > 40) {
+      if (diff > 0) {
+        goPrev();
+      } else {
+        goNext();
+      }
+    }
+  }, [goPrev, goNext]);
+
+  // Mouse drag handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    touchStartX.current = e.clientX;
+    touchCurrentX.current = e.clientX;
+    isDragging.current = true;
+    dragOffset.current = 0;
+    e.preventDefault();
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+    touchCurrentX.current = e.clientX;
+    dragOffset.current = touchCurrentX.current - touchStartX.current;
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    const diff = dragOffset.current;
+    dragOffset.current = 0;
+
+    if (Math.abs(diff) > 40) {
+      if (diff > 0) {
+        goPrev();
+      } else {
+        goNext();
+      }
+    }
+  }, [goPrev, goNext]);
+
   if (produtos.length === 0) return null;
 
   const canScrollLeft = currentIndex > 0 || produtos.length > visibleCards;
@@ -116,7 +181,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
       <div
         className="relative bg-[#0f1629] py-6"
         onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={() => setIsPaused(false)}
+        onMouseLeave={() => { setIsPaused(false); isDragging.current = false; }}
       >
         {/* Arrows */}
         {needsScroll && canScrollLeft && (
@@ -138,7 +203,16 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
           </button>
         )}
 
-        <div className="overflow-hidden px-4">
+        <div
+          className="overflow-hidden px-4 cursor-grab active:cursor-grabbing select-none"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={() => { if (isDragging.current) { isDragging.current = false; dragOffset.current = 0; } }}
+        >
           <div
             ref={trackRef}
             className="flex gap-5"
@@ -193,7 +267,9 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
                             <span className="text-text-muted text-xs line-through">{formatarMoeda(base)}</span>
                           </div>
                           {badge && (
-                            <span className="inline-block mt-0.5 text-[10px] font-bold text-accent">{badge}</span>
+                            <span className="inline-block mt-1 text-[10px] font-extrabold px-2 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">
+                              {badge}
+                            </span>
                           )}
                         </div>
                       ) : (

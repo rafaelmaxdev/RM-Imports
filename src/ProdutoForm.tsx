@@ -3,7 +3,7 @@ import axios from "axios";
 import { supabase } from "./lib/supabase";
 import { addProduto, updateProduto, deleteProduto, parseImageUrls } from "./lib/db";
 import type { DbProduto } from "./lib/db";
-import { FABRICANTES, proxyImageUrl } from "./types";
+import { proxyImageUrl } from "./types";
 
 interface Time {
   id: string;
@@ -24,6 +24,17 @@ const SELECOES = [
   "Sérvia", "Suécia", "Suíça", "Tunísia", "Uruguai",
 ].sort((a, b) => a.localeCompare(b));
 
+const NBA_FRANQUIAS = [
+  "Atlanta Hawks", "Boston Celtics", "Brooklyn Nets", "Charlotte Hornets",
+  "Chicago Bulls", "Cleveland Cavaliers", "Dallas Mavericks", "Denver Nuggets",
+  "Detroit Pistons", "Golden State Warriors", "Houston Rockets", "Indiana Pacers",
+  "LA Clippers", "LA Lakers", "Memphis Grizzlies", "Miami Heat",
+  "Milwaukee Bucks", "Minnesota Timberwolves", "New Orleans Pelicans", "New York Knicks",
+  "Oklahoma City Thunder", "Orlando Magic", "Philadelphia 76ers", "Phoenix Suns",
+  "Portland Trail Blazers", "Sacramento Kings", "San Antonio Spurs", "Toronto Raptors",
+  "Utah Jazz", "Washington Wizards",
+].sort((a, b) => a.localeCompare(b));
+
 const ligas: Liga[] = [
   { nome: "Brasileirão", url: "/api/yupoo/categories/680738" },
   { nome: "Bundesliga", url: "/api/yupoo/categories/680725" },
@@ -31,6 +42,7 @@ const ligas: Liga[] = [
   { nome: "La Liga", url: "/api/yupoo/categories/680717" },
   { nome: "Ligue 1", url: "/api/yupoo/categories/2897018" },
   { nome: "MLS", url: "/api/yupoo/categories/3247384" },
+  { nome: "NBA", url: "" },
   { nome: "Premier League", url: "/api/yupoo/categories/680719" },
   { nome: "Serie A", url: "/api/yupoo/categories/708736" },
   { nome: "Seleções", url: "" },
@@ -40,6 +52,8 @@ const renomear: Record<string, string> = {
   "LFC": "Liverpool",
   "M-U": "Manchester United",
   "Juv": "Juventus",
+  "Inter Milan": "Inter de Milão",
+  "Atlético Juventus": "Atlético Juventus",
   "Ceara Sporting": "Ceará",
   "Ceará Sporting": "Ceará",
 };
@@ -52,7 +66,6 @@ function normalizeNome(nome: string): string {
   return result;
 }
 
-const RETRO_ANO_TEMPORADA = 21;
 const RETRO_ANO_SELECAO = 2022;
 
 function getValorAtual(isAno: boolean): string {
@@ -73,7 +86,9 @@ function isRetro(valor: string, isAno: boolean): boolean {
     return parseInt(valor) <= RETRO_ANO_SELECAO;
   }
   const [inicio] = valor.split("/").map(Number);
-  return inicio <= RETRO_ANO_TEMPORADA;
+  // Converte ano de 2 dígitos para 4 dígitos: >= 50 → 1900s, < 50 → 2000s
+  const anoCompleto = inicio >= 50 ? inicio + 1900 : inicio + 2000;
+  return anoCompleto <= 2021;
 }
 
 function montarNome(
@@ -379,7 +394,6 @@ export default function ProdutoForm({
   const [nomeCustom, setNomeCustom] = useState("");
   const [imagemUrls, setImagemUrls] = useState<string[]>([""]);
   const [yupooUrl, setYupooUrl] = useState("");
-  const [fabricante, setFabricante] = useState("");
   const [destaque, setDestaque] = useState(false);
   const [promocao, setPromocao] = useState(false);
   const [promocaoTipo, setPromocaoTipo] = useState<string>("");
@@ -430,20 +444,31 @@ export default function ProdutoForm({
     if (liga === "Seleções") {
       return SELECOES.map((t, i) => ({ id: `sel-${i}`, nome: t, href: "" }));
     }
+    if (liga === "NBA") {
+      return NBA_FRANQUIAS.map((t, i) => ({ id: `nba-${i}`, nome: t, href: "" }));
+    }
     return timesPorLiga[liga] || [];
   }, [liga, timesPorLiga]);
 
   const retro = isRetro(periodo, isAno);
-  const tiposDisponiveis = retro ? ["Retrô"] : ["Torcedor", "Jogador", "Manga Longa"];
+  const isNBA = liga === "NBA";
+  const tiposDisponiveis = isNBA
+    ? ["NBA"]
+    : retro
+      ? ["Retrô"]
+      : ["Torcedor", "Jogador", "Manga Longa", "Goleiro", "Treinamento", "Polo"];
 
   useEffect(() => {
-    if (retro && tipo !== "Retrô") {
+    if (isNBA && tipo !== "NBA") {
+      setTipo("NBA");
+    } else if (retro && tipo !== "Retrô") {
       setTipo("Retrô");
-    }
-    if (!retro && tipo === "Retrô") {
+    } else if (!retro && !isNBA && tipo === "Retrô") {
+      setTipo("Torcedor");
+    } else if (!retro && !isNBA && tipo === "NBA") {
       setTipo("Torcedor");
     }
-  }, [retro]);
+  }, [retro, isNBA]);
 
   const nomeFinal = montarNome(time, tipo, periodo, nomeCustom, localizacao);
 
@@ -453,7 +478,6 @@ export default function ProdutoForm({
     setPeriodo(getValorAtual(false));
     setTipo("Torcedor");
     setLocalizacao("");
-    setFabricante("");
     setNomeCustom("");
     setImagemUrls([""]);
     setYupooUrl("");
@@ -520,7 +544,6 @@ export default function ProdutoForm({
 
     const nomeGerado = montarNome(normalizedTime, fp.tipo, fp.temporada, "", loc);
     setNomeCustom(fp.nome !== nomeGerado ? fp.nome : "");
-    setFabricante("");
   }
 
   async function handleSave() {
@@ -745,22 +768,6 @@ export default function ProdutoForm({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-text-muted">Fabricante (visível apenas no admin)</label>
-          <select
-            value={fabricante}
-            onChange={(e) => setFabricante(e.target.value)}
-            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-          >
-            <option value="">Selecione</option>
-            {FABRICANTES.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
           <label className="text-sm font-semibold text-text-muted">Preço customizado (opcional — sobrescreve o preço da categoria)</label>
           <input
             type="number"
@@ -837,7 +844,7 @@ export default function ProdutoForm({
               className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
             >
               <option value="">Todos os tipos</option>
-              {["Torcedor", "Jogador", "Manga Longa", "Retrô"].map((t) => (
+              {["Torcedor", "Jogador", "Manga Longa", "Retrô", "Goleiro", "Treinamento", "Polo", "NBA"].map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>

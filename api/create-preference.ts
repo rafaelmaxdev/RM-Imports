@@ -52,6 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         payment_methods: {
           installments: 12,
         },
+        purpose: "wallet_purchase",
       },
     });
 

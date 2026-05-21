@@ -18,16 +18,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { type, data, action } = req.body as {
+    const body = req.body as {
       type?: string;
-      data?: { id: string };
       action?: string;
+      data?: { id: string };
     };
 
-    // Mercado Pago sends notifications with type and data.id
-    // We only care about "payment" type
-    if (type === "payment" && data?.id) {
-      const paymentId = data.id;
+    console.log("Webhook received:", JSON.stringify(body));
+
+    // Mercado Pago sends notifications with type="payment" or action="payment.updated"
+    const isPayment = body.type === "payment" || body.action?.startsWith("payment");
+
+    if (isPayment && body.data?.id) {
+      const paymentId = body.data.id;
+
+      console.log(`Processing payment ${paymentId}`);
 
       // Fetch payment details from Mercado Pago
       const paymentApi = new Payment(mpClient);
@@ -36,7 +41,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const externalReference = paymentInfo.external_reference;
       const status = paymentInfo.status;
       const paymentMethod = paymentInfo.payment_method_id;
-      const paymentTypeId = paymentInfo.payment_type_id;
+
+      console.log(`Payment ${paymentId}: status=${status}, ref=${externalReference}, method=${paymentMethod}`);
 
       if (externalReference) {
         // Map MP status to our status
@@ -56,19 +62,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // Update order in Supabase
+        const updateData: Record<string, unknown> = {
+          status: orderStatus,
+          mp_payment_id: String(paymentId),
+        };
+        if (paymentMethod) updateData.payment_method = paymentMethod;
+
         const { error } = await supabase
           .from("pedidos")
-          .update({
-            status: orderStatus,
-            payment_method: paymentMethod || null,
-            payment_type: paymentTypeId || null,
-            mp_payment_id: paymentId,
-          })
+          .update(updateData)
           .eq("id", externalReference);
 
         if (error) {
           console.error("Error updating order:", error);
+        } else {
+          console.log(`Order ${externalReference} updated to ${orderStatus}`);
         }
+      } else {
+        console.log(`Payment ${paymentId}: no external_reference found`);
       }
     }
 

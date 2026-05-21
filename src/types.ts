@@ -38,14 +38,19 @@ export interface OrderAddress {
   telefone: string;
 }
 
+export type PaymentMethod = "pix" | "credit_card" | "debit_card";
+
 export interface Order {
   id: string;
   data: string;
   hora: string;
   itens: OrderItem[];
   total: number;
-  status: "pendente" | "confirmado" | "entregue";
+  status: "pendente" | "pago" | "entregue" | "cancelado";
   endereco?: OrderAddress;
+  payment_method?: PaymentMethod;
+  mp_preference_id?: string;
+  mp_payment_id?: string;
 }
 
 export const PRECOS_BASE: Record<string, number> = {
@@ -188,7 +193,7 @@ export const TAMANHOS = ["P", "M", "G", "GG", "G1", "G2", "G3"];
 
 export const FABRICANTES = ["Nike", "Adidas", "Puma", "New Balance", "Umbro", "Kappa", "Joma", "Outro"];
 
-export const WHATSAPP_NUMBER = "5511999999999";
+export const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || "5511999999999";
 
 export function gerarId(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

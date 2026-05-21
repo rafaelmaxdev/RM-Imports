@@ -13,7 +13,7 @@ import NotFound from "./NotFound";
 import { CartProvider, useCart } from "./CartContext";
 import { getProdutos, getLojaConfig } from "./lib/db";
 import type { DbProduto } from "./lib/db";
-import type { OrderAddress, LojaConfig } from "./types";
+import type { OrderAddress, LojaConfig, PaymentMethod } from "./types";
 import { DEFAULT_CONFIG } from "./types";
 import "./index.css";
 
@@ -32,8 +32,8 @@ function AppContent() {
     ]).finally(() => setLoading(false));
   }, []);
 
-  async function handleCheckout(endereco: OrderAddress) {
-    const order = await createOrder(endereco);
+  async function handleCheckout(endereco: OrderAddress, paymentMethod: PaymentMethod) {
+    const order = await createOrder(endereco, paymentMethod);
     if (order) {
       setShowCart(false);
       navigate(`/pedido/${order.id}`);

@@ -146,6 +146,9 @@ export interface DbPedido {
   total: number;
   status: string;
   endereco: string | null; // JSONB stored as string from Supabase
+  payment_method: string | null;
+  mp_preference_id: string | null;
+  mp_payment_id: string | null;
   created_at: string;
 }
 
@@ -160,11 +163,14 @@ function dbPedidoToOrder(db: DbPedido): import("../types").Order {
     endereco: db.endereco
       ? (typeof db.endereco === "string" ? JSON.parse(db.endereco) : db.endereco)
       : undefined,
+    payment_method: (db.payment_method as import("../types").PaymentMethod) || undefined,
+    mp_preference_id: db.mp_preference_id || undefined,
+    mp_payment_id: db.mp_payment_id || undefined,
   };
 }
 
 export async function createPedido(order: import("../types").Order): Promise<import("../types").Order> {
-  const row = {
+const row = {
     id: order.id,
     data: order.data,
     hora: order.hora,
@@ -172,6 +178,9 @@ export async function createPedido(order: import("../types").Order): Promise<imp
     total: order.total,
     status: order.status,
     endereco: order.endereco ? JSON.stringify(order.endereco) : null,
+    payment_method: order.payment_method || null,
+    mp_preference_id: order.mp_preference_id || null,
+    mp_payment_id: order.mp_payment_id || null,
   };
 
   const { data, error } = await supabase

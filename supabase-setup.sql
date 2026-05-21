@@ -91,3 +91,21 @@ create policy "Apenas autenticados podem atualizar pedidos"
 create policy "Apenas autenticados podem deletar pedidos"
   on pedidos for delete
   using (auth.role() = 'authenticated');
+
+-- ============================================================
+-- MIGRAÇÃO: Adicionar colunas de pagamento Mercado Pago
+-- Execute CADA COMANDO SEPARADAMENTE no SQL Editor do Supabase:
+-- ============================================================
+
+-- ALTER TABLE pedidos ADD COLUMN payment_method text;
+-- ALTER TABLE pedidos ADD COLUMN mp_preference_id text;
+-- ALTER TABLE pedidos ADD COLUMN mp_payment_id text;
+
+-- ============================================================
+-- NOTA: O status do pedido agora segue o fluxo:
+--   pendente → pago → entregue
+--   pendente → cancelado
+-- O status "confirmado" foi substituído por "pago".
+-- Se você tinha pedidos com status "confirmado", execute:
+-- UPDATE pedidos SET status = 'pago' WHERE status = 'confirmado';
+-- ============================================================

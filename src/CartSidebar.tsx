@@ -1,11 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useCart } from "./CartContext";
-import type { OrderAddress } from "./types";
+import type { OrderAddress, PaymentMethod } from "./types";
 import { formatarMoeda, proxyImageUrl } from "./types";
 
 interface CartSidebarProps {
   onClose: () => void;
-  onCheckout: (endereco: OrderAddress) => void;
+  onCheckout: (endereco: OrderAddress, paymentMethod: PaymentMethod) => void;
 }
 
 const ESTADOS = [
@@ -44,9 +44,11 @@ function formatarTelefone(valor: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
+type Step = "cart" | "address" | "payment";
+
 export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   const { cart, removeFromCart, total } = useCart();
-  const [step, setStep] = useState<"cart" | "address">("cart");
+  const [step, setStep] = useState<Step>("cart");
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState("");
   const [ruaSugestoes, setRuaSugestoes] = useState<RuaSugestao[]>([]);
@@ -54,6 +56,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   const [showSugestoes, setShowSugestoes] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ruaRef = useRef<HTMLDivElement>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
 
   const [endereco, setEndereco] = useState<OrderAddress>({
     nome: "",
@@ -148,7 +151,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   }
 
   function handleNext() {
-    setStep("address");
+    if (step === "cart") setStep("address");
+    else if (step === "address") setStep("payment");
   }
 
   function handleConfirm() {
@@ -166,7 +170,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
       return;
     }
     setErro("");
-    onCheckout(endereco);
+    onCheckout(endereco, paymentMethod);
     onClose();
   }
 
@@ -186,12 +190,18 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
     }
   }
 
+  const paymentOptions: { value: PaymentMethod; label: string; icon: string; desc: string }[] = [
+    { value: "pix", label: "Pix", icon: "📱", desc: "Pagamento instantâneo" },
+    { value: "credit_card", label: "Cartão de Crédito", icon: "💳", desc: "Parcele em até 12x" },
+    { value: "debit_card", label: "Cartão de Débito", icon: "🏦", desc: "Débito à vista" },
+  ];
+
   return (
     <div className="fixed inset-0 bg-black/50 z-[1000]" onClick={onClose}>
       <div className="absolute right-0 top-0 bottom-0 w-full max-w-100 bg-card-bg flex flex-col shadow-[-4px_0_16px_rgba(0,0,0,0.1)]" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center px-6 py-4 border-b border-border">
           <h3 className="m-0 text-primary font-semibold">
-            {step === "cart" ? `Carrinho (${cart.length})` : "Endereço de Entrega"}
+            {step === "cart" ? `Carrinho (${cart.length})` : step === "address" ? "Endereço de Entrega" : "Pagamento"}
           </h3>
           <button className="bg-none border-none text-xl cursor-pointer text-text-muted" onClick={onClose}>
             ✕
@@ -248,7 +258,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
               </button>
             </div>
           </>
-        ) : (
+        ) : step === "address" ? (
           <>
             <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
               <div>
@@ -399,6 +409,63 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                 <button
                   className="flex-1 py-3 text-sm font-semibold bg-border text-text-main rounded-md cursor-pointer transition-colors hover:bg-gray-300"
                   onClick={() => setStep("cart")}
+                >
+                  Voltar
+                </button>
+                <button
+                  className="flex-1 py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"
+                  onClick={handleNext}
+                >
+                  Continuar
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              <p className="text-sm text-text-muted mb-4">Escolha a forma de pagamento:</p>
+              <div className="flex flex-col gap-2">
+                {paymentOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer transition-colors text-left ${
+                      paymentMethod === opt.value
+                        ? "border-accent bg-accent/5"
+                        : "border-border hover:border-accent/50"
+                    }`}
+                    onClick={() => setPaymentMethod(opt.value)}
+                  >
+                    <span className="text-2xl">{opt.icon}</span>
+                    <div className="flex-1">
+                      <div className="font-semibold text-sm text-text-main">{opt.label}</div>
+                      <div className="text-xs text-text-muted">{opt.desc}</div>
+                    </div>
+                    {paymentMethod === opt.value && (
+                      <span className="text-accent font-bold">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 p-3 bg-primary/5 rounded-md border border-border">
+                  <p className="text-xs text-text-muted">
+                    {paymentMethod === "pix" && "Você será redirecionado ao Mercado Pago para pagar via Pix. O pagamento é instantâneo e a confirmação é automática."}
+                    {paymentMethod === "credit_card" && "Você será redirecionado ao Mercado Pago para pagar com cartão de crédito. Parcelamento em até 12x disponível."}
+                    {paymentMethod === "debit_card" && "Você será redirecionado ao Mercado Pago para pagar com cartão de débito."}
+                  </p>
+                </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-border">
+              <div className="flex justify-between font-bold text-lg mb-4">
+                <span>Total:</span>
+                <span>{formatarMoeda(total)}</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="flex-1 py-3 text-sm font-semibold bg-border text-text-main rounded-md cursor-pointer transition-colors hover:bg-gray-300"
+                  onClick={() => setStep("address")}
                 >
                   Voltar
                 </button>

@@ -1,7 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { getPedidos, updatePedidoStatus, deletePedido } from "./lib/db";
 import type { Order } from "./types";
-import { montarMensagemFornecedor, montarMensagemPagamento, WHATSAPP_NUMBER, formatarMoeda } from "./types";
+import { montarMensagemFornecedor, WHATSAPP_NUMBER, formatarMoeda } from "./types";
+
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  pendente: { label: "Pendente", bg: "bg-yellow-100", text: "text-yellow-800" },
+  pago: { label: "Pago", bg: "bg-green-100", text: "text-green-800" },
+  entregue: { label: "Entregue", bg: "bg-cyan-100", text: "text-cyan-800" },
+  cancelado: { label: "Cancelado", bg: "bg-red-100", text: "text-red-800" },
+};
+
+const PAYMENT_LABELS: Record<string, string> = {
+  pix: "Pix",
+  credit_card: "Cartão",
+  debit_card: "Débito",
+};
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -12,7 +25,7 @@ export default function AdminOrders() {
   const loadOrders = useCallback(async () => {
     try {
       const all = await getPedidos();
-      setOrders(all.filter((o) => o.status !== "entregue"));
+      setOrders(all.filter((o) => o.status !== "entregue" && o.status !== "cancelado"));
     } catch (err) {
       console.error("Erro ao carregar pedidos:", err);
     } finally {
@@ -34,14 +47,20 @@ export default function AdminOrders() {
     return false;
   });
 
-  async function handleConfirmPayment(id: string) {
-    await updatePedidoStatus(id, "confirmado");
-    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "confirmado" as const } : o)));
+  async function handleMarkAsPaid(id: string) {
+    await updatePedidoStatus(id, "pago");
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "pago" as const } : o)));
   }
 
   async function handleConfirmDelivery(id: string) {
     if (!confirm(`Confirmar entrega do pedido ${id}?`)) return;
     await updatePedidoStatus(id, "entregue");
+    setOrders((prev) => prev.filter((o) => o.id !== id));
+  }
+
+  async function handleCancel(id: string) {
+    if (!confirm(`Cancelar pedido ${id}?`)) return;
+    await updatePedidoStatus(id, "cancelado");
     setOrders((prev) => prev.filter((o) => o.id !== id));
   }
 
@@ -57,19 +76,19 @@ export default function AdminOrders() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
         <h2 className="text-xl text-primary m-0">Pedidos ({filteredOrders.length})</h2>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center w-full sm:w-auto">
           <button
-            className="px-3 py-2 text-sm font-semibold bg-accent/10 text-accent rounded-md cursor-pointer hover:bg-accent/20 transition-colors"
+            className="px-3 py-2 text-sm font-semibold bg-accent/10 text-accent rounded-md cursor-pointer hover:bg-accent/20 transition-colors whitespace-nowrap"
             onClick={loadOrders}
           >
             ↻ Atualizar
           </button>
           <input
             type="text"
-            placeholder="Buscar por ID, nome, telefone ou produto..."
-            className="px-3 py-2 border border-border rounded-md text-sm w-72"
+            placeholder="Buscar ID, nome, tel..."
+            className="px-3 py-2 border border-border rounded-md text-sm flex-1 sm:w-64 min-w-0"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -82,12 +101,12 @@ export default function AdminOrders() {
         <div className="flex flex-col gap-4">
           {filteredOrders.map((order) => {
             const msgFornecedor = montarMensagemFornecedor(order);
-            const msgPagamento = montarMensagemPagamento(order);
             const whatsappFornecedor = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msgFornecedor)}`;
-            const whatsappPagamento = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msgPagamento)}`;
             const isExpanded = expandedId === order.id;
             const totalItens = order.itens.length;
             const totalPersonalizacoes = order.itens.filter((i) => i.personalizado).length;
+            const statusInfo = STATUS_CONFIG[order.status] || STATUS_CONFIG.pendente;
+            const paymentLabel = order.payment_method ? PAYMENT_LABELS[order.payment_method] || order.payment_method : null;
 
             return (
               <div key={order.id} className="bg-card-bg rounded-md shadow-card overflow-hidden">
@@ -97,18 +116,17 @@ export default function AdminOrders() {
                   onClick={() => setExpandedId(isExpanded ? null : order.id)}
                 >
                   <div className="flex justify-between items-start">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-lg text-primary">{order.id}</span>
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
-                            order.status === "pendente"
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-green-100 text-green-800"
-                          }`}
-                        >
-                          {order.status === "pendente" ? "Pendente" : "Confirmado"}
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${statusInfo.bg} ${statusInfo.text}`}>
+                          {statusInfo.label}
                         </span>
+                        {paymentLabel && (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">
+                            {paymentLabel}
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-text-muted mt-1">
                         {order.data} às {order.hora} • {totalItens} {totalItens === 1 ? "item" : "itens"}
@@ -179,28 +197,26 @@ export default function AdminOrders() {
                     )}
 
                     {/* Actions */}
-                    <div className="flex justify-between items-center pt-4 mt-4 border-t border-border flex-wrap gap-3">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-4 mt-4 border-t border-border gap-3">
                       <div className="font-bold text-lg">Total: {formatarMoeda(order.total)}</div>
                       <div className="flex gap-2 flex-wrap">
                         {order.status === "pendente" && (
                           <>
-                            <a
-                              href={whatsappPagamento}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center justify-center px-4 py-2.5 rounded-md border-none text-sm font-semibold cursor-pointer transition-opacity hover:opacity-85 text-white bg-green-500 min-h-9 whitespace-nowrap no-underline"
-                            >
-                              📱 Enviar Link Pagamento
-                            </a>
                             <button
                               className="inline-flex items-center justify-center px-4 py-2.5 rounded-md border-none text-sm font-semibold cursor-pointer transition-opacity hover:opacity-85 text-white bg-blue-500 min-h-9 whitespace-nowrap"
-                              onClick={() => handleConfirmPayment(order.id)}
+                              onClick={() => handleMarkAsPaid(order.id)}
                             >
-                              ✓ Confirmar Pagamento
+                              ✓ Marcar como Pago
+                            </button>
+                            <button
+                              className="inline-flex items-center justify-center px-4 py-2.5 rounded-md border-none text-sm font-semibold cursor-pointer transition-opacity hover:opacity-85 text-white bg-red-400 min-h-9 whitespace-nowrap"
+                              onClick={() => handleCancel(order.id)}
+                            >
+                              ✕ Cancelar
                             </button>
                           </>
                         )}
-                        {order.status === "confirmado" && (
+                        {order.status === "pago" && (
                           <>
                             <a
                               href={whatsappFornecedor}

@@ -3,16 +3,30 @@ import { getPedidos, deletePedido } from "./lib/db";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
 
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  pendente: { label: "Pendente", bg: "bg-yellow-100", text: "text-yellow-800" },
+  pago: { label: "Pago", bg: "bg-green-100", text: "text-green-800" },
+  entregue: { label: "Entregue", bg: "bg-cyan-100", text: "text-cyan-800" },
+  cancelado: { label: "Cancelado", bg: "bg-red-100", text: "text-red-800" },
+};
+
+const PAYMENT_LABELS: Record<string, string> = {
+  pix: "Pix",
+  credit_card: "Cartão",
+  debit_card: "Débito",
+};
+
 export default function AdminHistory() {
   const [history, setHistory] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"all" | "entregue" | "cancelado">("all");
 
   const loadHistory = useCallback(async () => {
     try {
       const all = await getPedidos();
-      setHistory(all.filter((o) => o.status === "entregue"));
+      setHistory(all.filter((o) => o.status === "entregue" || o.status === "cancelado"));
     } catch (err) {
       console.error("Erro ao carregar histórico:", err);
     } finally {
@@ -31,6 +45,8 @@ export default function AdminHistory() {
   }
 
   const filteredHistory = history.filter((order) => {
+    if (filter === "entregue" && order.status !== "entregue") return false;
+    if (filter === "cancelado" && order.status !== "cancelado") return false;
     const term = search.toLowerCase();
     if (!term) return true;
     if (order.id.toLowerCase().includes(term)) return true;
@@ -46,19 +62,28 @@ export default function AdminHistory() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
         <h2 className="text-xl text-primary m-0">Histórico ({filteredHistory.length})</h2>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center w-full sm:w-auto">
           <button
-            className="px-3 py-2 text-sm font-semibold bg-accent/10 text-accent rounded-md cursor-pointer hover:bg-accent/20 transition-colors"
+            className="px-3 py-2 text-sm font-semibold bg-accent/10 text-accent rounded-md cursor-pointer hover:bg-accent/20 transition-colors whitespace-nowrap"
             onClick={loadHistory}
           >
             ↻ Atualizar
           </button>
+          <select
+            className="px-3 py-2 border border-border rounded-md text-sm bg-card-bg"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as typeof filter)}
+          >
+            <option value="all">Todos</option>
+            <option value="entregue">Entregues</option>
+            <option value="cancelado">Cancelados</option>
+          </select>
           <input
             type="text"
-            placeholder="Buscar por ID, nome, telefone ou produto..."
-            className="px-3 py-2 border border-border rounded-md text-sm w-80"
+            placeholder="Buscar ID, nome, tel..."
+            className="px-3 py-2 border border-border rounded-md text-sm flex-1 sm:w-52 min-w-0"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -66,28 +91,35 @@ export default function AdminHistory() {
       </div>
 
       {filteredHistory.length === 0 ? (
-        <p className="text-center text-text-muted py-8">Nenhum pedido entregue ainda.</p>
+        <p className="text-center text-text-muted py-8">Nenhum pedido no histórico.</p>
       ) : (
         <div className="flex flex-col gap-4">
           {filteredHistory.map((order) => {
             const isExpanded = expandedId === order.id;
             const totalItens = order.itens.length;
             const totalPersonalizacoes = order.itens.filter((i) => i.personalizado).length;
+            const statusInfo = STATUS_CONFIG[order.status] || STATUS_CONFIG.entregue;
+            const paymentLabel = order.payment_method ? PAYMENT_LABELS[order.payment_method] || order.payment_method : null;
 
             return (
-              <div key={order.id} className="bg-card-bg rounded-md shadow-card overflow-hidden opacity-90">
+              <div key={order.id} className={`bg-card-bg rounded-md shadow-card overflow-hidden ${order.status === "cancelado" ? "opacity-70" : ""}`}>
                 {/* Header */}
                 <div
                   className="p-4 cursor-pointer hover:bg-bg-base transition-colors"
                   onClick={() => setExpandedId(isExpanded ? null : order.id)}
                 >
                   <div className="flex justify-between items-start">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-lg text-primary">{order.id}</span>
-                        <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-cyan-100 text-cyan-800">
-                          Entregue
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${statusInfo.bg} ${statusInfo.text}`}>
+                          {statusInfo.label}
                         </span>
+                        {paymentLabel && (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">
+                            {paymentLabel}
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-text-muted mt-1">
                         {order.data} às {order.hora} • {totalItens} {totalItens === 1 ? "item" : "itens"}

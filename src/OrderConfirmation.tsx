@@ -2,7 +2,21 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getPedidoById } from "./lib/db";
 import type { Order } from "./types";
-import { montarMensagemPagamento, WHATSAPP_NUMBER, formatarMoeda } from "./types";
+import { formatarMoeda } from "./types";
+import { Wallet } from "@mercadopago/sdk-react";
+
+const PAYMENT_LABELS: Record<string, string> = {
+  pix: "Pix",
+  credit_card: "Cartão de Crédito",
+  debit_card: "Cartão de Débito",
+};
+
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  pendente: { label: "Aguardando pagamento", bg: "bg-yellow-100", text: "text-yellow-800" },
+  pago: { label: "Pagamento confirmado", bg: "bg-green-100", text: "text-green-800" },
+  entregue: { label: "Entregue", bg: "bg-cyan-100", text: "text-cyan-800" },
+  cancelado: { label: "Cancelado", bg: "bg-red-100", text: "text-red-800" },
+};
 
 export default function OrderConfirmation() {
   const { id } = useParams<{ id: string }>();
@@ -40,18 +54,25 @@ export default function OrderConfirmation() {
     );
   }
 
-  const msg = montarMensagemPagamento(order);
-  const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
+  const isMPPayment = !!order.payment_method;
+  const paymentLabel = order.payment_method ? PAYMENT_LABELS[order.payment_method] || order.payment_method : "";
+  const statusInfo = STATUS_CONFIG[order.status] || STATUS_CONFIG.pendente;
+  const needsPayment = order.status === "pendente" && isMPPayment && !!order.mp_preference_id;
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8 text-center">
       <div className="mb-8">
-        <div className="w-15 h-15 bg-green-500 text-white rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
-          ✓
+        <div className={`w-15 h-15 ${needsPayment ? "bg-yellow-500" : "bg-green-500"} text-white rounded-full flex items-center justify-center text-2xl mx-auto mb-4`}>
+          {needsPayment ? "⏳" : "✓"}
         </div>
-        <h2 className="text-primary mb-2">Pedido Confirmado!</h2>
+        <h2 className="text-primary mb-2">
+          {needsPayment ? "Finalize o Pagamento" : "Pedido Registrado!"}
+        </h2>
         <p>
-          Seu pedido <strong>{order.id}</strong> foi registrado com sucesso.
+          Pedido <strong>{order.id}</strong> —{" "}
+          <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${statusInfo.bg} ${statusInfo.text}`}>
+            {statusInfo.label}
+          </span>
         </p>
       </div>
 
@@ -62,12 +83,12 @@ export default function OrderConfirmation() {
             <span className="text-text-muted">Data</span>
             <span className="font-medium">{order.data} às {order.hora}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-text-muted">Status</span>
-            <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-yellow-100 text-yellow-800">
-              Aguardando pagamento
-            </span>
-          </div>
+          {paymentLabel && (
+            <div className="flex justify-between">
+              <span className="text-text-muted">Pagamento</span>
+              <span className="font-medium">{paymentLabel}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-text-muted">Itens</span>
             <span className="font-medium">{order.itens.length} {order.itens.length === 1 ? "item" : "itens"}</span>
@@ -118,16 +139,28 @@ export default function OrderConfirmation() {
         )}
       </div>
 
-      <div className="flex flex-col items-center gap-3">
-        <a
-          href={whatsappUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-block bg-green-500 text-white px-6 py-3 rounded-md no-underline font-semibold transition-opacity hover:opacity-90"
-        >
-          Confirmar Pagamento via WhatsApp
-        </a>
+      {/* Mercado Pago Payment Section */}
+      {needsPayment && (
+        <div className="bg-card-bg rounded-md p-6 shadow-card mb-6">
+          <h3 className="text-primary mb-2">Pagar com {paymentLabel}</h3>
+          <p className="text-sm text-text-muted mb-4">
+            Clique no botão abaixo para finalizar o pagamento via Mercado Pago.
+            A confirmação é automática após o pagamento.
+          </p>
+          <div className="flex justify-center">
+            <Wallet initialization={{ preferenceId: order.mp_preference_id! }} />
+          </div>
+        </div>
+      )}
 
+      {order.status === "pago" && (
+        <div className="bg-green-50 rounded-md p-4 mb-6 border border-green-200">
+          <p className="text-sm text-green-800 font-semibold">✓ Pagamento confirmado!</p>
+          <p className="text-xs text-green-700 mt-1">Agora é só aguardar a entrega. Você será notificado quando o pedido for enviado.</p>
+        </div>
+      )}
+
+      <div className="flex flex-col items-center gap-3">
         <button
           className="px-6 py-3 text-base font-semibold bg-border text-text-main rounded-md cursor-pointer transition-colors hover:bg-gray-300"
           onClick={() => navigate("/")}

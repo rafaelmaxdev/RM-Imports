@@ -119,7 +119,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         auto_return: "approved",
         notification_url: `${process.env.VITE_APP_URL || "https://rm-imports.vercel.app"}/api/mp-webhook`,
         payment_methods: paymentMethods,
-      },
+        expires: true,
+        date_of_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      } as any,
     });
 
     return res.status(200).json({

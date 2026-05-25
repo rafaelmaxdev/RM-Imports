@@ -32,7 +32,6 @@ export default function OrderConfirmation() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmed, setConfirmed] = useState(false);
-  const [countdown, setCountdown] = useState(5);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [walletReady, setWalletReady] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -45,6 +44,23 @@ export default function OrderConfirmation() {
 
   // Only show Wallet if we actually have a preference ID
   const showWallet = needsPayment && !!order?.mp_preference_id;
+
+  // Check if order is expired (pending for more than 24 hours)
+  const isExpired = useMemo(() => {
+    if (!order || order.status !== "pendente") return false;
+    try {
+      // Parse "dd/mm/yyyy HH:MM" format
+      const [day, month, year] = order.data.split("/").map(Number);
+      const [hours, minutes] = order.hora.split(":").map(Number);
+      const orderDate = new Date(year, month - 1, day, hours, minutes);
+      const now = new Date();
+      const diffMs = now.getTime() - orderDate.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      return diffHours > 24;
+    } catch {
+      return false;
+    }
+  }, [order]);
 
   // Stable callbacks for Wallet brick — prevents infinite re-renders
   const handleWalletReady = useCallback(() => {
@@ -100,24 +116,6 @@ export default function OrderConfirmation() {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
   }, [id, confirmed, walletReady]);
-
-  // Auto-redirect countdown after confirmation
-  useEffect(() => {
-    if (!confirmed) return;
-
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          navigate("/");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [confirmed, navigate]);
 
   if (loading) {
     return (
@@ -252,17 +250,11 @@ export default function OrderConfirmation() {
         </div>
 
         <div className="bg-green-50 rounded-md p-4 mb-6 border border-green-200">
-          <p className="text-sm text-green-800 font-semibold">{statusInfo.icon} {statusInfo.label}!</p>
+          <p className="text-sm text-green-800 font-semibold">{statusInfo.icon} Pedido confirmado!</p>
           <p className="text-xs text-green-700 mt-1">
-            Acompanhe o status do seu pedido nesta página.
-          </p>
-        </div>
-
-        <div className="bg-blue-50 rounded-md p-4 mb-6 border border-blue-200">
-          <p className="text-sm text-blue-800 font-semibold">📋 Salve o link desta página!</p>
-          <p className="text-xs text-blue-700 mt-1">
-            Acesse <strong>{window.location.href}</strong> para acompanhar seu pedido.
-            Guarde este link — ele é a forma de rastrear seu pedido.
+            {order.endereco?.deliveryMethod === "retirada"
+              ? "Aguarde até a retirada. Avisaremos quando estiver disponível na Magazine Luiza em Caruaru."
+              : "Aguarde a entrega. Avisaremos quando o pedido estiver a caminho."}
           </p>
         </div>
 
@@ -270,7 +262,7 @@ export default function OrderConfirmation() {
           <div className="bg-blue-50 rounded-md p-4 mb-6 border border-blue-200">
             <p className="text-sm text-blue-800 font-semibold">ID da Transação: {order.mp_payment_id}</p>
             <p className="text-xs text-blue-700 mt-1">
-              Guarde este ID para suporte. Ele pode ser solicitado em caso de dúvidas sobre o pagamento.
+              O ID da transação também foi enviado para o seu email. Use-o para qualquer dúvida sobre o pedido.
             </p>
           </div>
         )}
@@ -279,7 +271,7 @@ export default function OrderConfirmation() {
           className="px-8 py-3 text-base font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"
           onClick={() => navigate("/")}
         >
-          Voltar à Loja {countdown > 0 && `(${countdown}s)`}
+          Voltar à Loja
         </button>
       </div>
     );
@@ -410,7 +402,7 @@ export default function OrderConfirmation() {
       </div>
 
       {/* Mercado Pago Payment Section */}
-      {needsPayment && (
+      {needsPayment && !isExpired && (
         <div className="bg-card-bg rounded-md p-6 shadow-card mb-6">
           <h3 className="text-primary mb-2">Pagar com {paymentLabel}</h3>
           <p className="text-sm text-text-muted mb-4">
@@ -461,9 +453,34 @@ export default function OrderConfirmation() {
         </div>
       )}
 
+      {/* Expired order notice */}
+      {needsPayment && isExpired && (
+        <div className="bg-red-50 rounded-md p-6 shadow-card mb-6 border border-red-200">
+          <h3 className="text-red-800 mb-2">⏰ Pagamento expirado</h3>
+          <p className="text-sm text-red-700 mb-4">
+            O prazo de 24 horas para pagamento deste pedido expirou. Por favor, crie um novo pedido.
+          </p>
+          <button
+            className="px-6 py-3 text-base font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"
+            onClick={() => navigate("/")}
+          >
+            Voltar à Loja
+          </button>
+        </div>
+      )}
+
       <p className="text-xs text-text-muted">
         Aguardando confirmação do pagamento... Esta página será atualizada automaticamente.
       </p>
+
+      {needsPayment && !isExpired && (
+        <div className="mt-4 p-3 bg-yellow-50 rounded-md border border-yellow-200">
+          <p className="text-xs text-yellow-800 font-semibold">⏰ Você tem 24 horas para pagar</p>
+          <p className="text-xs text-yellow-700 mt-0.5">
+            Após esse prazo, o pedido será cancelado automaticamente.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col items-center gap-3 mt-4">
         <button

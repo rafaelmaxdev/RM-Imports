@@ -272,3 +272,88 @@ export async function deletePedido(id: string): Promise<void> {
 
   if (error) throw error;
 }
+
+// ── Pacotes ──
+
+export interface DbPacote {
+  id: string;
+  status: string;
+  custo: number | null;
+  frete: number | null;
+  taxa_importacao: number | null;
+  pedido_ids: string; // JSONB stored as string from Supabase
+  created_at: string;
+}
+
+export interface Pacote {
+  id: string;
+  status: string;
+  custo: number | null;
+  frete: number | null;
+  taxa_importacao: number | null;
+  pedido_ids: string[];
+  created_at: string;
+}
+
+function dbPacoteToPacote(db: DbPacote): Pacote {
+  return {
+    id: db.id,
+    status: db.status,
+    custo: db.custo,
+    frete: db.frete,
+    taxa_importacao: db.taxa_importacao,
+    pedido_ids: typeof db.pedido_ids === "string" ? JSON.parse(db.pedido_ids) : db.pedido_ids,
+    created_at: db.created_at,
+  };
+}
+
+export async function createPacote(pedido_ids: string[]): Promise<Pacote> {
+  const row = {
+    status: "enviado_fornecedor",
+    custo: null,
+    frete: null,
+    taxa_importacao: null,
+    pedido_ids: JSON.stringify(pedido_ids),
+  };
+
+  const { data, error } = await supabase
+    .from("pacotes")
+    .insert(row)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return dbPacoteToPacote(data as DbPacote);
+}
+
+export async function getPacotes(): Promise<Pacote[]> {
+  const { data, error } = await supabase
+    .from("pacotes")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  if (!data) return [];
+  return (data as DbPacote[]).map(dbPacoteToPacote);
+}
+
+export async function updatePacoteStatus(id: string, status: string): Promise<void> {
+  const { error } = await supabase
+    .from("pacotes")
+    .update({ status })
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function updatePacoteFinanceiro(
+  id: string,
+  financeiro: { custo: number | null; frete: number | null; taxa_importacao: number | null }
+): Promise<void> {
+  const { error } = await supabase
+    .from("pacotes")
+    .update(financeiro)
+    .eq("id", id);
+
+  if (error) throw error;
+}

@@ -32,10 +32,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Missing items or orderId" });
     }
 
-// Validate prices are within safe range (prevents price manipulation)
-    // Min R$1 / Max R$2.000 (covers any combo + extras)
+    // Validate prices are within safe range (prevents price manipulation)
+    // Min R$1 (Mercado Pago minimum) / Max R$2.000 (covers any combo + extras)
     for (const item of items) {
       if (!Number.isFinite(item.unit_price) || item.unit_price < 1 || item.unit_price > 2000) {
+        console.error("Invalid item price:", item.title, item.unit_price);
         return res.status(400).json({ error: `Invalid item price: ${item.title} - R$${item.unit_price}` });
       }
     }

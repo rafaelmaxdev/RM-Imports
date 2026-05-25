@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
 import type { LojaConfig, PromocaoTipo } from "./types";
@@ -36,6 +36,13 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
   const [erro, setErro] = useState("");
   const [lightbox, setLightbox] = useState<{ images: string[]; alt: string; index: number } | null>(null);
   const [showSizeChart, setShowSizeChart] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
 
   const temFeminino = produto.feminino === true;
   const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo);
@@ -88,10 +95,6 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
     <>
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4" onClick={onClose}>
         <div className="bg-card-bg rounded-md p-6 max-w-md w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
-          <button className="absolute top-3 right-3 bg-none border-none text-xl cursor-pointer text-text-muted z-10" onClick={onClose}>
-            ✕
-          </button>
-
           {showSizeChart ? (
             /* ── Size chart view ── */
             <>

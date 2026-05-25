@@ -49,12 +49,13 @@ export interface Order {
   hora: string;
   itens: OrderItem[];
   total: number;
-  status: "pendente" | "em_analise" | "pago" | "enviado_fornecedor" | "em_producao" | "a_caminho" | "em_estoque" | "em_entrega" | "entregue" | "cancelado" | "reembolsado";
+  status: "pendente" | "pago" | "enviado_fornecedor" | "em_producao" | "a_caminho" | "em_estoque" | "em_entrega" | "entregue" | "cancelado" | "reembolsado";
   endereco?: OrderAddress;
   payment_method?: PaymentMethod;
   mp_preference_id?: string;
   mp_payment_id?: string;
   admin_order?: boolean;
+  credit_release_period?: "immediate" | "14_days" | "30_days";
 }
 
 export const PRECOS_BASE: Record<string, number> = {
@@ -204,22 +205,37 @@ export function getPrecoProduto(
 export const PRECO_PERSONALIZACAO = 25.00;
 
 export const ADICIONAL_TAMANHO: Record<string, number> = {
-  "3XL": 10.00,
-  "4XL": 20.00,
+  "G2": 10.00,
+  "G3": 20.00,
 };
 
-export const TAMANHOS = ["S", "M", "L", "XL", "2XL", "3XL", "4XL"];
+/** Tamanhos exibidos para o cliente (modelo brasileiro) */
+export const TAMANHOS = ["P", "M", "G", "GG", "G1", "G2", "G3"];
 
 /** Mapeamento de tamanho BR → internacional para envio ao fornecedor */
 export const TAMANHO_FORNECEDOR: Record<string, string> = {
-  "S": "S",
+  "P": "S",
   "M": "M",
-  "L": "L",
-  "XL": "XL",
-  "2XL": "2XL",
-  "3XL": "3XL",
-  "4XL": "4XL",
+  "G": "L",
+  "GG": "XL",
+  "G1": "2XL",
+  "G2": "3XL",
+  "G3": "4XL",
 };
+
+/** Exibe tamanho no formato brasileiro para o cliente */
+export function tamanhoCliente(tamanhoInternacional: string): string {
+  const map: Record<string, string> = {
+    "S": "P",
+    "M": "M",
+    "L": "G",
+    "XL": "GG",
+    "2XL": "G1",
+    "3XL": "G2",
+    "4XL": "G3",
+  };
+  return map[tamanhoInternacional] || tamanhoInternacional;
+}
 
 export const FABRICANTES = ["Nike", "Adidas", "Puma", "New Balance", "Umbro", "Kappa", "Joma", "Outro"];
 
@@ -302,49 +318,13 @@ const TIPO_ENGLISH: Record<string, string> = {
 };
 
 export function montarMensagemPacote(orders: Order[]): string {
-  // Group all items across orders, combining duplicates
-  const allItems: { nome: string; tipo: string; tamanho: string; genero: string; feminino: boolean; yupooUrl: string; nomePersonalizado?: string; numeroPersonalizado?: string; qty: number }[] = [];
+  const totalCamisas = orders.reduce((sum, o) => sum + o.itens.length, 0);
 
-  for (const order of orders) {
-    for (const item of order.itens) {
-      const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
-      const version = item.feminino && item.genero === "Feminino"
-        ? `${tipoEn} WOMANS`
-        : `${tipoEn} MALE`;
-      const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
-
-      // Create a key to group identical items
-      const key = `${item.yupooUrl}|${sizeForSupplier}|${version}|${item.personalizado ? `${item.nomePersonalizado}|${item.numeroPersonalizado}` : ""}`;
-
-      const existing = allItems.find((a) => {
-        const aKey = `${a.yupooUrl}|${TAMANHO_FORNECEDOR[a.tamanho] || a.tamanho}|${TIPO_ENGLISH[a.tipo] || a.tipo}${a.feminino && a.genero === "Feminino" ? " WOMANS" : a.genero === "Feminino" ? " WOMANS" : " MALE"}|${a.nomePersonalizado ? `${a.nomePersonalizado}|${a.numeroPersonalizado}` : ""}`;
-        return aKey === key;
-      });
-
-      if (existing) {
-        existing.qty += 1;
-      } else {
-        allItems.push({
-          nome: item.nome,
-          tipo: item.tipo,
-          tamanho: item.tamanho,
-          genero: item.genero,
-          feminino: item.feminino,
-          yupooUrl: item.yupooUrl,
-          nomePersonalizado: item.personalizado ? item.nomePersonalizado : undefined,
-          numeroPersonalizado: item.personalizado ? item.numeroPersonalizado : undefined,
-          qty: 1,
-        });
-      }
-    }
-  }
-
-  const totalCamisas = allItems.reduce((sum, a) => sum + a.qty, 0);
   let msg = `*Pacote RM Imports*\n`;
-  msg += `📦 ${orders.length} pedido(s) • ${totalCamisas} camisa(s)\n`;
+  msg += `📦 ${totalCamisas} camisa(s) — ${orders.length} pedido(s)\n`;
 
   orders.forEach((order) => {
-    msg += `\n━━━━━━━━━━━━━━━\n\n`;
+    msg += `\n━━━━━━━━━━━━━━━\n`;
     msg += `*Pedido ${order.id}*\n`;
 
     order.itens.forEach((item, i) => {
@@ -352,47 +332,18 @@ export function montarMensagemPacote(orders: Order[]): string {
       const version = item.feminino && item.genero === "Feminino"
         ? `${tipoEn} WOMANS`
         : `${tipoEn} MALE`;
-
       const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
 
-      msg += `${i + 1}.\n`;
-      msg += `Link: ${item.yupooUrl || "N/A"}\n`;
-      msg += `Size: ${sizeForSupplier}\n`;
-      msg += `Version: ${version}\n`;
+      msg += `${i + 1}. ${item.nome}\n`;
+      msg += `   Link: ${item.yupooUrl || "N/A"}\n`;
+      msg += `   Size: ${sizeForSupplier}\n`;
+      msg += `   Version: ${version}\n`;
       if (item.personalizado) {
-        msg += `Name: ${item.nomePersonalizado}\n`;
-        msg += `Number: ${item.numeroPersonalizado}\n`;
+        msg += `   Name: ${item.nomePersonalizado}\n`;
+        msg += `   Number: ${item.numeroPersonalizado}\n`;
       }
-      if (i < order.itens.length - 1) msg += `\n`;
     });
   });
-
-  msg += `\n━━━━━━━━━━━━━━━\n`;
-  msg += `*Resumo do Pacote:*\n\n`;
-
-  allItems.forEach((item) => {
-    const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
-    const version = item.feminino && item.genero === "Feminino"
-      ? `${tipoEn} WOMANS`
-      : `${tipoEn} MALE`;
-    const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
-
-    if (item.qty > 1) {
-      msg += `${item.qty}x ${item.nome}\n`;
-    } else {
-      msg += `${item.nome}\n`;
-    }
-    msg += `Link: ${item.yupooUrl || "N/A"}\n`;
-    msg += `Size: ${sizeForSupplier}\n`;
-    msg += `Version: ${version}\n`;
-    if (item.nomePersonalizado) {
-      msg += `Name: ${item.nomePersonalizado}\n`;
-      msg += `Number: ${item.numeroPersonalizado}\n`;
-    }
-    msg += `\n`;
-  });
-
-  msg += `Total: ${totalCamisas} camisa(s) em ${orders.length} pedido(s)`;
 
   return msg;
 }

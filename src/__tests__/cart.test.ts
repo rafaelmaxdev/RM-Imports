@@ -9,7 +9,7 @@ import type { LojaConfig } from "../types";
  * The **real logic** lives in `calcularPreco()` which determines that `preco`.
  * These tests cover the combination of:
  *   - Base price by product type (categoria)
- *   - Size surcharges (3XL, 4XL)
+ *   - Size surcharges (G2, G3)
  *   - Personalization fee
  *   - All promo types (porcentagem, novo_preco, leve_pague, leve_3_pague_2, category)
  *   - Custom prices
@@ -37,8 +37,8 @@ describe("Cart pricing: base scenarios", () => {
     expect(formatarMoeda(price)).toBe("R$ 129,90");
   });
 
-  it("composes a Jogador L without extras", () => {
-    const price = calcularPreco("Jogador", "L", false);
+  it("composes a Jogador G without extras", () => {
+    const price = calcularPreco("Jogador", "G", false);
     expect(price).toBe(169.90);
   });
 
@@ -47,8 +47,8 @@ describe("Cart pricing: base scenarios", () => {
     expect(price).toBe(169.90);
   });
 
-  it("composes NBA XL without extras", () => {
-    const price = calcularPreco("NBA", "XL", false);
+  it("composes NBA GG without extras", () => {
+    const price = calcularPreco("NBA", "GG", false);
     expect(price).toBe(189.90);
   });
 });
@@ -57,19 +57,19 @@ describe("Cart pricing: base scenarios", () => {
 // Scenario: size surcharges
 // ---------------------------------------------------------------------------
 describe("Cart pricing: size surcharges", () => {
-  it.each(["S", "M", "L", "XL", "2XL"])("%s has no surcharge", (size) => {
+  it.each(["P", "M", "G", "GG", "G1"])("%s has no surcharge", (size) => {
     const price = calcularPreco("Torcedor", size, false);
     expect(price).toBe(129.90);
   });
 
-  it("3XL adds R$10 surcharge", () => {
-    const price = calcularPreco("Torcedor", "3XL", false);
-    expect(price).toBe(129.90 + ADICIONAL_TAMANHO["3XL"]);
+  it("G2 adds R$10 surcharge", () => {
+    const price = calcularPreco("Torcedor", "G2", false);
+    expect(price).toBe(129.90 + ADICIONAL_TAMANHO["G2"]);
   });
 
-  it("4XL adds R$20 surcharge", () => {
-    const price = calcularPreco("Torcedor", "4XL", false);
-    expect(price).toBe(129.90 + ADICIONAL_TAMANHO["4XL"]);
+  it("G3 adds R$20 surcharge", () => {
+    const price = calcularPreco("Torcedor", "G3", false);
+    expect(price).toBe(129.90 + ADICIONAL_TAMANHO["G3"]);
   });
 });
 
@@ -83,8 +83,8 @@ describe("Cart pricing: personalization", () => {
   });
 
   it("adds personalization fee on top of size surcharge", () => {
-    const price = calcularPreco("Jogador", "4XL", true);
-    expect(price).toBe(169.90 + ADICIONAL_TAMANHO["4XL"] + PRECO_PERSONALIZACAO);
+    const price = calcularPreco("Jogador", "G3", true);
+    expect(price).toBe(169.90 + ADICIONAL_TAMANHO["G3"] + PRECO_PERSONALIZACAO);
   });
 });
 
@@ -98,10 +98,10 @@ describe("Cart pricing: individual promos", () => {
       .toBe(expectedPromo);
   });
 
-  it("porcentagem: 20% off + 3XL surcharge + personalization", () => {
+  it("porcentagem: 20% off + G2 surcharge + personalization", () => {
     const expectedPromo = Math.round((169.90 - 169.90 * 0.20) * 100) / 100;
-    expect(calcularPreco("Jogador", "3XL", true, undefined, null, "porcentagem", 20))
-      .toBe(expectedPromo + ADICIONAL_TAMANHO["3XL"] + PRECO_PERSONALIZACAO);
+    expect(calcularPreco("Jogador", "G2", true, undefined, null, "porcentagem", 20))
+      .toBe(expectedPromo + ADICIONAL_TAMANHO["G2"] + PRECO_PERSONALIZACAO);
   });
 
   it("novo_preco: custom price overrides base (no surcharges)", () => {
@@ -109,9 +109,9 @@ describe("Cart pricing: individual promos", () => {
       .toBe(159.90);
   });
 
-  it("novo_preco: custom price + 4XL surcharge + personalization", () => {
-    expect(calcularPreco("NBA", "4XL", true, undefined, 159.90, "novo_preco"))
-      .toBe(159.90 + ADICIONAL_TAMANHO["4XL"] + PRECO_PERSONALIZACAO);
+  it("novo_preco: custom price + G3 surcharge + personalization", () => {
+    expect(calcularPreco("NBA", "G3", true, undefined, 159.90, "novo_preco"))
+      .toBe(159.90 + ADICIONAL_TAMANHO["G3"] + PRECO_PERSONALIZACAO);
   });
 
   it("leve_pague: uses base price (no discount applied to individual item)", () => {
@@ -119,9 +119,9 @@ describe("Cart pricing: individual promos", () => {
       .toBe(129.90);
   });
 
-  it("leve_pague: base + 3XL surcharge", () => {
-    expect(calcularPreco("Torcedor", "3XL", false, undefined, null, "leve_pague"))
-      .toBe(129.90 + ADICIONAL_TAMANHO["3XL"]);
+  it("leve_pague: base + G2 surcharge", () => {
+    expect(calcularPreco("Torcedor", "G2", false, undefined, null, "leve_pague"))
+      .toBe(129.90 + ADICIONAL_TAMANHO["G2"]);
   });
 
   it("leve_3_pague_2: uses base price", () => {
@@ -148,8 +148,8 @@ describe("Cart pricing: category-level promos", () => {
 
   it("category promo + size surcharge", () => {
     const cfg = categoriaEmPromocao("Jogador", true);
-    expect(calcularPreco("Jogador", "4XL", false, cfg))
-      .toBe(139.90 + ADICIONAL_TAMANHO["4XL"]);
+    expect(calcularPreco("Jogador", "G3", false, cfg))
+      .toBe(139.90 + ADICIONAL_TAMANHO["G3"]);
   });
 
   it("category promo + personalization", () => {
@@ -183,28 +183,28 @@ describe("Cart pricing: multi-item totals", () => {
   it("sums two plain items", () => {
     const total = cartTotal([
       { tipo: "Torcedor", tamanho: "M", personalizado: false },
-      { tipo: "Jogador", tamanho: "L", personalizado: false },
+      { tipo: "Jogador", tamanho: "G", personalizado: false },
     ]);
     expect(total).toBe(129.90 + 169.90);
   });
 
   it("sums items with size surcharges and personalization", () => {
     const total = cartTotal([
-      { tipo: "Torcedor", tamanho: "3XL", personalizado: false },
+      { tipo: "Torcedor", tamanho: "G2", personalizado: false },
       { tipo: "Jogador", tamanho: "M", personalizado: true },
     ]);
-    expect(total).toBe((129.90 + ADICIONAL_TAMANHO["3XL"]) + (169.90 + PRECO_PERSONALIZACAO));
+    expect(total).toBe((129.90 + ADICIONAL_TAMANHO["G2"]) + (169.90 + PRECO_PERSONALIZACAO));
   });
 
   it("sums items with mixed promos", () => {
     const cfgJogadorPromo = categoriaEmPromocao("Jogador", true);
     const total = cartTotal([
       { tipo: "Jogador", tamanho: "M", personalizado: false, config: cfgJogadorPromo },
-      { tipo: "Torcedor", tamanho: "4XL", personalizado: true, promoTipo: "porcentagem", promoValor: 10 },
+      { tipo: "Torcedor", tamanho: "G3", personalizado: true, promoTipo: "porcentagem", promoValor: 10 },
     ]);
     const expectedTorcedorPromo = Math.round((129.90 - 129.90 * 0.10) * 100) / 100;
     const expectedItem1 = 139.90; // Jogador em promoção de categoria
-    const expectedItem2 = expectedTorcedorPromo + ADICIONAL_TAMANHO["4XL"] + PRECO_PERSONALIZACAO;
+    const expectedItem2 = expectedTorcedorPromo + ADICIONAL_TAMANHO["G3"] + PRECO_PERSONALIZACAO;
     expect(total).toBe(expectedItem1 + expectedItem2);
   });
 
@@ -228,17 +228,17 @@ describe("Cart pricing: multi-item totals", () => {
   it("five items with various sizes, personalization, and promos", () => {
     const cfgTorcedorPromo = categoriaEmPromocao("Torcedor", true);
     const total = cartTotal([
-      { tipo: "Torcedor", tamanho: "S", personalizado: false, config: cfgTorcedorPromo },
+      { tipo: "Torcedor", tamanho: "P", personalizado: false, config: cfgTorcedorPromo },
       { tipo: "Jogador", tamanho: "M", personalizado: true },
-      { tipo: "Jogador", tamanho: "3XL", personalizado: false, promoTipo: "porcentagem", promoValor: 15 },
-      { tipo: "NBA", tamanho: "4XL", personalizado: true, precoCustom: 179.90, promoTipo: "novo_preco" },
-      { tipo: "Retrô", tamanho: "XL", personalizado: false },
+      { tipo: "Jogador", tamanho: "G2", personalizado: false, promoTipo: "porcentagem", promoValor: 15 },
+      { tipo: "NBA", tamanho: "G3", personalizado: true, precoCustom: 179.90, promoTipo: "novo_preco" },
+      { tipo: "Retrô", tamanho: "GG", personalizado: false },
     ]);
     const item0 = 109.90; // Torcedor category promo
     const item1 = 169.90 + PRECO_PERSONALIZACAO;
     const item2Promo = Math.round((169.90 - 169.90 * 0.15) * 100) / 100;
-    const item2 = item2Promo + ADICIONAL_TAMANHO["3XL"];
-    const item3 = 179.90 + ADICIONAL_TAMANHO["4XL"] + PRECO_PERSONALIZACAO;
+    const item2 = item2Promo + ADICIONAL_TAMANHO["G2"];
+    const item3 = 179.90 + ADICIONAL_TAMANHO["G3"] + PRECO_PERSONALIZACAO;
     const item4 = 169.90;
     expect(total).toBe(item0 + item1 + item2 + item3 + item4);
   });

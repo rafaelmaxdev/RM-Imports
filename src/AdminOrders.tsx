@@ -6,7 +6,6 @@ import { supabase } from "./lib/supabase";
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   pendente: { label: "Pendente", bg: "bg-yellow-100", text: "text-yellow-800" },
-  em_analise: { label: "Em análise", bg: "bg-orange-100", text: "text-orange-800" },
   pago: { label: "Pago", bg: "bg-green-100", text: "text-green-800" },
   enviado_fornecedor: { label: "Enviado ao fornecedor", bg: "bg-blue-100", text: "text-blue-800" },
   em_producao: { label: "Em produção", bg: "bg-purple-100", text: "text-purple-800" },
@@ -19,9 +18,8 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }>
 };
 
 const STATUS_FLOW: Record<string, string[]> = {
-  pendente: ["pago", "em_analise", "cancelado"],
-  em_analise: ["pago", "cancelado"],
-  pago: ["enviado_fornecedor", "reembolsado", "cancelado"],
+  pendente: ["pago", "cancelado"],
+  pago: ["reembolsado", "cancelado"], // envio ao fornecedor é feito via Pacotes
   enviado_fornecedor: ["em_producao"],
   em_producao: ["a_caminho"],
   a_caminho: ["em_estoque"],
@@ -36,19 +34,30 @@ const PAYMENT_LABELS: Record<string, string> = {
 };
 
 function montarMensagemCliente(order: Order): string {
-  let msg = `*RM Imports - Pedido ${order.id}*\n`;
-  msg += `✅ Pagamento confirmado!\n\n`;
-  msg += `*Resumo:*\n`;
+  const isRetirada = order.endereco?.deliveryMethod === "retirada";
+
+  let msg = `*RM Imports*\n`;
+  msg += `Pedido: ${order.id}\n`;
+  msg += `Status: ${STATUS_CONFIG[order.status]?.label || order.status}\n\n`;
+
+  msg += `*Itens:*\n`;
   order.itens.forEach((item, i) => {
-    msg += `${i + 1}. ${item.nome} - ${item.tamanho} - ${formatarMoeda(item.preco)}\n`;
+    msg += `${i + 1}. ${item.nome} (${item.tamanho})\n`;
   });
   msg += `\n*Total: ${formatarMoeda(order.total)}*\n`;
+
   if (order.endereco) {
-    msg += `\n*Entrega:*\n${order.endereco.rua}, ${order.endereco.numero}`;
-    if (order.endereco.complemento) msg += ` - ${order.endereco.complemento}`;
-    msg += `\n${order.endereco.bairro} - ${order.endereco.cidade}/${order.endereco.estado}`;
+    msg += `\n*${isRetirada ? "Retirada" : "Entrega"}:*\n`;
+    msg += `${order.endereco.nome}\n`;
+    if (!isRetirada) {
+      msg += `${order.endereco.rua}, ${order.endereco.numero}`;
+      if (order.endereco.complemento) msg += ` - ${order.endereco.complemento}`;
+      msg += `\n${order.endereco.bairro} - ${order.endereco.cidade}/${order.endereco.estado}\n`;
+    }
+    msg += `Tel: ${order.endereco.telefone}\n`;
   }
-  msg += `\n\nAcompanhe seu pedido em:\nhttps://rm-imports.vercel.app/pedido/${order.id}`;
+
+  msg += `\nAcompanhe aqui:\nhttps://rm-imports.vercel.app/pedido/${order.id}`;
   return msg;
 }
 
@@ -167,7 +176,6 @@ export default function AdminOrders() {
           >
             <option value="all">Todos</option>
             <option value="pendente">Pendente</option>
-            <option value="em_analise">Em análise</option>
             <option value="pago">Pago</option>
             <option value="enviado_fornecedor">Enviado fornecedor</option>
             <option value="em_producao">Em produção</option>
@@ -225,6 +233,11 @@ export default function AdminOrders() {
                         {order.data} às {order.hora} • {totalItens} {totalItens === 1 ? "item" : "itens"}
                         {totalPersonalizacoes > 0 && ` • ${totalPersonalizacoes} personalização${totalPersonalizacoes > 1 ? "ões" : ""}`}
                       </div>
+                      {order.status === "pago" && (
+                        <div className="text-xs text-accent font-semibold mt-1">
+                          📦 Vá em "Pacotes" para montar e enviar ao fornecedor
+                        </div>
+                      )}
                       {order.endereco && (
                         <div className="text-sm text-text-muted mt-0.5">
                           {order.endereco.nome} • {order.endereco.cidade}/{order.endereco.estado}
@@ -304,7 +317,6 @@ export default function AdminOrders() {
                           const next = STATUS_CONFIG[nextStatus];
                           const btnColors: Record<string, string> = {
                             pago: "bg-green-500",
-                            em_analise: "bg-orange-500",
                             enviado_fornecedor: "bg-blue-500",
                             em_producao: "bg-purple-500",
                             a_caminho: "bg-indigo-500",

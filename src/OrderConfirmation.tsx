@@ -13,7 +13,6 @@ const PAYMENT_LABELS: Record<string, string> = {
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; icon: string }> = {
   pendente: { label: "Aguardando pagamento", bg: "bg-yellow-100", text: "text-yellow-800", icon: "⏳" },
-  em_analise: { label: "Em análise", bg: "bg-orange-100", text: "text-orange-800", icon: "🔍" },
   pago: { label: "Pagamento confirmado", bg: "bg-green-100", text: "text-green-800", icon: "✓" },
   enviado_fornecedor: { label: "Enviado ao fornecedor", bg: "bg-blue-100", text: "text-blue-800", icon: "📤" },
   em_producao: { label: "Em produção", bg: "bg-purple-100", text: "text-purple-800", icon: "🏭" },

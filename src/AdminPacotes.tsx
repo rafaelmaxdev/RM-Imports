@@ -56,10 +56,23 @@ const STATUS_ACTION_LABELS: Record<string, string> = {
 };
 
 const FEE_RATES: Record<string, number> = {
-  pix: 0.0199,
-  credit_card: 0.0499,
-  debit_card: 0.0399,
+  pix: 0.0099,        // 0,99%
+  debit_card: 0.0399, // 3,99%
 };
+
+// Taxas cartão de crédito dependem do prazo de liberação do saldo
+const CREDIT_CARD_RATES: Record<string, number> = {
+  immediate: 0.0499, // 4,99% — na hora
+  "14_days": 0.0449, // 4,49% — em 14 dias
+  "30_days": 0.0399, // 3,99% — em 30 dias
+};
+
+function getFeeRate(paymentMethod: string | undefined, creditReleasePeriod: string | undefined): number {
+  if (paymentMethod === "credit_card") {
+    return CREDIT_CARD_RATES[creditReleasePeriod || "immediate"] ?? 0.0499;
+  }
+  return FEE_RATES[paymentMethod || ""] ?? 0.0499;
+}
 
 type Tab = "montar" | "pacotes" | "historico";
 type Step = "select" | "review";
@@ -75,6 +88,7 @@ export default function AdminPacotes() {
   const [pacotes, setPacotes] = useState<Pacote[]>([]);
   const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
   const [showAllHistorico, setShowAllHistorico] = useState(false);
+  const [creditReleasePeriod, setCreditReleasePeriod] = useState<"immediate" | "14_days" | "30_days">("immediate");
 
   const loadOrders = useCallback(async () => {
     try {
@@ -304,9 +318,9 @@ export default function AdminPacotes() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       {/* Tab navigation */}
-      <div className="flex border-b border-border mb-6">
+      <div className="flex flex-wrap border-b border-border mb-6">
         <button
-          className={`px-4 py-2 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
+          className={`px-3 sm:px-4 py-2 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
             tab === "montar" ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text-main"
           }`}
           onClick={() => setTab("montar")}
@@ -317,7 +331,7 @@ export default function AdminPacotes() {
           )}
         </button>
         <button
-          className={`px-4 py-2 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
+          className={`px-3 sm:px-4 py-2 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
             tab === "pacotes" ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text-main"
           }`}
           onClick={() => setTab("pacotes")}
@@ -328,7 +342,7 @@ export default function AdminPacotes() {
           )}
         </button>
         <button
-          className={`px-4 py-2 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
+          className={`px-3 sm:px-4 py-2 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
             tab === "historico" ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text-main"
           }`}
           onClick={() => setTab("historico")}
@@ -347,7 +361,7 @@ export default function AdminPacotes() {
             <div>
               <h2 className="text-xl text-primary m-0">Montar Pacote</h2>
               <p className="text-sm text-text-muted mt-1">
-                Selecione pedidos pagos para enviar ao fornecedor. Máximo 8 camisas por pacote.
+                Passo 1: Selecione os pedidos pagos abaixo (máx. 8 camisas). Passo 2: Revise e envie ao fornecedor.
               </p>
             </div>
             <button
@@ -440,7 +454,7 @@ export default function AdminPacotes() {
             <div className="text-center py-16 text-text-muted">
               <p className="text-4xl mb-4">🚚</p>
               <p>Nenhum pacote em andamento.</p>
-              <p className="text-sm mt-2">Monte um pacote na aba "Montar" para começar.</p>
+              <p className="text-sm mt-2">Acompanhe aqui os pacotes enviados ao fornecedor. Monte um pacote na aba "Montar" para começar.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
@@ -490,7 +504,7 @@ export default function AdminPacotes() {
                       </div>
 
                       {/* Status pipeline */}
-                      <div className="flex items-center gap-1 mt-3">
+                      <div className="flex flex-wrap items-center gap-1 mt-3">
                         {STATUS_PIPELINE.map((s, i) => {
                           const currentIdx = STATUS_PIPELINE.indexOf(pacote.status as typeof STATUS_PIPELINE[number]);
                           const isDone = i <= currentIdx;
@@ -570,8 +584,23 @@ export default function AdminPacotes() {
             </div>
           ) : (
             <>
+              {/* Credit card release period selector */}
+              <div className="bg-card-bg rounded-md p-4 shadow-card mb-4">
+                <label className="block text-sm font-semibold text-text-muted mb-2">Prazo de liberação do saldo (Cartão de Crédito)</label>
+                <select
+                  className="w-full sm:w-auto px-3 py-2 border border-border rounded-md text-sm bg-card-bg"
+                  value={creditReleasePeriod}
+                  onChange={(e) => setCreditReleasePeriod(e.target.value as "immediate" | "14_days" | "30_days")}
+                >
+                  <option value="immediate">Na hora — 4,99%</option>
+                  <option value="14_days">Em 14 dias — 4,49%</option>
+                  <option value="30_days">Em 30 dias — 3,99%</option>
+                </select>
+                <p className="text-xs text-text-muted mt-1">Selecione o prazo usado no Mercado Pago para calcular as taxas corretamente.</p>
+              </div>
+
               {/* Profit summary at top */}
-              <ProfitSummary pacotes={deliveredPacotes} allOrders={allOrders} />
+              <ProfitSummary pacotes={deliveredPacotes} allOrders={allOrders} creditReleasePeriod={creditReleasePeriod} />
 
               {/* Delivered packages list */}
               <div className="flex flex-col gap-4 mt-6">
@@ -580,6 +609,7 @@ export default function AdminPacotes() {
                     key={pacote.id}
                     pacote={pacote}
                     allOrders={allOrders}
+                    creditReleasePeriod={creditReleasePeriod}
                     onSaveFinanceiro={handleSaveFinanceiro}
                     onRemovePedido={handleRemovePedido}
                     onDeletePacote={handleDeletePacote}
@@ -606,7 +636,7 @@ export default function AdminPacotes() {
 }
 
 // ── Profit Summary Component ──
-function ProfitSummary({ pacotes, allOrders }: { pacotes: Pacote[]; allOrders: Order[] }) {
+function ProfitSummary({ pacotes, allOrders, creditReleasePeriod }: { pacotes: Pacote[]; allOrders: Order[]; creditReleasePeriod: "immediate" | "14_days" | "30_days" }) {
   let totalVendido = 0;
   let totalCamisas = 0;
   let totalCusto = 0;
@@ -622,7 +652,7 @@ function ProfitSummary({ pacotes, allOrders }: { pacotes: Pacote[]; allOrders: O
     const vendido = orders.reduce((sum, o) => sum + o.total, 0);
     const camisas = orders.reduce((sum, o) => sum + o.itens.length, 0);
     const taxas = orders.reduce((sum, o) => {
-      const rate = FEE_RATES[o.payment_method || ""] ?? 0.0499;
+      const rate = getFeeRate(o.payment_method, o.credit_release_period || creditReleasePeriod);
       return sum + o.total * rate;
     }, 0);
 
@@ -689,12 +719,14 @@ function ProfitSummary({ pacotes, allOrders }: { pacotes: Pacote[]; allOrders: O
 function DeliveredPacoteCard({
   pacote,
   allOrders,
+  creditReleasePeriod,
   onSaveFinanceiro,
   onRemovePedido,
   onDeletePacote,
 }: {
   pacote: Pacote;
   allOrders: Order[];
+  creditReleasePeriod: "immediate" | "14_days" | "30_days";
   onSaveFinanceiro: (pacote: Pacote, field: "custo" | "frete" | "taxa_importacao", value: string) => void;
   onRemovePedido: (pacoteId: string, pedidoId: string) => void;
   onDeletePacote: (pacoteId: string) => void;
@@ -716,7 +748,7 @@ function DeliveredPacoteCard({
   const freteValue = parseFloat(localFrete) || 0;
   const taxaValue = parseFloat(localTaxa) || 0;
   const totalTaxas = nonAdminOrders.reduce((sum, o) => {
-    const rate = FEE_RATES[o.payment_method || ""] ?? 0.0499;
+    const rate = getFeeRate(o.payment_method, o.credit_release_period || creditReleasePeriod);
     return sum + o.total * rate;
   }, 0);
   const lucro = totalVendido - custoValue - freteValue - taxaValue - totalTaxas;
@@ -764,7 +796,7 @@ function DeliveredPacoteCard({
           {/* Financial inputs */}
           <div className="mt-4 mb-4 p-3 bg-green-50 rounded-md border border-green-200">
             <h4 className="text-sm font-semibold text-green-800 mb-3">💰 Dados Financeiros</h4>
-            <div className="grid grid-cols-3 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
               <div>
                 <label className="block text-xs text-green-700 mb-1">Custo do pacote (R$)</label>
                 <input

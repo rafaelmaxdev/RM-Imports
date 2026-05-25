@@ -169,16 +169,16 @@ describe("calcularPreco", () => {
     expect(calcularPreco("Torcedor", "M", false)).toBe(129.90);
   });
 
-  it("adds surcharge for 3XL", () => {
-    expect(calcularPreco("Torcedor", "3XL", false)).toBe(129.90 + ADICIONAL_TAMANHO["3XL"]);
+  it("adds surcharge for G2", () => {
+    expect(calcularPreco("Torcedor", "G2", false)).toBe(129.90 + ADICIONAL_TAMANHO["G2"]);
   });
 
-  it("adds surcharge for 4XL", () => {
-    expect(calcularPreco("Torcedor", "4XL", false)).toBe(129.90 + ADICIONAL_TAMANHO["4XL"]);
+  it("adds surcharge for G3", () => {
+    expect(calcularPreco("Torcedor", "G3", false)).toBe(129.90 + ADICIONAL_TAMANHO["G3"]);
   });
 
-  it("no surcharge for standard sizes (S, M, L, XL, 2XL)", () => {
-    for (const size of ["S", "M", "L", "XL", "2XL"]) {
+  it("no surcharge for standard sizes (P, M, G, GG, G1)", () => {
+    for (const size of ["P", "M", "G", "GG", "G1"]) {
       expect(calcularPreco("Torcedor", size, false)).toBe(129.90);
     }
   });
@@ -188,19 +188,19 @@ describe("calcularPreco", () => {
   });
 
   it("adds both size surcharge and personalization", () => {
-    expect(calcularPreco("Jogador", "4XL", true)).toBe(169.90 + ADICIONAL_TAMANHO["4XL"] + PRECO_PERSONALIZACAO);
+    expect(calcularPreco("Jogador", "G3", true)).toBe(169.90 + ADICIONAL_TAMANHO["G3"] + PRECO_PERSONALIZACAO);
   });
 
   it("applies porcentagem promo before size/personalization surcharges", () => {
     const precoPromo = Math.round((169.90 - 169.90 * 0.2) * 100) / 100;
-    const expected = precoPromo + ADICIONAL_TAMANHO["3XL"] + PRECO_PERSONALIZACAO;
-    expect(calcularPreco("Jogador", "3XL", true, undefined, null, "porcentagem", 20)).toBe(expected);
+    const expected = precoPromo + ADICIONAL_TAMANHO["G2"] + PRECO_PERSONALIZACAO;
+    expect(calcularPreco("Jogador", "G2", true, undefined, null, "porcentagem", 20)).toBe(expected);
   });
 
   it("applies category promo with size surcharge", () => {
     const cfg = categoriaEmPromocao("Jogador", true);
-    const expected = 139.90 + ADICIONAL_TAMANHO["4XL"];
-    expect(calcularPreco("Jogador", "4XL", false, cfg)).toBe(expected);
+    const expected = 139.90 + ADICIONAL_TAMANHO["G3"];
+    expect(calcularPreco("Jogador", "G3", false, cfg)).toBe(expected);
   });
 
   it("uses custom precoCustomizado when provided (novo_preco)", () => {
@@ -208,7 +208,7 @@ describe("calcularPreco", () => {
   });
 
   it("returns base price for unknown type with size surcharge", () => {
-    expect(calcularPreco("Desconhecido", "3XL", false)).toBe(89.90 + ADICIONAL_TAMANHO["3XL"]);
+    expect(calcularPreco("Desconhecido", "G2", false)).toBe(89.90 + ADICIONAL_TAMANHO["G2"]);
   });
 
   it("leve_pague promo returns base price (promo is null, so base used) plus surcharges", () => {
@@ -313,20 +313,18 @@ describe("montarMensagemPacote", () => {
   it("includes order header and item details for single order", () => {
     const msg = montarMensagemPacote([makeOrder()]);
     expect(msg).toContain("*Pacote RM Imports*");
-    expect(msg).toContain("1 pedido(s) • 1 camisa(s)");
+    expect(msg).toContain("1 camisa(s) — 1 pedido(s)");
     expect(msg).toContain("*Pedido UL-TEST1234*");
     expect(msg).toContain("Link: https://yupoo.com/item123");
     expect(msg).toContain("Size: M");
-    expect(msg).toContain("Patch: 25/26");
     expect(msg).toContain("Version: Fan MALE");
-    expect(msg).toContain("Total: 1 camisa(s) em 1 pedido(s)");
   });
 
   it("maps tamanho via TAMANHO_FORNECEDOR", () => {
-    const item = { ...baseItem, tamanho: "3XL" };
+    const item = { ...baseItem, tamanho: "G2" };
     const order = makeOrder({ itens: [item] });
     const msg = montarMensagemPacote([order]);
-    expect(msg).toContain(`Size: ${TAMANHO_FORNECEDOR["3XL"]}`);
+    expect(msg).toContain(`Size: ${TAMANHO_FORNECEDOR["G2"]}`);
   });
 
   it("falls back to original tamanho when not in TAMANHO_FORNECEDOR", () => {
@@ -366,10 +364,9 @@ describe("montarMensagemPacote", () => {
     const order1 = makeOrder({ id: "UL-AAAA1111", itens: [baseItem] });
     const order2 = makeOrder({ id: "UL-BBBB2222", itens: [baseItem, baseItem] });
     const msg = montarMensagemPacote([order1, order2]);
-    expect(msg).toContain("2 pedido(s) • 3 camisa(s)");
+    expect(msg).toContain("3 camisa(s) — 2 pedido(s)");
     expect(msg).toContain("*Pedido UL-AAAA1111*");
     expect(msg).toContain("*Pedido UL-BBBB2222*");
-    expect(msg).toContain("Total: 3 camisa(s) em 2 pedido(s)");
   });
 
   it("uses N/A when yupooUrl is empty", () => {
@@ -386,11 +383,9 @@ describe("montarMensagemPacote", () => {
     expect(msg).toContain("Version: Retro MALE");
   });
 
-  it("omits Patch line when temporada is empty", () => {
-    const item = { ...baseItem, temporada: "" };
-    const order = makeOrder({ itens: [item] });
-    const msg = montarMensagemPacote([order]);
-    expect(msg).not.toContain("Patch:");
+  it("does not include resumo section", () => {
+    const msg = montarMensagemPacote([makeOrder()]);
+    expect(msg).not.toContain("Resumo do Pacote:");
   });
 });
 

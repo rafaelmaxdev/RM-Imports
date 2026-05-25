@@ -108,6 +108,15 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
           )}
         </div>
 
+        {produto.tipo === "Jogador" && (
+          <div className="mb-3 p-2.5 bg-blue-50 rounded-md border border-blue-200">
+            <p className="text-xs text-blue-800 font-semibold">💡 Dica de tamanho</p>
+            <p className="text-xs text-blue-700 mt-0.5">
+              A versão Jogador costuma vestir mais justa. Recomendamos pegar <strong>1 ou 2 tamanhos acima</strong> do que você usaria na versão Torcedor.
+            </p>
+          </div>
+        )}
+
         <div className="mb-4">
           <label className="block text-sm font-semibold text-text-muted mb-2">Tamanho</label>
           <div className="flex gap-2 flex-wrap mb-2">

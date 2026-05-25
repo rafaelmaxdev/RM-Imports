@@ -75,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (externalReference) {
         // Map MP status to our status
-        // Flow: pendente → em_analise → pago → enviado_fornecedor → em_producao → a_caminho → em_estoque → em_entrega → entregue
+        // Flow: pendente → pago → enviado_fornecedor → em_producao → a_caminho → em_estoque → em_entrega → entregue
         // Flow: pendente → cancelado
         // Flow: pago → reembolsado
         let orderStatus: string;
@@ -85,7 +85,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             break;
           case "in_process":
           case "in_mediation":
-            orderStatus = "em_analise";
+            // mantém pendente — não usamos mais "em_analise"
+            orderStatus = "pendente";
             break;
           case "cancelled":
           case "rejected":

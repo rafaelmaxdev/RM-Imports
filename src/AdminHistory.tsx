@@ -5,7 +5,6 @@ import { formatarMoeda } from "./types";
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   pendente: { label: "Pendente", bg: "bg-yellow-100", text: "text-yellow-800" },
-  em_analise: { label: "Em análise", bg: "bg-orange-100", text: "text-orange-800" },
   pago: { label: "Pago", bg: "bg-green-100", text: "text-green-800" },
   enviado_fornecedor: { label: "Enviado ao fornecedor", bg: "bg-blue-100", text: "text-blue-800" },
   em_producao: { label: "Em produção", bg: "bg-purple-100", text: "text-purple-800" },

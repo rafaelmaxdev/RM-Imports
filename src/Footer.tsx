@@ -37,7 +37,6 @@ export default function Footer() {
           <div>
             <h3 className="text-lg font-bold mb-3">Informações</h3>
             <ul className="space-y-2 text-sm text-white/70 list-none m-0 p-0">
-              <li>🔒 Compra segura</li>
               <li>💳 Pix, Cartão de Crédito e Débito</li>
             </ul>
           </div>

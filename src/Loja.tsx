@@ -252,7 +252,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                   </span>
                 )}
 
-                <div className="aspect-square bg-gray-100 overflow-hidden">
+                <div className="aspect-square bg-gray-100 overflow-hidden relative group/img">
                   <ImageCarousel
                     images={parseImageUrls(p.imagem_urls).map((url) =>
                       url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")
@@ -266,6 +266,10 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                       index: i,
                     })}
                   />
+                  <div className="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover/img:opacity-100 transition-opacity pointer-events-none flex items-center gap-0.5">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                    Ampliar
+                  </div>
                 </div>
 
                 <div className="p-2.5 sm:p-4 flex flex-col flex-1">

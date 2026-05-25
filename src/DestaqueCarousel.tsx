@@ -14,13 +14,13 @@ function Marquee({ direction }: { direction: "left" | "right" }) {
   const text = "DESTAQUES E PROMOÇÕES\u00A0\u00A0\u00A0\u00A0\u00A0\u2022\u00A0\u00A0\u00A0\u00A0\u00A0";
   const repeated = Array(20).fill(text).join("");
   const content = (
-    <span className="whitespace-nowrap text-base font-black tracking-[0.25em] uppercase text-white/90" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+    <span className="whitespace-nowrap text-xs sm:text-base font-black tracking-[0.15em] sm:tracking-[0.25em] uppercase text-white/90" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
       {repeated}
     </span>
   );
 
   return (
-    <div className="overflow-hidden bg-primary py-2.5">
+    <div className="overflow-hidden bg-primary py-1.5 sm:py-2.5">
       <div className={direction === "left" ? "animate-marquee-left" : "animate-marquee-right"} style={{ display: "flex", width: "max-content" }}>
         {content}
         {content}
@@ -29,7 +29,8 @@ function Marquee({ direction }: { direction: "left" | "right" }) {
   );
 }
 
-const CARD_WIDTH = 220;
+const CARD_WIDTH_MOBILE = 175;
+const CARD_WIDTH_DESKTOP = 220;
 const CARD_GAP = 20;
 
 export default function DestaqueCarousel({ produtos, config, onSelect }: DestaqueCarouselProps) {
@@ -58,7 +59,9 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  const visibleCards = Math.max(1, Math.floor((containerWidth - 32) / (CARD_WIDTH + CARD_GAP)));
+  const isMobile = containerWidth < 640;
+  const cardWidth = isMobile ? CARD_WIDTH_MOBILE : CARD_WIDTH_DESKTOP;
+  const visibleCards = Math.max(1, Math.floor((containerWidth - 32) / (cardWidth + CARD_GAP)));
   const maxIndex = Math.max(0, produtos.length - visibleCards);
 
   // Clamp index when produtos change
@@ -172,14 +175,14 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
   const canScrollLeft = currentIndex > 0 || produtos.length > visibleCards;
   const canScrollRight = currentIndex < maxIndex || produtos.length > visibleCards;
   const needsScroll = produtos.length > visibleCards;
-  const offset = currentIndex * (CARD_WIDTH + CARD_GAP);
+  const offset = currentIndex * (cardWidth + CARD_GAP);
 
   return (
-    <section className="mb-8">
+    <section className="mb-0">
       <Marquee direction="left" />
 
       <div
-        className="relative bg-[#0f1629] py-6"
+        className="relative bg-[#0f1629] py-4 sm:py-6"
         onMouseEnter={() => setIsPaused(true)}
         onMouseLeave={() => { setIsPaused(false); isDragging.current = false; }}
       >
@@ -187,7 +190,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
         {needsScroll && canScrollLeft && (
           <button
             onClick={goPrev}
-            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center cursor-pointer border-none transition-colors"
+            className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center cursor-pointer border-none transition-colors"
             aria-label="Anterior"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
@@ -196,7 +199,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
         {needsScroll && canScrollRight && (
           <button
             onClick={goNext}
-            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center cursor-pointer border-none transition-colors"
+            className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center cursor-pointer border-none transition-colors"
             aria-label="Próximo"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
@@ -204,7 +207,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
         )}
 
         <div
-          className="overflow-hidden px-4 cursor-grab active:cursor-grabbing select-none"
+          className="overflow-hidden px-3 sm:px-4 cursor-grab active:cursor-grabbing select-none"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -231,7 +234,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
                 <div
                   key={p.id}
                   className="flex-shrink-0 bg-white rounded-lg overflow-hidden shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer relative group flex flex-col"
-                  style={{ width: `${CARD_WIDTH}px` }}
+                  style={{ width: `${cardWidth}px` }}
                   onClick={() => onSelect(p)}
                 >
                   {emPromocao && (
@@ -253,27 +256,27 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
                     )}
                   </div>
 
-                  <div className="p-3 flex flex-col flex-1">
-                    <div className="font-semibold text-sm line-clamp-2 mb-1.5">{p.nome}</div>
-                    <div className="flex gap-1.5 mb-1.5">
-                      <span className="text-[10px] px-1.5 py-0.5 bg-primary text-white rounded">{p.tipo}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 bg-primary text-white rounded">{p.temporada}</span>
+                  <div className="p-2 sm:p-3 flex flex-col flex-1">
+                    <div className="font-semibold text-xs sm:text-sm line-clamp-2 mb-1 sm:mb-1.5">{p.nome}</div>
+                    <div className="flex gap-1 sm:gap-1.5 mb-1 sm:mb-1.5">
+                      <span className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 bg-primary text-white rounded">{p.tipo}</span>
+                      <span className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 bg-primary text-white rounded">{p.temporada}</span>
                     </div>
                     <div className="mt-auto">
                       {promo !== null ? (
                         <div>
-                          <div className="flex items-baseline gap-2">
-                            <span className="font-bold text-accent text-base">{formatarMoeda(promo)}</span>
-                            <span className="text-text-muted text-xs line-through">{formatarMoeda(base)}</span>
+                          <div className="flex items-baseline gap-1 sm:gap-2">
+                            <span className="font-bold text-accent text-sm sm:text-base">{formatarMoeda(promo)}</span>
+                            <span className="text-text-muted text-[10px] sm:text-xs line-through">{formatarMoeda(base)}</span>
                           </div>
                           {badge && (
-                            <span className="inline-block mt-1 text-[10px] font-extrabold px-2 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">
+                            <span className="inline-block mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">
                               {discountLabel || badge}
                             </span>
                           )}
                         </div>
                       ) : (
-                        <div className="font-bold text-accent text-base">{formatarMoeda(base)}</div>
+                        <div className="font-bold text-accent text-sm sm:text-base">{formatarMoeda(base)}</div>
                       )}
                     </div>
                   </div>
@@ -285,7 +288,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
 
         {/* Dots indicator */}
         {needsScroll && (
-          <div className="flex justify-center gap-1.5 mt-4">
+          <div className="flex justify-center gap-1.5 mt-2 sm:mt-4">
             {Array.from({ length: maxIndex + 1 }, (_, i) => (
               <button
                 key={i}

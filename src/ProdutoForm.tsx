@@ -418,7 +418,9 @@ export default function ProdutoForm({
   const isAno = liga === "Seleções";
 
   useEffect(() => {
-    setPeriodo(getValorAtual(isAno));
+    if (!editandoId) {
+      setPeriodo(getValorAtual(isAno));
+    }
   }, [isAno]);
 
   useEffect(() => {
@@ -633,294 +635,339 @@ export default function ProdutoForm({
 
   if (loadingTimes) return <div className="text-center py-16 text-text-muted text-lg">Carregando times...</div>;
 
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl text-primary m-0">{editandoId ? "Editar Produto" : "Adicionar Produto"}</h2>
-        <button
-          className="bg-transparent text-text-muted border border-border px-4 py-1.5 text-sm rounded-md hover:bg-border hover:text-text-main transition-colors"
-          onClick={handleLogout}
+  const formFields = (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-text-muted">Liga</label>
+        <select
+          value={liga}
+          onChange={(e) => {
+            setLiga(e.target.value);
+            setTime("");
+          }}
+          className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
         >
-          Sair
-        </button>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-text-muted">Liga</label>
-          <select
-            value={liga}
-            onChange={(e) => {
-              setLiga(e.target.value);
-              setTime("");
-            }}
-            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-          >
-            <option value="">Selecione a liga</option>
-            {ligas.map((l) => (
-              <option key={l.nome} value={l.nome}>
-                {l.nome}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-text-muted">Time</label>
-          <select
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-            disabled={!liga}
-            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg disabled:opacity-50"
-          >
-            <option value="">Selecione o time</option>
-            {timesDaLiga.map((t) => (
-              <option key={t.id} value={t.nome}>
-                {t.nome}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-text-muted">{isAno ? "Ano" : "Temporada"}</label>
-          <input
-            type="text"
-            value={periodo}
-            onChange={(e) => setPeriodo(formatarValor(e.target.value, isAno))}
-            placeholder={isAno ? "ex: 2026" : "ex: 25/26"}
-            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-text-muted">
-            Tipo{" "}
-            {retro &&
-              (isAno
-                ? "(apenas Retrô para 2022 ou anterior)"
-                : "(apenas Retrô para 21/22 ou anterior)")}
-          </label>
-          <select
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value)}
-            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-          >
-            {tiposDisponiveis.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-text-muted">Localização (opcional)</label>
-          <select
-            value={localizacao}
-            onChange={(e) => setLocalizacao(e.target.value)}
-            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-          >
-            <option value="">Padrão</option>
-            <option value="Casa">Casa</option>
-            <option value="Fora">Fora</option>
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-text-muted">Nome personalizado (opcional)</label>
-          <input
-            type="text"
-            value={nomeCustom}
-            onChange={(e) => setNomeCustom(e.target.value)}
-            placeholder="Sobrescreve o nome gerado"
-            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-semibold text-text-muted">Links das imagens</label>
-          {imagemUrls.map((url, i) => (
-            <div key={i} className="flex gap-2">
-              <input
-                type="text"
-                value={url}
-                onChange={(e) => {
-                  const newUrls = [...imagemUrls];
-                  newUrls[i] = e.target.value;
-                  setImagemUrls(newUrls);
-                }}
-                placeholder="https://..."
-                className="flex-1 px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-              />
-              {imagemUrls.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setImagemUrls(imagemUrls.filter((_, j) => j !== i))}
-                  className="px-2.5 text-red-500 hover:bg-red-50 rounded-md border border-red-200 text-sm cursor-pointer transition-colors"
-                  aria-label="Remover imagem"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+          <option value="">Selecione a liga</option>
+          {ligas.map((l) => (
+            <option key={l.nome} value={l.nome}>
+              {l.nome}
+            </option>
           ))}
-          <button
-            type="button"
-            onClick={() => setImagemUrls([...imagemUrls, ""])}
-            className="text-sm text-accent hover:underline cursor-pointer self-start"
-          >
-            + Adicionar imagem
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-text-muted">Link da loja Yupoo</label>
-          <input
-            type="text"
-            value={yupooUrl}
-            onChange={(e) => setYupooUrl(e.target.value)}
-            placeholder="https://..."
-            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            id="feminino-check"
-            type="checkbox"
-            checked={feminino}
-            onChange={(e) => setFeminino(e.target.checked)}
-            className="w-4 h-4 accent-primary cursor-pointer"
-          />
-          <label htmlFor="feminino-check" className="text-sm cursor-pointer select-none">
-            Tem versão feminina
-          </label>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-text-muted">Peça</label>
-          <select
-            value={peca}
-            onChange={(e) => setPeca(e.target.value)}
-            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-          >
-            <option value="camisa">Camisa</option>
-            <option value="regata">Regata / Jersey</option>
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-text-muted">Preço customizado (opcional — sobrescreve o preço da categoria)</label>
-          <input
-            type="number"
-            step="0.01"
-            value={precoCustomizado}
-            onChange={(e) => setPrecoCustomizado(e.target.value)}
-            placeholder="Deixe vazio para usar o preço padrão"
-            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-          />
-        </div>
-
-        <div className="px-3 py-3 bg-blue-50 rounded-md font-medium text-primary">
-          {nomeFinal || "Preencha os campos acima"}
-        </div>
-
-        <div className="flex gap-3">
-          {editandoId ? (
-            <>
-              <button
-                className="flex-1 py-3 text-base font-semibold bg-green-500 text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleSave}
-                disabled={!nomeFinal || saving}
-              >
-                {saving ? "Salvando..." : "Salvar"}
-              </button>
-              <button
-                className="px-6 py-3 text-base font-semibold bg-border text-text-main rounded-md cursor-pointer transition-colors hover:bg-gray-300"
-                onClick={limparForm}
-              >
-                Cancelar
-              </button>
-            </>
-          ) : (
-            <button
-              className="flex-1 py-3 text-base font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={handleAdd}
-              disabled={!nomeFinal || saving}
-            >
-              {saving ? "Adicionando..." : "Adicionar Produto"}
-            </button>
-          )}
-        </div>
+        </select>
       </div>
 
-      {produtos.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-xl mb-4 text-primary">Produtos ({produtos.length})</h3>
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-text-muted">Time</label>
+        <select
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          disabled={!liga}
+          className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg disabled:opacity-50"
+        >
+          <option value="">Selecione o time</option>
+          {timesDaLiga.map((t) => (
+            <option key={t.id} value={t.nome}>
+              {t.nome}
+            </option>
+          ))}
+        </select>
+      </div>
 
-          <div className="flex gap-2 mb-4 flex-wrap items-center">
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-text-muted">{isAno ? "Ano" : "Temporada"}</label>
+        <input
+          type="text"
+          value={periodo}
+          onChange={(e) => setPeriodo(formatarValor(e.target.value, isAno))}
+          placeholder={isAno ? "ex: 2026" : "ex: 25/26"}
+          className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-text-muted">
+          Tipo{" "}
+          {retro &&
+            (isAno
+              ? "(apenas Retrô para 2022 ou anterior)"
+              : "(apenas Retrô para 21/22 ou anterior)")}
+        </label>
+        <select
+          value={tipo}
+          onChange={(e) => setTipo(e.target.value)}
+          className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+        >
+          {tiposDisponiveis.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-text-muted">Localização (opcional)</label>
+        <select
+          value={localizacao}
+          onChange={(e) => setLocalizacao(e.target.value)}
+          className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+        >
+          <option value="">Padrão</option>
+          <option value="Casa">Casa</option>
+          <option value="Fora">Fora</option>
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-text-muted">Nome personalizado (opcional)</label>
+        <input
+          type="text"
+          value={nomeCustom}
+          onChange={(e) => setNomeCustom(e.target.value)}
+          placeholder="Sobrescreve o nome gerado"
+          className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-semibold text-text-muted">Links das imagens</label>
+        {imagemUrls.map((url, i) => (
+          <div key={i} className="flex gap-2">
             <input
               type="text"
-              value={filtroBusca}
-              onChange={(e) => setFiltroBusca(e.target.value)}
-              placeholder="Buscar por nome, time, liga..."
-              className="flex-1 min-w-48 px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
+              value={url}
+              onChange={(e) => {
+                const newUrls = [...imagemUrls];
+                newUrls[i] = e.target.value;
+                setImagemUrls(newUrls);
+              }}
+              placeholder="https://..."
+              className="flex-1 px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
             />
-
-            <select
-              value={filtroTime}
-              onChange={(e) => setFiltroTime(e.target.value)}
-              className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
-            >
-              <option value="">Todos os times</option>
-              {todosTimes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={filtroTipo}
-              onChange={(e) => setFiltroTipo(e.target.value)}
-              className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
-            >
-              <option value="">Todos os tipos</option>
-              {["Torcedor", "Jogador", "Manga Longa", "Retrô", "Goleiro", "Treinamento", "Polo", "NBA"].map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-
-            {(filtroTime || filtroTipo || filtroBusca) && (
+            {imagemUrls.length > 1 && (
               <button
-                className="px-3 py-2 text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90"
-                onClick={() => {
-                  setFiltroTime("");
-                  setFiltroTipo("");
-                  setFiltroBusca("");
-                }}
+                type="button"
+                onClick={() => setImagemUrls(imagemUrls.filter((_, j) => j !== i))}
+                className="px-2.5 text-red-500 hover:bg-red-50 rounded-md border border-red-200 text-sm cursor-pointer transition-colors"
+                aria-label="Remover imagem"
               >
-                Limpar
+                ✕
               </button>
             )}
           </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => setImagemUrls([...imagemUrls, ""])}
+          className="text-sm text-accent hover:underline cursor-pointer self-start"
+        >
+          + Adicionar imagem
+        </button>
+      </div>
 
-          {produtosFiltrados.length === 0 ? (
-            <p className="text-center text-text-muted py-8">
-              Nenhum produto encontrado com os filtros selecionados.
-            </p>
-          ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-              {produtosFiltrados.map((p) => (
-                <AdminProductCard key={p.id} p={p} onEdit={handleEdit} onRemove={handleRemove} />
-              ))}
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-text-muted">Link da loja Yupoo</label>
+        <input
+          type="text"
+          value={yupooUrl}
+          onChange={(e) => setYupooUrl(e.target.value)}
+          placeholder="https://..."
+          className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          id="feminino-check"
+          type="checkbox"
+          checked={feminino}
+          onChange={(e) => setFeminino(e.target.checked)}
+          className="w-4 h-4 accent-primary cursor-pointer"
+        />
+        <label htmlFor="feminino-check" className="text-sm cursor-pointer select-none">
+          Tem versão feminina
+        </label>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-text-muted">Peça</label>
+        <select
+          value={peca}
+          onChange={(e) => setPeca(e.target.value)}
+          className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+        >
+          <option value="camisa">Camisa</option>
+          <option value="regata">Regata / Jersey</option>
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-text-muted">Preço customizado (opcional — sobrescreve o preço da categoria)</label>
+        <input
+          type="number"
+          step="0.01"
+          value={precoCustomizado}
+          onChange={(e) => setPrecoCustomizado(e.target.value)}
+          placeholder="Deixe vazio para usar o preço padrão"
+          className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+        />
+      </div>
+
+      <div className="px-3 py-3 bg-blue-50 rounded-md font-medium text-primary">
+        {nomeFinal || "Preencha os campos acima"}
+      </div>
+
+      <div className="flex gap-3">
+        {editandoId ? (
+          <>
+            <button
+              className="flex-1 py-3 text-base font-semibold bg-green-500 text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleSave}
+              disabled={!nomeFinal || saving}
+            >
+              {saving ? "Salvando..." : "Salvar"}
+            </button>
+            <button
+              className="px-6 py-3 text-base font-semibold bg-border text-text-main rounded-md cursor-pointer transition-colors hover:bg-gray-300"
+              onClick={limparForm}
+            >
+              Cancelar
+            </button>
+          </>
+        ) : (
+          <button
+            className="flex-1 py-3 text-base font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleAdd}
+            disabled={!nomeFinal || saving}
+          >
+            {saving ? "Adicionando..." : "Adicionar Produto"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        {/* Add form — only shown when NOT editing */}
+        {!editandoId && (
+          <>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl text-primary m-0">Adicionar Produto</h2>
+              <button
+                className="bg-transparent text-text-muted border border-border px-4 py-1.5 text-sm rounded-md hover:bg-border hover:text-text-main transition-colors"
+                onClick={handleLogout}
+              >
+                Sair
+              </button>
             </div>
-          )}
+            {formFields}
+          </>
+        )}
+
+        {/* Product list — always visible */}
+        {produtos.length > 0 && (
+          <div className={!editandoId ? "mt-8" : ""}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl text-primary m-0">Produtos ({produtos.length})</h3>
+              {editandoId && (
+                <button
+                  className="bg-transparent text-text-muted border border-border px-4 py-1.5 text-sm rounded-md hover:bg-border hover:text-text-main transition-colors"
+                  onClick={handleLogout}
+                >
+                  Sair
+                </button>
+              )}
+            </div>
+
+            <div className="flex gap-2 mb-4 flex-wrap items-center">
+              <input
+                type="text"
+                value={filtroBusca}
+                onChange={(e) => setFiltroBusca(e.target.value)}
+                placeholder="Buscar por nome, time, liga..."
+                className="flex-1 min-w-48 px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
+              />
+
+              <select
+                value={filtroTime}
+                onChange={(e) => setFiltroTime(e.target.value)}
+                className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
+              >
+                <option value="">Todos os times</option>
+                {todosTimes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={filtroTipo}
+                onChange={(e) => setFiltroTipo(e.target.value)}
+                className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
+              >
+                <option value="">Todos os tipos</option>
+                {["Torcedor", "Jogador", "Manga Longa", "Retrô", "Goleiro", "Treinamento", "Polo", "NBA"].map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+
+              {(filtroTime || filtroTipo || filtroBusca) && (
+                <button
+                  className="px-3 py-2 text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90"
+                  onClick={() => {
+                    setFiltroTime("");
+                    setFiltroTipo("");
+                    setFiltroBusca("");
+                  }}
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
+
+            {produtosFiltrados.length === 0 ? (
+              <p className="text-center text-text-muted py-8">
+                Nenhum produto encontrado com os filtros selecionados.
+              </p>
+            ) : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+                {produtosFiltrados.map((p) => (
+                  <AdminProductCard key={p.id} p={p} onEdit={handleEdit} onRemove={handleRemove} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Edit modal — floating overlay */}
+      {editandoId && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) limparForm(); }}
+        >
+          <div className="bg-card-bg rounded-lg shadow-xl max-w-3xl w-full my-4 sm:my-8 mx-4">
+            <div className="sticky top-0 bg-card-bg p-4 border-b border-border flex justify-between items-center z-10 rounded-t-lg">
+              <h2 className="text-xl text-primary m-0">Editar Produto</h2>
+              <button
+                className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-text-main text-xl bg-transparent border-none cursor-pointer rounded-full hover:bg-gray-100 transition-colors"
+                onClick={limparForm}
+                title="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 max-h-[calc(100vh-8rem)] overflow-y-auto">
+              {formFields}
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

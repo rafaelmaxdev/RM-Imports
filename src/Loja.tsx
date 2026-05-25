@@ -78,7 +78,11 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       res = res.filter((p) => p.time === filtroTime);
     }
     if (filtroTipo) {
-      res = res.filter((p) => p.tipo === filtroTipo);
+      if (filtroTipo === "__feminino__") {
+        res = res.filter((p) => p.feminino);
+      } else {
+        res = res.filter((p) => p.tipo === filtroTipo);
+      }
     }
 
     // Sort
@@ -151,11 +155,11 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       )}
 
       <div className="max-w-5xl mx-auto px-4 pt-4 pb-8">
-      <nav className="flex justify-center gap-2 flex-wrap pb-2 mb-4">
+      <nav className="flex justify-center gap-1.5 sm:gap-2 flex-wrap mb-4">
         {CATEGORIAS.map((cat) => (
           <button
             key={cat}
-            className={`px-4 py-2 border border-border bg-card-bg rounded-full cursor-pointer whitespace-nowrap text-sm transition-colors ${
+            className={`px-2.5 py-1.5 sm:px-4 sm:py-2 border border-border bg-card-bg rounded-full cursor-pointer whitespace-nowrap text-xs sm:text-sm transition-colors ${
               categoriaSelecionada === cat
                 ? "bg-primary text-white border-primary"
                 : "text-text-main hover:bg-gray-100"
@@ -171,12 +175,12 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
         ))}
       </nav>
 
-      <div className="flex gap-2 mb-6 flex-wrap items-center">
+      <div className="grid grid-cols-2 sm:flex gap-2 mb-4">
         {timesDisponiveis.length > 0 && (
           <select
             value={filtroTime}
             onChange={(e) => setFiltroTime(e.target.value)}
-            className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm min-w-44"
+            className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
           >
             <option value="">Todos os times</option>
             {timesDisponiveis.map((t) => (
@@ -191,7 +195,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           <select
             value={filtroTipo}
             onChange={(e) => setFiltroTipo(e.target.value)}
-            className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm min-w-44"
+            className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
           >
             <option value="">Todos os tipos</option>
             {tiposDisponiveis.map((t) => (
@@ -199,15 +203,16 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                 {t}
               </option>
             ))}
+            <option value="__feminino__">Tem versão feminina</option>
           </select>
         )}
 
         <select
           value={ordenacao}
           onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
-          className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
+          className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
         >
-          <option value="time">Ordenar: Time / Nome</option>
+          <option value="time">Time / Nome</option>
           <option value="preco-asc">Menor preço</option>
           <option value="preco-desc">Maior preço</option>
           <option value="categoria">Categoria</option>
@@ -215,7 +220,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
         {(filtroTime || filtroTipo) && (
           <button
-            className="px-3 py-2 text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90"
+            className="px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90 whitespace-nowrap"
             onClick={() => { setFiltroTime(""); setFiltroTipo(""); }}
           >
             Limpar filtros
@@ -273,13 +278,13 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                 </div>
 
                 <div className="p-2.5 sm:p-4 flex flex-col flex-1">
-                  <div className="font-semibold text-xs sm:text-[0.95rem] mb-1 sm:mb-2 line-clamp-2">
+                  <div className="font-semibold text-xs sm:text-[0.95rem] mb-1 sm:mb-2 line-clamp-2 min-h-[2.5em] sm:min-h-[2.6em]">
                     {p.nome}
                   </div>
 
                   <div className="flex gap-1 sm:gap-2 mb-1.5 sm:mb-2">
                     <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-primary text-white rounded">
-                      {p.tipo}
+                      {p.tipo}{p.feminino ? " (F e M)" : ""}
                     </span>
                     <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-primary text-white rounded">
                       {p.temporada}
@@ -287,19 +292,17 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                   </div>
 
                   <div className="mt-auto">
-                    {promo !== null ? (
-                      <div>
-                        <div className="flex items-baseline gap-1 sm:gap-2">
-                          <span className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(promo)}</span>
-                          <span className="text-text-muted text-[10px] sm:text-sm line-through">{formatarMoeda(base)}</span>
-                        </div>
-                        {badge && (
-                          <span className="inline-block mt-0.5 text-[9px] sm:text-[10px] font-extrabold px-1.5 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">{discountLabel || badge}</span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(base)}</div>
-                    )}
+                    <div className="flex items-baseline gap-1 sm:gap-2 min-h-[1.25rem] sm:min-h-[1.75rem]">
+                      <span className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(promo ?? base)}</span>
+                      {promo !== null && (
+                        <span className="text-text-muted text-[10px] sm:text-sm line-through">{formatarMoeda(base)}</span>
+                      )}
+                    </div>
+                    <div className="min-h-[1rem] sm:min-h-[1.25rem]">
+                      {emPromocao && badge && (
+                        <span className="inline-block text-[9px] sm:text-[10px] font-extrabold px-1.5 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">{discountLabel || badge}</span>
+                      )}
+                    </div>
                   </div>
 
                   <button

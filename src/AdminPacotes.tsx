@@ -47,6 +47,22 @@ const NEXT_STATUS: Record<string, string> = {
   em_entrega: "entregue",
 };
 
+const PREV_STATUS: Record<string, string> = {
+  em_producao: "enviado_fornecedor",
+  a_caminho: "em_producao",
+  em_estoque: "a_caminho",
+  em_entrega: "em_estoque",
+  entregue: "em_entrega",
+};
+
+const PREV_ACTION_LABELS: Record<string, string> = {
+  em_producao: "Enviado ao fornecedor",
+  a_caminho: "Em produção",
+  em_estoque: "A caminho",
+  em_entrega: "Em estoque",
+  entregue: "Em entrega",
+};
+
 const STATUS_ACTION_LABELS: Record<string, string> = {
   enviado_fornecedor: "Em Produção",
   em_producao: "A Caminho",
@@ -88,7 +104,6 @@ export default function AdminPacotes() {
   const [pacotes, setPacotes] = useState<Pacote[]>([]);
   const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
   const [showAllHistorico, setShowAllHistorico] = useState(false);
-  const [creditReleasePeriod, setCreditReleasePeriod] = useState<"immediate" | "14_days" | "30_days">("immediate");
 
   const loadOrders = useCallback(async () => {
     try {
@@ -182,6 +197,26 @@ export default function AdminPacotes() {
     } catch (err) {
       console.error("Erro ao atualizar status:", err);
       alert("Erro ao atualizar status. Verifique manualmente.");
+    }
+  }
+
+  async function handleRevertPackage(pacote: Pacote) {
+    const prevStatus = PREV_STATUS[pacote.status];
+    if (!prevStatus) return;
+
+    const label = PREV_ACTION_LABELS[pacote.status] || prevStatus;
+    if (!confirm(`Voltar Pacote para "${label}"?`)) return;
+
+    try {
+      await Promise.all(pacote.pedido_ids.map((id) => updatePedidoStatus(id, prevStatus)));
+      await updatePacoteStatus(pacote.id, prevStatus);
+
+      setPacotes((prev) =>
+        prev.map((p) => p.id === pacote.id ? { ...p, status: prevStatus } : p)
+      );
+    } catch (err) {
+      console.error("Erro ao voltar status:", err);
+      alert("Erro ao voltar status. Verifique manualmente.");
     }
   }
 
@@ -491,6 +526,14 @@ export default function AdminPacotes() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {PREV_STATUS[pacote.status] && (
+                            <button
+                              className="px-3 py-1.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded-md cursor-pointer hover:bg-gray-300 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); handleRevertPackage(pacote); }}
+                            >
+                              ← Voltar
+                            </button>
+                          )}
                           {nextAction && (
                             <button
                               className="px-3 py-1.5 text-xs font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity"
@@ -584,23 +627,8 @@ export default function AdminPacotes() {
             </div>
           ) : (
             <>
-              {/* Credit card release period selector */}
-              <div className="bg-card-bg rounded-md p-4 shadow-card mb-4">
-                <label className="block text-sm font-semibold text-text-muted mb-2">Prazo de liberação do saldo (Cartão de Crédito)</label>
-                <select
-                  className="w-full sm:w-auto px-3 py-2 border border-border rounded-md text-sm bg-card-bg"
-                  value={creditReleasePeriod}
-                  onChange={(e) => setCreditReleasePeriod(e.target.value as "immediate" | "14_days" | "30_days")}
-                >
-                  <option value="immediate">Na hora — 4,99%</option>
-                  <option value="14_days">Em 14 dias — 4,49%</option>
-                  <option value="30_days">Em 30 dias — 3,99%</option>
-                </select>
-                <p className="text-xs text-text-muted mt-1">Selecione o prazo usado no Mercado Pago para calcular as taxas corretamente.</p>
-              </div>
-
               {/* Profit summary at top */}
-              <ProfitSummary pacotes={deliveredPacotes} allOrders={allOrders} creditReleasePeriod={creditReleasePeriod} />
+              <ProfitSummary pacotes={deliveredPacotes} allOrders={allOrders} />
 
               {/* Delivered packages list */}
               <div className="flex flex-col gap-4 mt-6">
@@ -609,7 +637,6 @@ export default function AdminPacotes() {
                     key={pacote.id}
                     pacote={pacote}
                     allOrders={allOrders}
-                    creditReleasePeriod={creditReleasePeriod}
                     onSaveFinanceiro={handleSaveFinanceiro}
                     onRemovePedido={handleRemovePedido}
                     onDeletePacote={handleDeletePacote}
@@ -636,7 +663,7 @@ export default function AdminPacotes() {
 }
 
 // ── Profit Summary Component ──
-function ProfitSummary({ pacotes, allOrders, creditReleasePeriod }: { pacotes: Pacote[]; allOrders: Order[]; creditReleasePeriod: "immediate" | "14_days" | "30_days" }) {
+function ProfitSummary({ pacotes, allOrders }: { pacotes: Pacote[]; allOrders: Order[] }) {
   let totalVendido = 0;
   let totalCamisas = 0;
   let totalCusto = 0;
@@ -652,7 +679,7 @@ function ProfitSummary({ pacotes, allOrders, creditReleasePeriod }: { pacotes: P
     const vendido = orders.reduce((sum, o) => sum + o.total, 0);
     const camisas = orders.reduce((sum, o) => sum + o.itens.length, 0);
     const taxas = orders.reduce((sum, o) => {
-      const rate = getFeeRate(o.payment_method, o.credit_release_period || creditReleasePeriod);
+      const rate = getFeeRate(o.payment_method, o.credit_release_period || "immediate");
       return sum + o.total * rate;
     }, 0);
 
@@ -719,14 +746,12 @@ function ProfitSummary({ pacotes, allOrders, creditReleasePeriod }: { pacotes: P
 function DeliveredPacoteCard({
   pacote,
   allOrders,
-  creditReleasePeriod,
   onSaveFinanceiro,
   onRemovePedido,
   onDeletePacote,
 }: {
   pacote: Pacote;
   allOrders: Order[];
-  creditReleasePeriod: "immediate" | "14_days" | "30_days";
   onSaveFinanceiro: (pacote: Pacote, field: "custo" | "frete" | "taxa_importacao", value: string) => void;
   onRemovePedido: (pacoteId: string, pedidoId: string) => void;
   onDeletePacote: (pacoteId: string) => void;
@@ -735,6 +760,7 @@ function DeliveredPacoteCard({
   const [localCusto, setLocalCusto] = useState(pacote.custo?.toString() ?? "");
   const [localFrete, setLocalFrete] = useState(pacote.frete?.toString() ?? "");
   const [localTaxa, setLocalTaxa] = useState(pacote.taxa_importacao?.toString() ?? "");
+  const [creditReleasePeriod, setCreditReleasePeriod] = useState<"immediate" | "14_days" | "30_days">("immediate");
 
   const orders = pacote.pedido_ids
     .map((id) => allOrders.find((o) => o.id === id))
@@ -747,6 +773,9 @@ function DeliveredPacoteCard({
   const custoValue = parseFloat(localCusto) || 0;
   const freteValue = parseFloat(localFrete) || 0;
   const taxaValue = parseFloat(localTaxa) || 0;
+
+  const hasCreditCard = orders.some((o) => o.payment_method === "credit_card");
+
   const totalTaxas = nonAdminOrders.reduce((sum, o) => {
     const rate = getFeeRate(o.payment_method, o.credit_release_period || creditReleasePeriod);
     return sum + o.total * rate;
@@ -835,6 +864,22 @@ function DeliveredPacoteCard({
               </div>
             </div>
 
+            {/* Credit card release period per package — only if there are credit card orders */}
+            {hasCreditCard && (
+              <div className="mt-3 pt-3 border-t border-green-200">
+                <label className="block text-xs text-green-700 mb-1">Prazo de liberação (Cartão de Crédito)</label>
+                <select
+                  className="w-full px-3 py-2 border border-green-300 rounded-md bg-white text-sm"
+                  value={creditReleasePeriod}
+                  onChange={(e) => setCreditReleasePeriod(e.target.value as "immediate" | "14_days" | "30_days")}
+                >
+                  <option value="immediate">Na hora — 4,99%</option>
+                  <option value="14_days">Em 14 dias — 4,49%</option>
+                  <option value="30_days">Em 30 dias — 3,99%</option>
+                </select>
+              </div>
+            )}
+
             {/* Per-package summary */}
             <div className="mt-3 pt-3 border-t border-green-200 space-y-1 text-sm">
               <div className="flex justify-between">
@@ -853,6 +898,12 @@ function DeliveredPacoteCard({
                 <span className="text-green-700">Taxas Mercado Pago:</span>
                 <span>{formatarMoeda(totalTaxas)}</span>
               </div>
+              {hasCreditCard && (
+                <div className="flex justify-between text-xs text-green-600">
+                  <span className="pl-3">└ Cartão de crédito ({creditReleasePeriod === "immediate" ? "4,99%" : creditReleasePeriod === "14_days" ? "4,49%" : "3,99%"}):</span>
+                  <span>{formatarMoeda(nonAdminOrders.filter(o => o.payment_method === "credit_card").reduce((sum, o) => sum + o.total * getFeeRate(o.payment_method, o.credit_release_period || creditReleasePeriod), 0))}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-green-700">Frete:</span>
                 <span>{formatarMoeda(freteValue)}</span>

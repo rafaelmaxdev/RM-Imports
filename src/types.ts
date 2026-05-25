@@ -302,7 +302,44 @@ const TIPO_ENGLISH: Record<string, string> = {
 };
 
 export function montarMensagemPacote(orders: Order[]): string {
-  const totalCamisas = orders.reduce((sum, o) => sum + o.itens.length, 0);
+  // Group all items across orders, combining duplicates
+  const allItems: { nome: string; tipo: string; tamanho: string; genero: string; feminino: boolean; yupooUrl: string; nomePersonalizado?: string; numeroPersonalizado?: string; qty: number }[] = [];
+
+  for (const order of orders) {
+    for (const item of order.itens) {
+      const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
+      const version = item.feminino && item.genero === "Feminino"
+        ? `${tipoEn} WOMANS`
+        : `${tipoEn} MALE`;
+      const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
+
+      // Create a key to group identical items
+      const key = `${item.yupooUrl}|${sizeForSupplier}|${version}|${item.personalizado ? `${item.nomePersonalizado}|${item.numeroPersonalizado}` : ""}`;
+
+      const existing = allItems.find((a) => {
+        const aKey = `${a.yupooUrl}|${TAMANHO_FORNECEDOR[a.tamanho] || a.tamanho}|${TIPO_ENGLISH[a.tipo] || a.tipo}${a.feminino && a.genero === "Feminino" ? " WOMANS" : a.genero === "Feminino" ? " WOMANS" : " MALE"}|${a.nomePersonalizado ? `${a.nomePersonalizado}|${a.numeroPersonalizado}` : ""}`;
+        return aKey === key;
+      });
+
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        allItems.push({
+          nome: item.nome,
+          tipo: item.tipo,
+          tamanho: item.tamanho,
+          genero: item.genero,
+          feminino: item.feminino,
+          yupooUrl: item.yupooUrl,
+          nomePersonalizado: item.personalizado ? item.nomePersonalizado : undefined,
+          numeroPersonalizado: item.personalizado ? item.numeroPersonalizado : undefined,
+          qty: 1,
+        });
+      }
+    }
+  }
+
+  const totalCamisas = allItems.reduce((sum, a) => sum + a.qty, 0);
   let msg = `*Pacote RM Imports*\n`;
   msg += `📦 ${orders.length} pedido(s) • ${totalCamisas} camisa(s)\n`;
 
@@ -331,6 +368,30 @@ export function montarMensagemPacote(orders: Order[]): string {
   });
 
   msg += `\n━━━━━━━━━━━━━━━\n`;
+  msg += `*Resumo do Pacote:*\n\n`;
+
+  allItems.forEach((item) => {
+    const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
+    const version = item.feminino && item.genero === "Feminino"
+      ? `${tipoEn} WOMANS`
+      : `${tipoEn} MALE`;
+    const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
+
+    if (item.qty > 1) {
+      msg += `${item.qty}x ${item.nome}\n`;
+    } else {
+      msg += `${item.nome}\n`;
+    }
+    msg += `Link: ${item.yupooUrl || "N/A"}\n`;
+    msg += `Size: ${sizeForSupplier}\n`;
+    msg += `Version: ${version}\n`;
+    if (item.nomePersonalizado) {
+      msg += `Name: ${item.nomePersonalizado}\n`;
+      msg += `Number: ${item.numeroPersonalizado}\n`;
+    }
+    msg += `\n`;
+  });
+
   msg += `Total: ${totalCamisas} camisa(s) em ${orders.length} pedido(s)`;
 
   return msg;

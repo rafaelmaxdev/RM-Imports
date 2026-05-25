@@ -48,7 +48,7 @@ function AppContent() {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 flex items-center justify-between px-4 sm:px-8 py-3 bg-primary text-white shadow-md relative">
+      <nav className="sticky top-0 z-50 flex items-center justify-between px-4 sm:px-8 py-3 bg-primary text-white shadow-md relative" aria-label="Navegação principal">
         <button
           className={`hamburger-btn bg-transparent border-none cursor-pointer p-2 flex flex-col items-center justify-center gap-[5px] w-10 h-10 ${showMenu ? 'open' : ''}`}
           onClick={() => setShowMenu(!showMenu)}
@@ -67,6 +67,7 @@ function AppContent() {
         <button
           className="relative bg-white/10 border border-white/20 text-white px-3 py-2 rounded-lg cursor-pointer text-lg hover:bg-white/20 hover:border-white/30 transition-all duration-200"
           onClick={() => setShowCart(true)}
+          aria-label={`Carrinho${cart.length > 0 ? `, ${cart.length} ${cart.length === 1 ? 'item' : 'itens'}` : ''}`}
         >
           🛒
           {cart.length > 0 && (
@@ -102,11 +103,12 @@ function AppContent() {
         </div>
       )}
 
-      {loading ? (
-        <div className="text-center py-16 text-text-muted text-lg">Carregando...</div>
-      ) : (
-        <Suspense fallback={<div className="text-center py-16 text-text-muted text-lg">Carregando...</div>}>
-          <Routes>
+      <main>
+        {loading ? (
+          <div className="text-center py-16 text-text-muted text-lg">Carregando...</div>
+        ) : (
+          <Suspense fallback={<div className="text-center py-16 text-text-muted text-lg">Carregando...</div>}>
+            <Routes>
             <Route path="/" element={<Loja produtos={produtos} config={config} />} />
             <Route
               path="/admin"
@@ -122,6 +124,7 @@ function AppContent() {
           </Routes>
         </Suspense>
       )}
+      </main>
 
       {showCart && (
         <Suspense fallback={null}>

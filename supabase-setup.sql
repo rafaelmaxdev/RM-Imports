@@ -77,18 +77,27 @@ create policy "Qualquer um pode criar pedidos"
   on pedidos for insert
   with check (true);
 
--- Apenas autenticados podem ler pedidos (admin)
--- NOTA: A página de confirmação de pedido usa o ID na URL como autenticação implícita.
--- Para permitir que clientes acessem seus pedidos, usamos uma função que verifica o ID.
--- Migração: substituir a policy antiga (using true) por esta:
--- DROP POLICY "Qualquer um pode ler pedidos" ON pedidos;
+-- ⚠️ SEGURANÇA: A policy atual permite que QUALQUER UM leia todos os pedidos,
+-- incluindo dados pessoais (nome, endereço, telefone).
+-- Para restringir, execute a migração abaixo E crie a API route /api/order.
+--
+-- PASSO 1: Criar a API route /api/order (já implementada em api/order.ts)
+-- PASSO 2: Executar os comandos abaixo no SQL Editor do Supabase:
+--
+-- DROP POLICY "Qualquer um pode criar pedidos" ON pedidos;
+-- DROP POLICY IF EXISTS "Qualquer um pode ler pedidos" ON pedidos;
+--
 -- CREATE POLICY "Apenas autenticados podem ler pedidos"
 --   ON pedidos FOR SELECT
 --   USING (auth.role() = 'authenticated');
 --
--- IMPORTANTE: Ao ativar esta policy, a página /pedido/:id deixará de funcionar
--- para clientes não autenticados. Para resolver isso, crie uma Supabase Edge Function
--- ou uma API route que verifique o ID do pedido e retorne os dados.
+-- CREATE POLICY "Qualquer um pode criar pedidos via API"
+--   ON pedidos FOR INSERT
+--   WITH CHECK (true);
+--
+-- IMPORTANTE: Ao ativar a policy de SELECT restritiva, a página /pedido/:id
+-- deixará de funcionar para clientes não autenticados. A API route /api/order/:id
+-- deve ser usada no lugar para buscar dados do pedido.
 
 create policy "Apenas autenticados podem atualizar pedidos"
   on pedidos for update
@@ -151,3 +160,58 @@ create policy "Apenas autenticados podem deletar pedidos"
 -- NOTA: peca pode ser 'camisa' ou 'regata'. O default é 'camisa'.
 -- O comando UPDATE acima marca todos os produtos existentes como camisa.
 -- ============================================================
+
+-- ============================================================
+-- Tabela de configuração da loja
+-- ============================================================
+create table if not exists loja_config (
+  key text primary key,
+  value jsonb not null
+);
+
+-- Habilitar RLS
+alter table loja_config enable row level security;
+
+-- Qualquer um pode ler a configuração (preços, promoções)
+create policy "Qualquer um pode ler config"
+  on loja_config for select
+  using (true);
+
+-- Apenas autenticados podem alterar a configuração
+create policy "Apenas autenticados podem alterar config"
+  on loja_config for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+-- ============================================================
+-- Tabela de pacotes
+-- ============================================================
+create table if not exists pacotes (
+  id uuid default gen_random_uuid() primary key,
+  status text not null default 'enviado_fornecedor',
+  custo numeric,
+  frete numeric,
+  taxa_importacao numeric,
+  pedido_ids jsonb default '[]'::jsonb,
+  created_at timestamptz default now()
+);
+
+-- Habilitar RLS
+alter table pacotes enable row level security;
+
+-- Apenas autenticados podem gerenciar pacotes (admin)
+create policy "Apenas autenticados podem ler pacotes"
+  on pacotes for select
+  using (auth.role() = 'authenticated');
+
+create policy "Apenas autenticados podem inserir pacotes"
+  on pacotes for insert
+  with check (auth.role() = 'authenticated');
+
+create policy "Apenas autenticados podem atualizar pacotes"
+  on pacotes for update
+  using (auth.role() = 'authenticated');
+
+create policy "Apenas autenticados podem deletar pacotes"
+  on pacotes for delete
+  using (auth.role() = 'authenticated');

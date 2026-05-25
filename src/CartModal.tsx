@@ -39,10 +39,17 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+
     return () => {
       document.body.style.overflow = "";
+      document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [onClose]);
 
   const temFeminino = produto.feminino === true;
   const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo);
@@ -93,8 +100,8 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4" onClick={onClose}>
-        <div className="bg-card-bg rounded-md p-6 max-w-md w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4" onClick={onClose} role="presentation">
+        <div className="bg-card-bg rounded-md p-6 max-w-md w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Adicionar ${produto.nome} ao carrinho`}>
           {showSizeChart ? (
             /* ── Size chart view ── */
             <>

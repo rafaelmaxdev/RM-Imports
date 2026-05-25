@@ -275,9 +275,18 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
     { value: "debit_card", label: "Cartão de Débito", icon: "🏦", desc: "Débito à vista" },
   ];
 
+  // Close on Escape key
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 bg-black/60 z-[1000] transition-colors duration-300" onClick={onClose}>
-      <div className="absolute right-0 top-0 bottom-0 w-full max-w-100 bg-card-bg flex flex-col shadow-[-8px_0_32px_rgba(0,0,0,0.2)] transition-transform duration-300 ease-out" onClick={(e) => e.stopPropagation()}>
+      <div className="absolute right-0 top-0 bottom-0 w-full max-w-100 bg-card-bg flex flex-col shadow-[-8px_0_32px_rgba(0,0,0,0.2)] transition-transform duration-300 ease-out" role="dialog" aria-modal="true" aria-label="Carrinho de compras" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center px-6 py-4 border-b border-border">
           <h3 className="m-0 text-primary font-semibold">
             {step === "cart" ? `Carrinho (${cart.length})` : step === "address" ? (endereco.deliveryMethod === "retirada" ? "Dados para Retirada" : "Endereço de Entrega") : "Pagamento"}

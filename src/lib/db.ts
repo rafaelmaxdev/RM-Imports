@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { LojaConfig } from "../types";
+import type { LojaConfig, OrderItem, OrderAddress } from "../types";
 import { DEFAULT_CONFIG } from "../types";
 
 export interface DbProduto {
@@ -31,7 +31,7 @@ export function parseImageUrls(value: string[] | string | null | undefined): str
 export async function getProdutos(): Promise<DbProduto[]> {
   const { data, error } = await supabase
     .from("produtos")
-    .select("*")
+    .select("id,nome,liga,time,tipo,temporada,imagem_urls,yupoo_url,destaque,preco_customizado,promocao,promocao_tipo,promocao_valor,feminino,peca,created_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -166,14 +166,15 @@ export interface DbPedido {
   id: string;
   data: string;
   hora: string;
-  itens: string; // JSONB stored as string from Supabase
+  itens: OrderItem[] | string; // JSONB: can arrive as parsed object or string
   total: number;
   status: string;
-  endereco: string | null; // JSONB stored as string from Supabase
+  endereco: OrderAddress | string | null; // JSONB: can arrive as parsed object or string
   payment_method: string | null;
   mp_preference_id: string | null;
   mp_payment_id: string | null;
   admin_order: boolean | null;
+  credit_release_period?: "immediate" | "14_days" | "30_days" | null;
   created_at: string;
 }
 

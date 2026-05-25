@@ -7,6 +7,7 @@ import ImageLightbox from "./ImageLightbox";
 import DestaqueCarousel from "./DestaqueCarousel";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { formatarMoeda, getPrecoProduto } from "./types";
+import { normalizeNome } from "./lib/utils";
 
 const CATEGORIAS = [
   "Todas",
@@ -21,20 +22,6 @@ const CATEGORIAS = [
   "Serie A",
   "Seleções",
 ].sort((a, b) => (a === "Todas" ? -1 : b === "Todas" ? 1 : a.localeCompare(b)));
-
-const renomear: Record<string, string> = {
-  "Inter Milan": "Inter de Milão",
-  "Ceara Sporting": "Ceará",
-  "Ceará Sporting": "Ceará",
-};
-
-function normalizeNome(nome: string): string {
-  let result = nome;
-  Object.entries(renomear).forEach(([de, para]) => {
-    result = result.replace(de, para);
-  });
-  return result;
-}
 
 type Ordenacao = "time" | "preco-asc" | "preco-desc" | "categoria";
 
@@ -154,8 +141,8 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
         />
       )}
 
-      <div className="max-w-5xl mx-auto px-4 pt-4 pb-8">
-      <nav className="flex justify-center gap-1.5 sm:gap-2 flex-wrap mb-4">
+      <div className="max-w-5xl mx-auto px-4 pt-4 pb-8" id="main-content">
+      <nav className="flex justify-center gap-1.5 sm:gap-2 flex-wrap mb-4" aria-label="Filtrar por categoria">
         {CATEGORIAS.map((cat) => (
           <button
             key={cat}
@@ -181,6 +168,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
             value={filtroTime}
             onChange={(e) => setFiltroTime(e.target.value)}
             className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
+            aria-label="Filtrar por time"
           >
             <option value="">Todos os times</option>
             {timesDisponiveis.map((t) => (
@@ -196,6 +184,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
             value={filtroTipo}
             onChange={(e) => setFiltroTipo(e.target.value)}
             className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
+            aria-label="Filtrar por tipo"
           >
             <option value="">Todos os tipos</option>
             {tiposDisponiveis.map((t) => (
@@ -211,6 +200,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           value={ordenacao}
           onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
           className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
+          aria-label="Ordenar produtos"
         >
           <option value="time">Time / Nome</option>
           <option value="preco-asc">Menor preço</option>
@@ -222,6 +212,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           <button
             className="px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90 whitespace-nowrap"
             onClick={() => { setFiltroTime(""); setFiltroTipo(""); }}
+            aria-label="Limpar filtros"
           >
             Limpar filtros
           </button>

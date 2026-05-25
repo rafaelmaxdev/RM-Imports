@@ -3,92 +3,7 @@ import { getPedidos, updatePedidoStatus, getPacotes, createPacote, updatePacoteS
 import type { Order } from "./types";
 import type { Pacote } from "./lib/db";
 import { montarMensagemPacote, WHATSAPP_NUMBER, formatarMoeda, TAMANHO_FORNECEDOR } from "./types";
-
-const PAYMENT_LABELS: Record<string, string> = {
-  pix: "Pix",
-  credit_card: "Cartão",
-  debit_card: "Débito",
-};
-
-const TIPO_ENGLISH: Record<string, string> = {
-  "Torcedor": "Fan",
-  "Jogador": "Player",
-  "Retrô": "Retro",
-  "Manga Longa": "Long Sleeve",
-  "Goleiro": "Goalkeeper",
-  "Treinamento": "Training",
-  "Polo": "Polo",
-  "NBA": "NBA",
-};
-
-const STATUS_PIPELINE = [
-  "enviado_fornecedor",
-  "em_producao",
-  "a_caminho",
-  "em_estoque",
-  "em_entrega",
-  "entregue",
-] as const;
-
-const STATUS_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  enviado_fornecedor: { label: "Enviado", bg: "bg-blue-100", text: "text-blue-800" },
-  em_producao: { label: "Em produção", bg: "bg-purple-100", text: "text-purple-800" },
-  a_caminho: { label: "A caminho", bg: "bg-indigo-100", text: "text-indigo-800" },
-  em_estoque: { label: "Em estoque", bg: "bg-teal-100", text: "text-teal-800" },
-  em_entrega: { label: "Em entrega", bg: "bg-cyan-100", text: "text-cyan-800" },
-  entregue: { label: "Entregue", bg: "bg-green-100", text: "text-green-800" },
-};
-
-const NEXT_STATUS: Record<string, string> = {
-  enviado_fornecedor: "em_producao",
-  em_producao: "a_caminho",
-  a_caminho: "em_estoque",
-  em_estoque: "em_entrega",
-  em_entrega: "entregue",
-};
-
-const PREV_STATUS: Record<string, string> = {
-  em_producao: "enviado_fornecedor",
-  a_caminho: "em_producao",
-  em_estoque: "a_caminho",
-  em_entrega: "em_estoque",
-  entregue: "em_entrega",
-};
-
-const PREV_ACTION_LABELS: Record<string, string> = {
-  em_producao: "Enviado ao fornecedor",
-  a_caminho: "Em produção",
-  em_estoque: "A caminho",
-  em_entrega: "Em estoque",
-  entregue: "Em entrega",
-};
-
-const STATUS_ACTION_LABELS: Record<string, string> = {
-  enviado_fornecedor: "Em Produção",
-  em_producao: "A Caminho",
-  a_caminho: "Em Estoque",
-  em_estoque: "Em Entrega",
-  em_entrega: "Entregue",
-};
-
-const FEE_RATES: Record<string, number> = {
-  pix: 0.0099,        // 0,99%
-  debit_card: 0.0399, // 3,99%
-};
-
-// Taxas cartão de crédito dependem do prazo de liberação do saldo
-const CREDIT_CARD_RATES: Record<string, number> = {
-  immediate: 0.0499, // 4,99% — na hora
-  "14_days": 0.0449, // 4,49% — em 14 dias
-  "30_days": 0.0399, // 3,99% — em 30 dias
-};
-
-function getFeeRate(paymentMethod: string | undefined, creditReleasePeriod: string | undefined): number {
-  if (paymentMethod === "credit_card") {
-    return CREDIT_CARD_RATES[creditReleasePeriod || "immediate"] ?? 0.0499;
-  }
-  return FEE_RATES[paymentMethod || ""] ?? 0.0499;
-}
+import { PAYMENT_LABELS_SHORT, TIPO_ENGLISH, PACKAGE_STATUS_PIPELINE, PACKAGE_STATUS_LABELS, PACKAGE_NEXT_STATUS, PACKAGE_PREV_STATUS, PACKAGE_PREV_ACTION_LABELS, PACKAGE_STATUS_ACTION_LABELS, getMPFeeRate } from "./lib/status";
 
 type Tab = "montar" | "pacotes" | "historico";
 type Step = "select" | "review";
@@ -179,10 +94,10 @@ export default function AdminPacotes() {
   }
 
   async function handleAdvancePackage(pacote: Pacote) {
-    const nextStatus = NEXT_STATUS[pacote.status];
+    const nextStatus = PACKAGE_NEXT_STATUS[pacote.status];
     if (!nextStatus) return;
 
-    const label = STATUS_ACTION_LABELS[pacote.status] || nextStatus;
+    const label = PACKAGE_STATUS_ACTION_LABELS[pacote.status] || nextStatus;
     if (!confirm(`Avançar Pacote para "${label}"?`)) return;
 
     try {
@@ -201,10 +116,10 @@ export default function AdminPacotes() {
   }
 
   async function handleRevertPackage(pacote: Pacote) {
-    const prevStatus = PREV_STATUS[pacote.status];
+    const prevStatus = PACKAGE_PREV_STATUS[pacote.status];
     if (!prevStatus) return;
 
-    const label = PREV_ACTION_LABELS[pacote.status] || prevStatus;
+    const label = PACKAGE_PREV_ACTION_LABELS[pacote.status] || prevStatus;
     if (!confirm(`Voltar Pacote para "${label}"?`)) return;
 
     try {
@@ -289,7 +204,7 @@ export default function AdminPacotes() {
                   <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">Pago</span>
                   {order.payment_method && (
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">
-                      {PAYMENT_LABELS[order.payment_method] || order.payment_method}
+                      {PAYMENT_LABELS_SHORT[order.payment_method] || order.payment_method}
                     </span>
                   )}
                   {order.admin_order && (
@@ -418,7 +333,7 @@ export default function AdminPacotes() {
                 {orders.map((order) => {
                   const isSelected = selectedIds.has(order.id);
                   const disabled = !isSelected && wouldExceed(order);
-                  const paymentLabel = order.payment_method ? PAYMENT_LABELS[order.payment_method] || order.payment_method : null;
+                  const paymentLabel = order.payment_method ? PAYMENT_LABELS_SHORT[order.payment_method] || order.payment_method : null;
 
                   return (
                     <div key={order.id} className={`bg-card-bg rounded-md shadow-card overflow-hidden transition-opacity ${disabled ? "opacity-50" : ""}`}>
@@ -494,8 +409,8 @@ export default function AdminPacotes() {
           ) : (
             <div className="flex flex-col gap-4">
               {activePacotes.map((pacote) => {
-                const statusInfo = STATUS_LABELS[pacote.status] || STATUS_LABELS.enviado_fornecedor;
-                const nextAction = STATUS_ACTION_LABELS[pacote.status];
+                const statusInfo = PACKAGE_STATUS_LABELS[pacote.status] || PACKAGE_STATUS_LABELS.enviado_fornecedor;
+                const nextAction = PACKAGE_STATUS_ACTION_LABELS[pacote.status];
                 const isExpanded = expandedPkg === pacote.id;
                 const totalShirtsPkg = pacote.pedido_ids.reduce((s, id) => {
                   const o = getOrderById(id);
@@ -526,7 +441,7 @@ export default function AdminPacotes() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {PREV_STATUS[pacote.status] && (
+                          {PACKAGE_PREV_STATUS[pacote.status] && (
                             <button
                               className="px-3 py-1.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded-md cursor-pointer hover:bg-gray-300 transition-colors"
                               onClick={(e) => { e.stopPropagation(); handleRevertPackage(pacote); }}
@@ -548,11 +463,11 @@ export default function AdminPacotes() {
 
                       {/* Status pipeline */}
                       <div className="flex flex-wrap items-center gap-1 mt-3">
-                        {STATUS_PIPELINE.map((s, i) => {
-                          const currentIdx = STATUS_PIPELINE.indexOf(pacote.status as typeof STATUS_PIPELINE[number]);
+                        {PACKAGE_STATUS_PIPELINE.map((s, i) => {
+                          const currentIdx = PACKAGE_STATUS_PIPELINE.indexOf(pacote.status as typeof PACKAGE_STATUS_PIPELINE[number]);
                           const isDone = i <= currentIdx;
                           const isCurrent = s === pacote.status;
-                          const sl = STATUS_LABELS[s];
+                          const sl = PACKAGE_STATUS_LABELS[s];
                           return (
                             <div key={s} className="flex items-center">
                               {i > 0 && <div className={`h-0.5 w-2 ${i <= currentIdx ? "bg-green-500" : "bg-gray-200"}`} />}
@@ -583,7 +498,7 @@ export default function AdminPacotes() {
                                     <span className="font-bold text-sm text-primary">{order.id}</span>
                                     {order.payment_method && (
                                       <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">
-                                        {PAYMENT_LABELS[order.payment_method] || order.payment_method}
+                                        {PAYMENT_LABELS_SHORT[order.payment_method] || order.payment_method}
                                       </span>
                                     )}
                                     {order.admin_order && (
@@ -679,7 +594,7 @@ function ProfitSummary({ pacotes, allOrders }: { pacotes: Pacote[]; allOrders: O
     const vendido = orders.reduce((sum, o) => sum + o.total, 0);
     const camisas = orders.reduce((sum, o) => sum + o.itens.length, 0);
     const taxas = orders.reduce((sum, o) => {
-      const rate = getFeeRate(o.payment_method, o.credit_release_period || "immediate");
+      const rate = getMPFeeRate(o.payment_method, o.credit_release_period || "immediate");
       return sum + o.total * rate;
     }, 0);
 
@@ -777,7 +692,7 @@ function DeliveredPacoteCard({
   const hasCreditCard = orders.some((o) => o.payment_method === "credit_card");
 
   const totalTaxas = nonAdminOrders.reduce((sum, o) => {
-    const rate = getFeeRate(o.payment_method, o.credit_release_period || creditReleasePeriod);
+    const rate = getMPFeeRate(o.payment_method, o.credit_release_period || creditReleasePeriod);
     return sum + o.total * rate;
   }, 0);
   const lucro = totalVendido - custoValue - freteValue - taxaValue - totalTaxas;
@@ -901,7 +816,7 @@ function DeliveredPacoteCard({
               {hasCreditCard && (
                 <div className="flex justify-between text-xs text-green-600">
                   <span className="pl-3">└ Cartão de crédito ({creditReleasePeriod === "immediate" ? "4,99%" : creditReleasePeriod === "14_days" ? "4,49%" : "3,99%"}):</span>
-                  <span>{formatarMoeda(nonAdminOrders.filter(o => o.payment_method === "credit_card").reduce((sum, o) => sum + o.total * getFeeRate(o.payment_method, o.credit_release_period || creditReleasePeriod), 0))}</span>
+                  <span>{formatarMoeda(nonAdminOrders.filter(o => o.payment_method === "credit_card").reduce((sum, o) => sum + o.total * getMPFeeRate(o.payment_method, o.credit_release_period || creditReleasePeriod), 0))}</span>
                 </div>
               )}
               <div className="flex justify-between">
@@ -929,7 +844,7 @@ function DeliveredPacoteCard({
                     <span className="font-bold text-sm text-primary">{order.id}</span>
                     {order.payment_method && (
                       <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">
-                        {PAYMENT_LABELS[order.payment_method] || order.payment_method}
+                        {PAYMENT_LABELS_SHORT[order.payment_method] || order.payment_method}
                       </span>
                     )}
                     {order.admin_order && (

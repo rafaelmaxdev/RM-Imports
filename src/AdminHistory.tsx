@@ -2,25 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getPedidos, deletePedido, updatePedidoAdminOrder } from "./lib/db";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
-
-const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  pendente: { label: "Pendente", bg: "bg-yellow-100", text: "text-yellow-800" },
-  pago: { label: "Pago", bg: "bg-green-100", text: "text-green-800" },
-  enviado_fornecedor: { label: "Enviado ao fornecedor", bg: "bg-blue-100", text: "text-blue-800" },
-  em_producao: { label: "Em produção", bg: "bg-purple-100", text: "text-purple-800" },
-  a_caminho: { label: "A caminho", bg: "bg-indigo-100", text: "text-indigo-800" },
-  em_estoque: { label: "Em estoque", bg: "bg-teal-100", text: "text-teal-800" },
-  em_entrega: { label: "Em entrega", bg: "bg-cyan-100", text: "text-cyan-800" },
-  entregue: { label: "Entregue", bg: "bg-emerald-100", text: "text-emerald-800" },
-  cancelado: { label: "Cancelado", bg: "bg-red-100", text: "text-red-800" },
-  reembolsado: { label: "Reembolsado", bg: "bg-gray-100", text: "text-gray-800" },
-};
-
-const PAYMENT_LABELS: Record<string, string> = {
-  pix: "Pix",
-  credit_card: "Cartão",
-  debit_card: "Débito",
-};
+import { STATUS_CONFIG_ADMIN, PAYMENT_LABELS_SHORT } from "./lib/status";
 
 export default function AdminHistory() {
   const [history, setHistory] = useState<Order[]>([]);
@@ -107,8 +89,8 @@ export default function AdminHistory() {
             const isExpanded = expandedId === order.id;
             const totalItens = order.itens.length;
             const totalPersonalizacoes = order.itens.filter((i) => i.personalizado).length;
-            const statusInfo = STATUS_CONFIG[order.status] || STATUS_CONFIG.entregue;
-            const paymentLabel = order.payment_method ? PAYMENT_LABELS[order.payment_method] || order.payment_method : null;
+            const statusInfo = STATUS_CONFIG_ADMIN[order.status] || STATUS_CONFIG_ADMIN.entregue;
+            const paymentLabel = order.payment_method ? PAYMENT_LABELS_SHORT[order.payment_method] || order.payment_method : null;
 
             return (
               <div key={order.id} className={`bg-card-bg rounded-md shadow-card overflow-hidden ${["cancelado", "reembolsado"].includes(order.status) ? "opacity-70" : ""}`}>

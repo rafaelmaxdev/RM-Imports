@@ -306,16 +306,7 @@ export function montarMensagemPagamento(order: Order): string {
   return msg;
 }
 
-const TIPO_ENGLISH: Record<string, string> = {
-  "Torcedor": "Fan",
-  "Jogador": "Player",
-  "Retrô": "Retro",
-  "Manga Longa": "Long Sleeve",
-  "Goleiro": "Goalkeeper",
-  "Treinamento": "Training",
-  "Polo": "Polo",
-  "NBA": "NBA",
-};
+import { TIPO_ENGLISH } from "./lib/status";
 
 export function montarMensagemPacote(orders: Order[]): string {
   const totalCamisas = orders.reduce((sum, o) => sum + o.itens.length, 0);

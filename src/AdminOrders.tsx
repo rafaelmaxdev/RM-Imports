@@ -3,42 +3,14 @@ import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder } 
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
-
-const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  pendente: { label: "Pendente", bg: "bg-yellow-100", text: "text-yellow-800" },
-  pago: { label: "Pago", bg: "bg-green-100", text: "text-green-800" },
-  enviado_fornecedor: { label: "Enviado ao fornecedor", bg: "bg-blue-100", text: "text-blue-800" },
-  em_producao: { label: "Em produção", bg: "bg-purple-100", text: "text-purple-800" },
-  a_caminho: { label: "A caminho", bg: "bg-indigo-100", text: "text-indigo-800" },
-  em_estoque: { label: "Em estoque", bg: "bg-teal-100", text: "text-teal-800" },
-  em_entrega: { label: "Em entrega", bg: "bg-cyan-100", text: "text-cyan-800" },
-  entregue: { label: "Entregue", bg: "bg-emerald-100", text: "text-emerald-800" },
-  cancelado: { label: "Cancelado", bg: "bg-red-100", text: "text-red-800" },
-  reembolsado: { label: "Reembolsado", bg: "bg-gray-100", text: "text-gray-800" },
-};
-
-const STATUS_FLOW: Record<string, string[]> = {
-  pendente: ["pago", "cancelado"],
-  pago: ["reembolsado", "cancelado"], // envio ao fornecedor é feito via Pacotes
-  enviado_fornecedor: ["em_producao"],
-  em_producao: ["a_caminho"],
-  a_caminho: ["em_estoque"],
-  em_estoque: ["em_entrega"],
-  em_entrega: ["entregue"],
-};
-
-const PAYMENT_LABELS: Record<string, string> = {
-  pix: "Pix",
-  credit_card: "Cartão",
-  debit_card: "Débito",
-};
+import { STATUS_CONFIG_ADMIN, STATUS_FLOW, PAYMENT_LABELS_SHORT } from "./lib/status";
 
 function montarMensagemCliente(order: Order): string {
   const isRetirada = order.endereco?.deliveryMethod === "retirada";
 
   let msg = `*RM Imports*\n`;
   msg += `Pedido: ${order.id}\n`;
-  msg += `Status: ${STATUS_CONFIG[order.status]?.label || order.status}\n\n`;
+  msg += `Status: ${STATUS_CONFIG_ADMIN[order.status]?.label || order.status}\n\n`;
 
   msg += `*Itens:*\n`;
   order.itens.forEach((item, i) => {
@@ -96,7 +68,7 @@ export default function AdminOrders() {
   });
 
   async function handleStatusChange(id: string, newStatus: string) {
-    const label = STATUS_CONFIG[newStatus]?.label || newStatus;
+    const label = STATUS_CONFIG_ADMIN[newStatus]?.label || newStatus;
 
     // If refunding, call the refund API first
     if (newStatus === "reembolsado") {
@@ -201,8 +173,8 @@ export default function AdminOrders() {
             const isExpanded = expandedId === order.id;
             const totalItens = order.itens.length;
             const totalPersonalizacoes = order.itens.filter((i) => i.personalizado).length;
-            const statusInfo = STATUS_CONFIG[order.status] || STATUS_CONFIG.pendente;
-            const paymentLabel = order.payment_method ? PAYMENT_LABELS[order.payment_method] || order.payment_method : null;
+            const statusInfo = STATUS_CONFIG_ADMIN[order.status] || STATUS_CONFIG_ADMIN.pendente;
+            const paymentLabel = order.payment_method ? PAYMENT_LABELS_SHORT[order.payment_method] || order.payment_method : null;
 
             return (
               <div key={order.id} className="bg-card-bg rounded-md shadow-card overflow-hidden">
@@ -314,7 +286,7 @@ export default function AdminOrders() {
                       <div className="font-bold text-lg">Total: {formatarMoeda(order.total)}</div>
                       <div className="flex gap-2 flex-wrap">
                         {STATUS_FLOW[order.status]?.map((nextStatus) => {
-                          const next = STATUS_CONFIG[nextStatus];
+                          const next = STATUS_CONFIG_ADMIN[nextStatus];
                           const btnColors: Record<string, string> = {
                             pago: "bg-green-500",
                             enviado_fornecedor: "bg-blue-500",

@@ -4,6 +4,7 @@ import { supabase } from "./lib/supabase";
 import { addProduto, updateProduto, deleteProduto, parseImageUrls } from "./lib/db";
 import type { DbProduto } from "./lib/db";
 import { proxyImageUrl } from "./types";
+import { normalizeNome } from "./lib/utils";
 
 interface Time {
   id: string;
@@ -47,24 +48,6 @@ const ligas: Liga[] = [
   { nome: "Serie A", url: "/api/yupoo/categories/708736" },
   { nome: "Seleções", url: "" },
 ].sort((a, b) => a.nome.localeCompare(b.nome));
-
-const renomear: Record<string, string> = {
-  "LFC": "Liverpool",
-  "M-U": "Manchester United",
-  "Juv": "Juventus",
-  "Inter Milan": "Inter de Milão",
-  "Atlético Juventus": "Atlético Juventus",
-  "Ceara Sporting": "Ceará",
-  "Ceará Sporting": "Ceará",
-};
-
-function normalizeNome(nome: string): string {
-  let result = nome;
-  Object.entries(renomear).forEach(([de, para]) => {
-    result = result.replace(de, para);
-  });
-  return result;
-}
 
 const RETRO_ANO_SELECAO = 2022;
 
@@ -115,7 +98,7 @@ async function fetchTimes(url: string): Promise<Time[]> {
 
   const times = Array.from(elementos).map((el, i) => {
     const nomeOriginal = el.textContent?.trim() || "";
-    const nome = normalizeNome(renomear[nomeOriginal] || nomeOriginal);
+    const nome = normalizeNome(nomeOriginal);
     return {
       id: `${url}-${i}`,
       nome,

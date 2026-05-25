@@ -3,6 +3,7 @@ import type { DbProduto } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
 import CartModal from "./CartModal";
 import ImageCarousel from "./ImageCarousel";
+import ImageLightbox from "./ImageLightbox";
 import DestaqueCarousel from "./DestaqueCarousel";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { formatarMoeda, getPrecoProduto } from "./types";
@@ -46,6 +47,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduto, setToastProduto] = useState("");
   const [visibleCount, setVisibleCount] = useState(24);
+  const [lightbox, setLightbox] = useState<{ images: string[]; alt: string; index: number } | null>(null);
 
   useEffect(() => {
     setVisibleCount(24);
@@ -256,6 +258,13 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                       url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")
                     )}
                     alt={p.nome}
+                    onImageClick={(i) => setLightbox({
+                      images: parseImageUrls(p.imagem_urls).map((url) =>
+                        url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/large.jpg")
+                      ),
+                      alt: p.nome,
+                      index: i,
+                    })}
                   />
                 </div>
 
@@ -322,6 +331,15 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
             setToastProduto(nome);
             setToastVisible(true);
           }}
+        />
+      )}
+
+      {lightbox && (
+        <ImageLightbox
+          images={lightbox.images}
+          alt={lightbox.alt}
+          initialIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
         />
       )}
 

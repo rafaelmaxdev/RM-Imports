@@ -6,6 +6,8 @@ interface ImageCarouselProps {
   alt: string;
   /** Extra CSS class for the outer container */
   className?: string;
+  /** Called when user clicks an image; receives current image index */
+  onImageClick?: (index: number) => void;
 }
 
 const PLACEHOLDER =
@@ -63,6 +65,7 @@ export default memo(function ImageCarousel({
   images,
   alt,
   className = "",
+  onImageClick,
 }: ImageCarouselProps) {
   const [current, setCurrent] = useState(0);
   const touchStartX = useRef<number | null>(null);
@@ -82,7 +85,10 @@ export default memo(function ImageCarousel({
   /* ---- Single image ---- */
   if (validImages.length === 1) {
     return (
-      <div className={`aspect-square bg-gray-100 overflow-hidden relative ${className}`}>
+      <div
+        className={`aspect-square bg-gray-100 overflow-hidden relative cursor-zoom-in ${className}`}
+        onClick={() => onImageClick?.(0)}
+      >
         <ImageWithLoader
           src={proxyImageUrl(validImages[0])}
           alt={alt}
@@ -134,9 +140,10 @@ export default memo(function ImageCarousel({
 
   return (
     <div
-      className={`relative aspect-square bg-gray-100 overflow-hidden group ${className}`}
+      className={`relative aspect-square bg-gray-100 overflow-hidden group cursor-zoom-in ${className}`}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onClick={() => onImageClick?.(current)}
     >
       {/* Sliding track */}
       <div

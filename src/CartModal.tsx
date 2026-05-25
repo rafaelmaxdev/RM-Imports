@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
 import type { LojaConfig, PromocaoTipo } from "./types";
@@ -118,7 +119,12 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
         )}
 
         <div className="mb-4">
-          <label className="block text-sm font-semibold text-text-muted mb-2">Tamanho</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-semibold text-text-muted">Tamanho</label>
+            <Link to="/tamanhos" target="_blank" className="text-xs text-accent hover:underline font-medium">
+              Guia de tamanhos ↗
+            </Link>
+          </div>
           <div className="flex gap-2 flex-wrap mb-2">
             {TAMANHOS.filter((t) => !ADICIONAL_TAMANHO[t]).map((t) => (
               <button

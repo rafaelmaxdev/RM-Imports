@@ -20,6 +20,7 @@ const AdminPacotes = lazy(() => import("./AdminPacotes"));
 const AdminDestaques = lazy(() => import("./AdminDestaques"));
 const AdminPromocoes = lazy(() => import("./AdminPromocoes"));
 const NotFound = lazy(() => import("./NotFound"));
+const SizeChart = lazy(() => import("./SizeChart"));
 
 function AppContent() {
   const [produtos, setProdutos] = useState<DbProduto[]>([]);
@@ -88,6 +89,9 @@ function AppContent() {
             <Link to="/" className="px-5 py-3 text-white no-underline hover:bg-white/10 transition-colors animate-menu-item" onClick={() => setShowMenu(false)}>
               🏠 Loja
             </Link>
+            <Link to="/tamanhos" className="px-5 py-3 text-white no-underline hover:bg-white/10 transition-colors animate-menu-item" onClick={() => setShowMenu(false)}>
+              📏 Guia de Tamanhos
+            </Link>
             <button
               className="px-5 py-3 text-left text-white hover:bg-white/10 transition-colors cursor-pointer border-none bg-transparent w-full text-base animate-menu-item"
               onClick={() => { setShowMenu(false); }}
@@ -113,6 +117,7 @@ function AppContent() {
               }
             />
             <Route path="/pedido/:id" element={<OrderConfirmation />} />
+            <Route path="/tamanhos" element={<SizeChart />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

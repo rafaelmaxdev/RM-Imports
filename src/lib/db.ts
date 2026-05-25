@@ -45,10 +45,31 @@ export async function getProdutos(): Promise<DbProduto[]> {
   });
 }
 
+/** Columns that actually exist in the Supabase 'produtos' table.
+ *  If a column is missing from the DB, it will be filtered out before insert/update.
+ */
+const PRODUTOS_COLUMNS = new Set([
+  "id", "nome", "liga", "time", "tipo", "temporada",
+  "imagem_urls", "yupoo_url", "destaque", "created_at",
+  "preco_customizado", "promocao", "promocao_tipo", "promocao_valor", "peca",
+  "feminino", // ← adicione esta coluna no banco: ALTER TABLE produtos ADD COLUMN feminino boolean DEFAULT false NOT NULL;
+]);
+
+function stripMissingColumns<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const result: Partial<T> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (PRODUTOS_COLUMNS.has(key)) {
+      (result as Record<string, unknown>)[key] = value;
+    }
+  }
+  return result;
+}
+
 export async function addProduto(p: Omit<DbProduto, "id" | "created_at">): Promise<DbProduto> {
+  const row = stripMissingColumns(p);
   const { data, error } = await supabase
     .from("produtos")
-    .insert(p)
+    .insert(row)
     .select()
     .single();
 
@@ -57,9 +78,10 @@ export async function addProduto(p: Omit<DbProduto, "id" | "created_at">): Promi
 }
 
 export async function updateProduto(id: string, p: Partial<Omit<DbProduto, "id" | "created_at">>): Promise<DbProduto> {
+  const row = stripMissingColumns(p);
   const { data, error } = await supabase
     .from("produtos")
-    .update(p)
+    .update(row)
     .eq("id", id)
     .select()
     .single();

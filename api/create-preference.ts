@@ -25,14 +25,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payerName?: string;
     };
 
+    console.log("create-preference request:", { orderId, itemsCount: items?.length, items: JSON.stringify(items) });
+
     if (!items || !orderId) {
+      console.error("Missing items or orderId:", { items: !!items, orderId: !!orderId });
       return res.status(400).json({ error: "Missing items or orderId" });
     }
 
-    // Validate prices are within reasonable range
+// Validate prices are within safe range (prevents price manipulation)
+    // Min R$1 / Max R$2.000 (covers any combo + extras)
     for (const item of items) {
-      if (item.unit_price < 50 || item.unit_price > 500) {
-        return res.status(400).json({ error: "Invalid item price" });
+      if (!Number.isFinite(item.unit_price) || item.unit_price < 1 || item.unit_price > 2000) {
+        return res.status(400).json({ error: `Invalid item price: ${item.title} - R$${item.unit_price}` });
       }
     }
 
@@ -44,16 +48,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .single();
 
     if (orderError || !order) {
+      console.error("Order not found:", orderId, orderError);
       return res.status(404).json({ error: "Order not found" });
     }
 
     if (order.status !== "pendente") {
+      console.error("Order not pending:", orderId, order.status);
       return res.status(400).json({ error: "Order is not pending" });
     }
 
     const itemsTotal = items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+    console.log("Total check:", { itemsTotal, orderTotal: order.total, diff: Math.abs(itemsTotal - order.total) });
     if (Math.abs(itemsTotal - order.total) > 1) {
-      return res.status(400).json({ error: "Total mismatch" });
+      console.error("Total mismatch:", { itemsTotal, orderTotal: order.total });
+      return res.status(400).json({ error: `Total mismatch: items R$${itemsTotal.toFixed(2)} vs order R$${order.total.toFixed(2)}` });
     }
 
     const preference = new Preference(client);

@@ -528,6 +528,7 @@ export default function ProdutoForm({
       limparForm();
     } catch (err) {
       console.error("Erro ao adicionar:", err);
+      alert("Erro ao adicionar produto. Verifique o console para detalhes.");
     } finally {
       setSaving(false);
     }
@@ -590,6 +591,7 @@ export default function ProdutoForm({
       limparForm();
     } catch (err) {
       console.error("Erro ao salvar:", err);
+      alert("Erro ao salvar produto. Verifique o console para detalhes.");
     } finally {
       setSaving(false);
     }

@@ -47,22 +47,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const createMPPreference = useCallback(
     async (orderId: string): Promise<{ preferenceId: string; initPoint: string } | null> => {
       try {
+        const payload = {
+          items: cart.map((item) => ({
+            title: `${item.nome} (${item.tipo} - ${item.tamanho})`,
+            quantity: 1,
+            unit_price: item.preco,
+          })),
+          orderId,
+        };
+        console.log("Creating MP preference:", JSON.stringify(payload, null, 2));
+
         const res = await fetch("/api/create-preference", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items: cart.map((item) => ({
-              title: `${item.nome} (${item.tipo} - ${item.tamanho})`,
-              quantity: 1,
-              unit_price: item.preco,
-            })),
-            orderId,
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (!res.ok) {
           const err = await res.json();
-          console.error("MP preference error:", err);
+          console.error("MP preference error:", res.status, err);
           return null;
         }
 

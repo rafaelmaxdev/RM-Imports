@@ -321,9 +321,6 @@ export function montarMensagemPacote(orders: Order[]): string {
       msg += `${i + 1}.\n`;
       msg += `Link: ${item.yupooUrl || "N/A"}\n`;
       msg += `Size: ${sizeForSupplier}\n`;
-      if (item.temporada) {
-        msg += `Patch: ${item.temporada}\n`;
-      }
       msg += `Version: ${version}\n`;
       if (item.personalizado) {
         msg += `Name: ${item.nomePersonalizado}\n`;

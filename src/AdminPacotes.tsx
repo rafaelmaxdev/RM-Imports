@@ -28,8 +28,9 @@ export default function AdminPacotes() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [step, setStep] = useState<Step>("select");
-  const [custoPorCamisa, setCustoPorCamisa] = useState("");
-  const [taxaEnvio, setTaxaEnvio] = useState("");
+  const [custoPacote, setCustoPacote] = useState("");
+  const [frete, setFrete] = useState("");
+  const [taxaImportacao, setTaxaImportacao] = useState("");
 
   const loadOrders = useCallback(async () => {
     try {
@@ -154,11 +155,10 @@ export default function AdminPacotes() {
 return (
                        <div key={i} className="p-3 bg-bg-base rounded-md">
                          <div className="font-semibold text-sm">{item.nome}</div>
-                         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted mt-1">
-                           <span>Size: {TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho}</span>
-                           <span>Version: {version}</span>
-                           {item.temporada && <span>Patch: {item.temporada}</span>}
-                         </div>
+<div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted mt-1">
+                            <span>Size: {TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho}</span>
+                            <span>Version: {version}</span>
+                          </div>
                         {item.personalizado && (
                           <div className="text-xs text-accent font-semibold mt-1">
                             Name: {item.nomePersonalizado} / Number: {item.numeroPersonalizado}
@@ -181,8 +181,9 @@ return (
           const nonAdminOrders = selectedOrders.filter(o => !o.admin_order);
           const totalVendido = nonAdminOrders.reduce((sum, o) => sum + o.total, 0);
           const totalCamisasVendidas = nonAdminOrders.reduce((sum, o) => sum + o.itens.length, 0);
-          const custoTotalCamisas = totalCamisasVendidas * (parseFloat(custoPorCamisa) || 0);
-          const taxaEnvioValue = parseFloat(taxaEnvio) || 0;
+          const custoPacoteValue = parseFloat(custoPacote) || 0;
+          const freteValue = parseFloat(frete) || 0;
+          const taxaImportacaoValue = parseFloat(taxaImportacao) || 0;
 
           const FEE_RATES: Record<string, number> = {
             pix: 0.0199,
@@ -194,30 +195,41 @@ return (
             return sum + o.total * rate;
           }, 0);
 
-          const lucro = totalVendido - custoTotalCamisas - taxaEnvioValue - totalTaxas;
+          const lucro = totalVendido - custoPacoteValue - freteValue - taxaImportacaoValue - totalTaxas;
 
           return (
             <div className="bg-card-bg rounded-md p-4 shadow-card mb-4">
               <h4 className="text-sm font-semibold text-primary mb-3">📊 Resumo Financeiro</h4>
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-3 gap-3 text-sm">
                 <div>
-                  <label className="block text-xs text-text-muted mb-1">Custo por camisa (R$)</label>
+                  <label className="block text-xs text-text-muted mb-1">Custo do pacote (R$)</label>
                   <input
                     type="number"
                     step="0.01"
-                    value={custoPorCamisa}
-                    onChange={e => setCustoPorCamisa(e.target.value)}
+                    value={custoPacote}
+                    onChange={e => setCustoPacote(e.target.value)}
                     placeholder="0.00"
                     className="w-full px-3 py-2 border border-border rounded-md bg-bg-base text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-text-muted mb-1">Taxa de envio (R$)</label>
+                  <label className="block text-xs text-text-muted mb-1">Frete (R$)</label>
                   <input
                     type="number"
                     step="0.01"
-                    value={taxaEnvio}
-                    onChange={e => setTaxaEnvio(e.target.value)}
+                    value={frete}
+                    onChange={e => setFrete(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 border border-border rounded-md bg-bg-base text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Taxa de importação (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={taxaImportacao}
+                    onChange={e => setTaxaImportacao(e.target.value)}
                     placeholder="0.00"
                     className="w-full px-3 py-2 border border-border rounded-md bg-bg-base text-sm"
                   />
@@ -229,20 +241,24 @@ return (
                   <span>{totalCamisasVendidas}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-muted">Custo total camisas:</span>
-                  <span>{formatarMoeda(custoTotalCamisas)}</span>
-                </div>
-                <div className="flex justify-between">
                   <span className="text-text-muted">Valor vendido (excl. admin):</span>
                   <span className="font-semibold">{formatarMoeda(totalVendido)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-muted">Taxas de pagamento:</span>
+                  <span className="text-text-muted">Custo do pacote:</span>
+                  <span>{formatarMoeda(custoPacoteValue)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Taxas Mercado Pago:</span>
                   <span>{formatarMoeda(totalTaxas)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-muted">Taxa de envio:</span>
-                  <span>{formatarMoeda(taxaEnvioValue)}</span>
+                  <span className="text-text-muted">Frete:</span>
+                  <span>{formatarMoeda(freteValue)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Taxa de importação:</span>
+                  <span>{formatarMoeda(taxaImportacaoValue)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
                   <span>Lucro:</span>

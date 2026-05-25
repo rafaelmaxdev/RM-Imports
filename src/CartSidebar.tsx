@@ -8,11 +8,6 @@ interface CartSidebarProps {
   onCheckout: (endereco: OrderAddress, paymentMethod: PaymentMethod) => void;
 }
 
-const ESTADOS = [
-  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
-  "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
-];
-
 interface ViaCepResponse {
   cep: string;
   logradouro: string;
@@ -64,8 +59,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
     numero: "",
     complemento: "",
     bairro: "",
-    cidade: "",
-    estado: "",
+    cidade: "Bezerros",
+    estado: "PE",
     cep: "",
     telefone: "",
     deliveryMethod: "entrega" as const,
@@ -260,15 +255,15 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
         cep: "55000-000",
       }));
     } else {
-      // Switching to entrega — clear auto-filled retirada fields
+      // Switching to entrega — pre-fill Bezerros/PE so street search works immediately
       setEndereco((prev) => ({
         ...prev,
         deliveryMethod: "entrega",
         rua: "",
         numero: "",
         bairro: "",
-        cidade: "",
-        estado: "",
+        cidade: "Bezerros",
+        estado: "PE",
         cep: "",
       }));
     }
@@ -433,28 +428,12 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
 
               {endereco.deliveryMethod === "entrega" ? (
                 <>
-                  {/* Entrega fields */}
-                  <div>
-                    <label htmlFor="cart-cep" className="block text-sm font-semibold text-text-muted mb-1">CEP *</label>
-                    <div className="relative">
-                      <input
-                        id="cart-cep"
-                        type="text"
-                        value={endereco.cep}
-                        onChange={(e) => handleCepChange(e.target.value)}
-                        placeholder="00000-000"
-                        maxLength={9}
-                        className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg pr-9"
-                      />
-                      {cepLoading && (
-                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                      )}
-                    </div>
-                    {cepError && <p className="text-xs text-accent mt-1">{cepError}</p>}
-                    {!endereco.cep && (
-                      <p className="text-[11px] text-text-muted mt-0.5">Preencha o CEP primeiro para buscar a rua automaticamente</p>
-                    )}
+                  {/* Entrega fields — Rua first for Bezerros street search */}
+                  <div className="p-2.5 bg-green-50 rounded-md border border-green-200">
+                    <p className="text-xs text-green-800 font-semibold">🎉 Frete grátis — Entrega em Bezerros!</p>
+                    <p className="text-[11px] text-green-700 mt-0.5">Digite o nome da rua e selecione o endereço. CEP e bairro serão preenchidos automaticamente.</p>
                   </div>
+
                   <div className="flex gap-2">
                     <div className="flex-1 relative" ref={ruaRef}>
                       <label htmlFor="cart-rua" className="block text-sm font-semibold text-text-muted mb-1">Rua *</label>
@@ -464,7 +443,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                         value={endereco.rua}
                         onChange={(e) => handleRuaChange(e.target.value)}
                         onFocus={() => ruaSugestoes.length > 0 && setShowSugestoes(true)}
-                        placeholder="Comece a digitar a rua..."
+                        placeholder="Digite o nome da rua..."
                         autoComplete="off"
                         className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                       />
@@ -483,14 +462,12 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                               }}
                             >
                               <div className="font-medium text-text-main">{sug.logradouro}</div>
-                              <div className="text-xs text-text-muted">{sug.bairro} — {sug.localidade}/{sug.uf} · CEP {sug.cep}</div>
+                              <div className="text-xs text-text-muted">{sug.bairro} — CEP {sug.cep}</div>
                             </li>
                           ))}
                         </ul>
                       )}
-                      {endereco.estado && endereco.cidade && (
-                        <p className="text-[11px] text-text-muted mt-0.5">Buscando em {endereco.cidade}/{endereco.estado}</p>
-                      )}
+                      <p className="text-[11px] text-text-muted mt-0.5">Buscando ruas em Bezerros-PE</p>
                     </div>
                     <div className="w-20">
                       <label htmlFor="cart-numero" className="block text-sm font-semibold text-text-muted mb-1">Número *</label>
@@ -522,42 +499,51 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                       type="text"
                       value={endereco.bairro}
                       onChange={(e) => updateField("bairro", e.target.value)}
-                      placeholder="Bairro"
+                      placeholder="Preenchido automaticamente ao selecionar a rua"
                       className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                     />
                   </div>
+                  <div>
+                    <label htmlFor="cart-cep" className="block text-sm font-semibold text-text-muted mb-1">CEP *</label>
+                    <div className="relative">
+                      <input
+                        id="cart-cep"
+                        type="text"
+                        value={endereco.cep}
+                        onChange={(e) => handleCepChange(e.target.value)}
+                        placeholder="Preenchido automaticamente"
+                        maxLength={9}
+                        className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg pr-9"
+                      />
+                      {cepLoading && (
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                      )}
+                    </div>
+                    {cepError && <p className="text-xs text-accent mt-1">{cepError}</p>}
+                    <p className="text-[11px] text-text-muted mt-0.5">Preenchido automaticamente ao selecionar a rua, ou digite manualmente</p>
+                  </div>
                   <div className="flex gap-2">
                     <div className="flex-1">
-                      <label htmlFor="cart-cidade" className="block text-sm font-semibold text-text-muted mb-1">Cidade *</label>
+                      <label htmlFor="cart-cidade" className="block text-sm font-semibold text-text-muted mb-1">Cidade</label>
                       <input
                         id="cart-cidade"
                         type="text"
                         value={endereco.cidade}
-                        onChange={(e) => updateField("cidade", e.target.value)}
-                        placeholder="Cidade"
-                        className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg bg-gray-100 text-text-muted"
-                        disabled
+                        readOnly
+                        className="w-full px-3 py-2 text-sm border border-border rounded-md bg-gray-100 text-text-muted"
                       />
                     </div>
                     <div className="w-20">
-                      <label htmlFor="cart-estado" className="block text-sm font-semibold text-text-muted mb-1">UF *</label>
-                      <select
+                      <label htmlFor="cart-estado" className="block text-sm font-semibold text-text-muted mb-1">UF</label>
+                      <input
                         id="cart-estado"
+                        type="text"
                         value={endereco.estado}
-                        onChange={(e) => updateField("estado", e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg bg-gray-100 text-text-muted"
-                        disabled
-                      >
-                        <option value="">UF</option>
-                        {ESTADOS.map((uf) => (
-                          <option key={uf} value={uf}>
-                            {uf}
-                          </option>
-                        ))}
-                      </select>
+                        readOnly
+                        className="w-full px-3 py-2 text-sm border border-border rounded-md bg-gray-100 text-text-muted"
+                      />
                     </div>
                   </div>
-                  <p className="text-[11px] text-text-muted -mt-1">Entrega disponível apenas para Bezerros-PE</p>
                 </>
               ) : (
                 <>
@@ -649,6 +635,15 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                   <p className="text-xs text-blue-800 font-semibold">📍 Retirada na Magazine Luiza — Centro de Caruaru</p>
                   <p className="text-xs text-blue-700 mt-1">
                     Após a confirmação do pagamento, avisaremos quando o pedido estiver disponível para retirada na Magazine Luiza, no Centro de Caruaru.
+                  </p>
+                </div>
+              )}
+
+              {endereco.deliveryMethod === "entrega" && (
+                <div className="mt-4 p-3 bg-green-50 rounded-md border border-green-200">
+                  <p className="text-xs text-green-800 font-semibold">🎉 Frete grátis — Entrega em Bezerros</p>
+                  <p className="text-xs text-green-700 mt-1">
+                    Sua entrega em Bezerros-PE é gratuita! Após a confirmação do pagamento, entraremos em contato para agendar a entrega.
                   </p>
                 </div>
               )}

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { TAMANHOS, PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto, TIPOS_SEM_PERSONALIZACAO } from "./types";
 import ImageCarousel from "./ImageCarousel";
+import ImageLightbox from "./ImageLightbox";
 import { parseImageUrls } from "./lib/db";
+import { tables, headerKeyMap } from "./sizeChartData";
 
 interface CartModalProps {
   produto: {
@@ -33,6 +34,8 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
   const [nomePersonalizado, setNomePersonalizado] = useState("");
   const [numeroPersonalizado, setNumeroPersonalizado] = useState("");
   const [erro, setErro] = useState("");
+  const [lightbox, setLightbox] = useState<{ images: string[]; alt: string; index: number } | null>(null);
+  const [showSizeChart, setShowSizeChart] = useState(false);
 
   const temFeminino = produto.feminino === true;
   const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo);
@@ -48,6 +51,8 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
   const adicionalPers = personalizado ? PRECO_PERSONALIZACAO : 0;
   const precoFinal = (precoPromo ?? precoBase) + adicionalTam + adicionalPers;
 
+  const allImages = parseImageUrls(produto.imagem_urls);
+
   function handleConfirm() {
     if (!tamanho) {
       setErro("Selecione um tamanho.");
@@ -61,7 +66,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
     const item: CartItem = {
       productId: produto.id,
       nome: produto.nome,
-      imagemUrl: parseImageUrls(produto.imagem_urls)[0] || "",
+      imagemUrl: allImages[0] || "",
       yupooUrl: produto.yupoo_url,
       tipo: produto.tipo,
       temporada: produto.temporada,
@@ -80,198 +85,286 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4" onClick={onClose}>
-      <div className="bg-card-bg rounded-md p-6 max-w-md w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
-        <button className="absolute top-3 right-3 bg-none border-none text-xl cursor-pointer text-text-muted" onClick={onClose}>
-          ✕
-        </button>
-        <h3 className="mb-4 text-primary font-semibold text-lg">Adicionar ao Carrinho</h3>
+    <>
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4" onClick={onClose}>
+        <div className="bg-card-bg rounded-md p-6 max-w-md w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+          <button className="absolute top-3 right-3 bg-none border-none text-xl cursor-pointer text-text-muted z-10" onClick={onClose}>
+            ✕
+          </button>
 
-        <div className="mb-4 -mx-6 -mt-2">
-          <ImageCarousel
-            images={parseImageUrls(produto.imagem_urls)}
-            alt={produto.nome}
-          />
-        </div>
-
-        <div className="mb-4 pb-4 border-b border-border">
-          <div className="font-semibold">{produto.nome}</div>
-          {emPromocao ? (
-            <div className="flex items-baseline gap-2">
-              <span className="text-accent font-bold text-lg">{formatarMoeda(precoPromo!)}</span>
-              <span className="text-text-muted text-sm line-through">{formatarMoeda(precoBase)}</span>
-            </div>
-          ) : (
-            <div className="text-accent font-bold text-lg">{formatarMoeda(precoBase)}</div>
-          )}
-          {emPromocao && discountLabel && (
-            <span className="inline-block mt-1 text-[10px] font-extrabold px-2 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">{discountLabel}</span>
-          )}
-        </div>
-
-        {produto.tipo === "Jogador" && (
-          <div className="mb-3 p-2.5 bg-blue-50 rounded-md border border-blue-200">
-            <p className="text-xs text-blue-800 font-semibold">💡 Dica de tamanho</p>
-            <p className="text-xs text-blue-700 mt-0.5">
-              A versão Jogador costuma vestir mais justa. Recomendamos pegar <strong>1 ou 2 tamanhos acima</strong> do que você usaria na versão Torcedor.
-            </p>
-          </div>
-        )}
-
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-semibold text-text-muted">Tamanho</label>
-            <Link to="/tamanhos" target="_blank" className="text-xs text-accent hover:underline font-medium">
-              Guia de tamanhos ↗
-            </Link>
-          </div>
-          <div className="flex gap-2 flex-wrap mb-2">
-            {TAMANHOS.filter((t) => !ADICIONAL_TAMANHO[t]).map((t) => (
-              <button
-                key={t}
-                className={`px-3 py-1.5 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors ${
-                  tamanho === t ? "bg-primary text-white border-primary" : ""
-                }`}
-                onClick={() => {
-                  setTamanho(t);
-                  setErro("");
-                }}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {TAMANHOS.filter((t) => ADICIONAL_TAMANHO[t]).map((t) => (
-              <button
-                key={t}
-                className={`px-3 py-1.5 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors flex flex-col items-center gap-0.5 ${
-                  tamanho === t ? "bg-primary text-white border-primary" : ""
-                }`}
-                onClick={() => {
-                  setTamanho(t);
-                  setErro("");
-                }}
-              >
-                {t}
-                <span className="text-xs text-accent font-semibold">
-                  +{formatarMoeda(ADICIONAL_TAMANHO[t])}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-sm font-semibold text-text-muted mb-2">Modelo</label>
-          <div className="flex gap-2">
-            {["Masculino", ...(temFeminino ? ["Feminino"] as const : [])].map((g) => (
-              <button
-                key={g}
-                className={`px-4 py-2 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors ${
-                  genero === g ? "bg-primary text-white border-primary" : ""
-                }`}
-                onClick={() => setGenero(g)}
-              >
-                {g}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {!semPersonalizacao && (
-        <div className="mb-4">
-          <div className="flex items-center gap-1">
-            <input
-              id="personalizar-check"
-              type="checkbox"
-              checked={personalizado}
-              onChange={(e) => {
-                setPersonalizado(e.target.checked);
-                setErro("");
-              }}
-              className="w-4 h-4 accent-primary cursor-pointer m-0"
-            />
-            <label htmlFor="personalizar-check" className="text-sm font-medium cursor-pointer select-none">
-              Personalizar (+{formatarMoeda(PRECO_PERSONALIZACAO)})
-            </label>
-          </div>
-        </div>
-      )}
-
-        {personalizado && (
-          <>
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-text-muted mb-2">Nome</label>
-              <input
-                type="text"
-                value={nomePersonalizado}
-                onChange={(e) => {
-                  setNomePersonalizado(e.target.value.toUpperCase());
-                  setErro("");
-                }}
-                placeholder="ex: SILVA"
-                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-text-muted mb-2">Número</label>
-              <input
-                type="text"
-                value={numeroPersonalizado}
-                onChange={(e) => {
-                  setNumeroPersonalizado(e.target.value.replace(/[^0-9]/g, ""));
-                  setErro("");
-                }}
-                placeholder="ex: 10"
-                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
-              />
-            </div>
-          </>
-        )}
-
-        {erro && <div className="text-accent text-sm mb-3 text-center">{erro}</div>}
-
-        <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 p-3 bg-bg-base rounded-md mb-3 text-sm">
-          {emPromocao ? (
+          {showSizeChart ? (
+            /* ── Size chart view ── */
             <>
-              <span className="line-through text-text-muted">Preço base:</span>
-              <span className="line-through text-text-muted">{formatarMoeda(precoBase)}</span>
-              <span className="text-accent font-semibold">Preço promocional:</span>
-              <span className="text-accent font-semibold">{formatarMoeda(precoPromo!)}</span>
+              <button
+                className="flex items-center gap-1 text-sm text-accent hover:underline cursor-pointer bg-transparent border-none p-0 mb-3"
+                onClick={() => setShowSizeChart(false)}
+              >
+                ← Voltar ao produto
+              </button>
+              <h3 className="mb-3 text-primary font-semibold text-lg">Guia de Tamanhos</h3>
+              <p className="text-text-muted text-sm mb-3 leading-relaxed">
+                Confira as medidas de cada versão para encontrar o tamanho ideal. As medidas estão em centímetros (cm).
+              </p>
+              <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+                <p className="text-xs text-blue-800 font-semibold">💡 Dica</p>
+                <p className="text-xs text-blue-700 mt-0.5">
+                  A versão Jogador costuma vestir mais justa. Recomendamos pegar <strong>1 ou 2 tamanhos acima</strong> do que você usaria na versão Torcedor.
+                </p>
+              </div>
+              <div className="space-y-5">
+                {tables.map((table) => (
+                  <section key={table.title}>
+                    <h4 className="text-sm font-bold text-primary mb-2">{table.title}</h4>
+                    <div className="overflow-x-auto rounded-md border border-border">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-primary text-white">
+                            {table.headers.map((h) => (
+                              <th key={h} className="px-2 py-1.5 text-center font-semibold whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {table.rows.map((row, i) => (
+                            <tr key={row.tam} className={`border-b border-border ${i % 2 === 0 ? "bg-card-bg" : "bg-bg-base"}`}>
+                              {table.headers.map((h) => {
+                                const key = headerKeyMap[h];
+                                return (
+                                  <td
+                                    key={h}
+                                    className={`px-2 py-1.5 whitespace-nowrap text-center ${
+                                      h === "Tam." || h === "Tamanho" ? "font-bold text-primary" : "text-text-main"
+                                    }`}
+                                  >
+                                    {row[key] || "—"}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                ))}
+              </div>
             </>
           ) : (
+            /* ── Product form view ── */
             <>
-              <span>Preço base:</span>
-              <span>{formatarMoeda(precoBase)}</span>
-            </>
-          )}
-          {adicionalTam > 0 && (
-            <>
-              <span>Tamanho {tamanho}:</span>
-              <span>+{formatarMoeda(adicionalTam)}</span>
-            </>
-          )}
-          {adicionalPers > 0 && (
-            <>
-              <span>Personalização:</span>
-              <span>+{formatarMoeda(adicionalPers)}</span>
-            </>
-          )}
-          <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">
-            <span>Total:</span>
-            <span>{formatarMoeda(precoFinal)}</span>
-          </div>
-        </div>
+              <h3 className="mb-4 text-primary font-semibold text-lg">Adicionar ao Carrinho</h3>
 
-        <button
-          className="w-full py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={handleConfirm}
-          disabled={!tamanho}
-        >
-          Adicionar ao Carrinho
-        </button>
+              <div className="mb-4 -mx-6 -mt-2">
+                <ImageCarousel
+                  images={allImages.map((url) =>
+                    url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/medium.jpg")
+                  )}
+                  alt={produto.nome}
+                  onImageClick={(i) => setLightbox({
+                    images: allImages.map((url) =>
+                      url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/large.jpg")
+                    ),
+                    alt: produto.nome,
+                    index: i,
+                  })}
+                />
+              </div>
+
+              <div className="mb-4 pb-4 border-b border-border">
+                <div className="font-semibold">{produto.nome}</div>
+                {emPromocao ? (
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-accent font-bold text-lg">{formatarMoeda(precoPromo!)}</span>
+                    <span className="text-text-muted text-sm line-through">{formatarMoeda(precoBase)}</span>
+                  </div>
+                ) : (
+                  <div className="text-accent font-bold text-lg">{formatarMoeda(precoBase)}</div>
+                )}
+                {emPromocao && discountLabel && (
+                  <span className="inline-block mt-1 text-[10px] font-extrabold px-2 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">{discountLabel}</span>
+                )}
+              </div>
+
+              {produto.tipo === "Jogador" && (
+                <div className="mb-3 p-2.5 bg-blue-50 rounded-md border border-blue-200">
+                  <p className="text-xs text-blue-800 font-semibold">💡 Dica de tamanho</p>
+                  <p className="text-xs text-blue-700 mt-0.5">
+                    A versão Jogador costuma vestir mais justa. Recomendamos pegar <strong>1 ou 2 tamanhos acima</strong> do que você usaria na versão Torcedor.
+                  </p>
+                </div>
+              )}
+
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-text-muted">Tamanho</label>
+                  <button
+                    type="button"
+                    className="text-xs text-accent hover:underline font-medium bg-transparent border-none cursor-pointer p-0"
+                    onClick={() => setShowSizeChart(true)}
+                  >
+                    Guia de tamanhos
+                  </button>
+                </div>
+                <div className="flex gap-2 flex-wrap mb-2">
+                  {TAMANHOS.filter((t) => !ADICIONAL_TAMANHO[t]).map((t) => (
+                    <button
+                      key={t}
+                      className={`px-3 py-1.5 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors ${
+                        tamanho === t ? "bg-primary text-white border-primary" : ""
+                      }`}
+                      onClick={() => {
+                        setTamanho(t);
+                        setErro("");
+                      }}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {TAMANHOS.filter((t) => ADICIONAL_TAMANHO[t]).map((t) => (
+                    <button
+                      key={t}
+                      className={`px-3 py-1.5 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors flex flex-col items-center gap-0.5 ${
+                        tamanho === t ? "bg-primary text-white border-primary" : ""
+                      }`}
+                      onClick={() => {
+                        setTamanho(t);
+                        setErro("");
+                      }}
+                    >
+                      {t}
+                      <span className="text-xs text-accent font-semibold">
+                        +{formatarMoeda(ADICIONAL_TAMANHO[t])}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-text-muted mb-2">Modelo</label>
+                <div className="flex gap-2">
+                  {["Masculino", ...(temFeminino ? ["Feminino"] as const : [])].map((g) => (
+                    <button
+                      key={g}
+                      className={`px-4 py-2 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors ${
+                        genero === g ? "bg-primary text-white border-primary" : ""
+                      }`}
+                      onClick={() => setGenero(g)}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {!semPersonalizacao && (
+              <div className="mb-4">
+                <div className="flex items-center gap-1">
+                  <input
+                    id="personalizar-check"
+                    type="checkbox"
+                    checked={personalizado}
+                    onChange={(e) => {
+                      setPersonalizado(e.target.checked);
+                      setErro("");
+                    }}
+                    className="w-4 h-4 accent-primary cursor-pointer m-0"
+                  />
+                  <label htmlFor="personalizar-check" className="text-sm font-medium cursor-pointer select-none">
+                    Personalizar (+{formatarMoeda(PRECO_PERSONALIZACAO)})
+                  </label>
+                </div>
+              </div>
+            )}
+
+              {personalizado && (
+                <>
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold text-text-muted mb-2">Nome</label>
+                    <input
+                      type="text"
+                      value={nomePersonalizado}
+                      onChange={(e) => {
+                        setNomePersonalizado(e.target.value.toUpperCase());
+                        setErro("");
+                      }}
+                      placeholder="ex: SILVA"
+                      className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold text-text-muted mb-2">Número</label>
+                    <input
+                      type="text"
+                      value={numeroPersonalizado}
+                      onChange={(e) => {
+                        setNumeroPersonalizado(e.target.value.replace(/[^0-9]/g, ""));
+                        setErro("");
+                      }}
+                      placeholder="ex: 10"
+                      className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                    />
+                  </div>
+                </>
+              )}
+
+              {erro && <div className="text-accent text-sm mb-3 text-center">{erro}</div>}
+
+              <div className="grid grid-cols-[1fr-auto] gap-x-4 gap-y-1 p-3 bg-bg-base rounded-md mb-3 text-sm">
+                {emPromocao ? (
+                  <>
+                    <span className="line-through text-text-muted">Preço base:</span>
+                    <span className="line-through text-text-muted">{formatarMoeda(precoBase)}</span>
+                    <span className="text-accent font-semibold">Preço promocional:</span>
+                    <span className="text-accent font-semibold">{formatarMoeda(precoPromo!)}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Preço base:</span>
+                    <span>{formatarMoeda(precoBase)}</span>
+                  </>
+                )}
+                {adicionalTam > 0 && (
+                  <>
+                    <span>Tamanho {tamanho}:</span>
+                    <span>+{formatarMoeda(adicionalTam)}</span>
+                  </>
+                )}
+                {adicionalPers > 0 && (
+                  <>
+                    <span>Personalização:</span>
+                    <span>+{formatarMoeda(adicionalPers)}</span>
+                  </>
+                )}
+                <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">
+                  <span>Total:</span>
+                  <span>{formatarMoeda(precoFinal)}</span>
+                </div>
+              </div>
+
+              <button
+                className="w-full py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleConfirm}
+                disabled={!tamanho}
+              >
+                Adicionar ao Carrinho
+              </button>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Image lightbox overlay */}
+      {lightbox && (
+        <ImageLightbox
+          images={lightbox.images}
+          alt={lightbox.alt}
+          initialIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+    </>
   );
 }

@@ -66,6 +66,7 @@ export default function ImageLightbox({ images, alt, initialIndex, onClose }: Im
           src={proxyImageUrl(validImages[current])}
           alt={`${alt} ${current + 1}`}
           className="max-w-full max-h-[85vh] object-contain select-none rounded-sm"
+          decoding="async"
           draggable={false}
         />
       </div>

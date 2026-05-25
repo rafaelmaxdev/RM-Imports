@@ -53,6 +53,7 @@ function ImageWithLoader({
         alt={alt}
         className={`${className} transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
         loading={loading}
+        decoding="async"
         draggable={false}
         onLoad={() => setLoaded(true)}
         onError={() => setErrored(true)}
@@ -171,7 +172,7 @@ export default memo(function ImageCarousel({
 
       {/* Left arrow */}
       <button
-        onClick={prev}
+        onClick={(e) => { e.stopPropagation(); prev(); }}
         className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
         aria-label="Imagem anterior"
       >
@@ -182,7 +183,7 @@ export default memo(function ImageCarousel({
 
       {/* Right arrow */}
       <button
-        onClick={next}
+        onClick={(e) => { e.stopPropagation(); next(); }}
         className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
         aria-label="Próxima imagem"
       >
@@ -196,7 +197,7 @@ export default memo(function ImageCarousel({
         {validImages.map((_, i) => (
           <button
             key={i}
-            onClick={() => setCurrent(i)}
+            onClick={(e) => { e.stopPropagation(); setCurrent(i); }}
             className={`w-2 h-2 rounded-full transition-all duration-200 cursor-pointer ${
               i === current
                 ? "bg-white scale-125 shadow-sm"

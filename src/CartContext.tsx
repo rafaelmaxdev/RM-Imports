@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo, t
 import type { CartItem, Order, OrderAddress, PaymentMethod } from "./types";
 import { gerarId } from "./types";
 import { createPedido } from "./lib/db";
+import { supabase } from "./lib/supabase";
 
 interface CartContextType {
   cart: CartItem[];
@@ -106,13 +107,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
       };
 
       try {
-        // Create Mercado Pago preference for all payment methods
+        // Save order to Supabase first, then create MP preference
+        const saved = await createPedido(order);
+
         const mpResult = await createMPPreference(order.id);
         if (mpResult) {
           order.mp_preference_id = mpResult.preferenceId;
+          // Update order with preference ID
+          await supabase.from("pedidos").update({ mp_preference_id: mpResult.preferenceId }).eq("id", order.id);
         }
 
-        const saved = await createPedido(order);
         setCart([]);
         return saved;
       } catch (err) {

@@ -18,11 +18,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { items, orderId, payerEmail, payerName } = req.body as {
+    const { items, orderId, payerEmail, payerName, paymentMethod } = req.body as {
       items: Array<{ title: string; quantity: number; unit_price: number }>;
       orderId: string;
       payerEmail?: string;
       payerName?: string;
+      paymentMethod?: string;
     };
 
     console.log("create-preference request:", { orderId, itemsCount: items?.length, items: JSON.stringify(items) });
@@ -67,6 +68,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const preference = new Preference(client);
 
+    // Configure payment methods based on user's choice
+    const paymentMethods: any = {
+      installments: 12,
+    };
+
+    if (paymentMethod === "pix") {
+      // Pix only — exclude credit and debit cards
+      paymentMethods.excluded_payment_methods = [
+        { id: "visa" }, { id: "master" }, { id: "amex" }, { id: "elo" },
+        { id: "hipercard" }, { id: "diners" }, { id: "discover" },
+      ];
+      paymentMethods.excluded_payment_types = [
+        { id: "credit_card" }, { id: "debit_card" }, { id: "prepaid_card" },
+      ];
+    } else if (paymentMethod === "credit_card") {
+      // Credit card only — exclude pix and debit
+      paymentMethods.excluded_payment_types = [
+        { id: "ticket" }, { id: "debit_card" }, { id: "prepaid_card" },
+      ];
+    } else if (paymentMethod === "debit_card") {
+      // Debit card only — exclude pix and credit
+      paymentMethods.excluded_payment_types = [
+        { id: "ticket" }, { id: "credit_card" }, { id: "prepaid_card" },
+      ];
+    }
+
     const result = await preference.create({
       body: {
         items: items.map((item, index) => ({
@@ -91,10 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         auto_return: "approved",
         notification_url: `${process.env.VITE_APP_URL || "https://rm-imports.vercel.app"}/api/mp-webhook`,
-        payment_methods: {
-          installments: 12,
-        },
-        
+        payment_methods: paymentMethods,
       },
     });
 

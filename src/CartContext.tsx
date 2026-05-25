@@ -45,7 +45,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const total = useMemo(() => cart.reduce((sum, item) => sum + item.preco, 0), [cart]);
 
   const createMPPreference = useCallback(
-    async (orderId: string): Promise<{ preferenceId: string; initPoint: string } | null> => {
+    async (orderId: string, paymentMethod?: string): Promise<{ preferenceId: string; initPoint: string } | null> => {
       try {
         const payload = {
           items: cart.map((item) => ({
@@ -54,6 +54,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             unit_price: item.preco,
           })),
           orderId,
+          paymentMethod,
         };
         console.log("Creating MP preference:", JSON.stringify(payload, null, 2));
 
@@ -113,7 +114,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         // Save order to Supabase first, then create MP preference
         const saved = await createPedido(order);
 
-        const mpResult = await createMPPreference(order.id);
+        const mpResult = await createMPPreference(order.id, paymentMethod);
         if (mpResult) {
           order.mp_preference_id = mpResult.preferenceId;
           // Update order with preference ID

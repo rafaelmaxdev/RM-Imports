@@ -565,10 +565,10 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                   <div className="p-3 bg-primary/5 rounded-md border border-border">
                     <p className="text-sm font-semibold text-text-main">📍 Retirada em Caruaru</p>
                     <p className="text-xs text-text-muted mt-1">
-                      Endereço de retirada: <span className="italic">A combinar via WhatsApp</span>
+                      Retirada na <strong className="text-text-main">Magazine Luiza</strong> — Centro de Caruaru
                     </p>
                     <p className="text-xs text-text-muted mt-1">
-                      Após o pagamento, entraremos em contato para combinar a retirada.
+                      Após o pagamento, avisaremos quando o pedido estiver disponível para retirada.
                     </p>
                   </div>
                 </>
@@ -643,6 +643,15 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                   <li>A confirmação é automática via Mercado Pago</li>
                 </ul>
               </div>
+
+              {endereco.deliveryMethod === "retirada" && (
+                <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+                  <p className="text-xs text-blue-800 font-semibold">📍 Retirada na Magazine Luiza — Centro de Caruaru</p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Após a confirmação do pagamento, avisaremos quando o pedido estiver disponível para retirada na Magazine Luiza, no Centro de Caruaru.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="px-6 py-4 border-t border-border">

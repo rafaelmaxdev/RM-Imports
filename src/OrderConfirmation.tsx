@@ -189,19 +189,37 @@ export default function OrderConfirmation() {
 
           {order.endereco && (
             <div className="mt-6 pt-4 border-t border-border">
-              <h3 className="text-base mb-2 text-primary">Endereço de Entrega</h3>
-              <div className="text-sm text-text-muted leading-relaxed">
-                <div className="font-semibold text-text-main">{order.endereco.nome}</div>
-                <div>
-                  {order.endereco.rua}, {order.endereco.numero}
-                  {order.endereco.complemento ? ` - ${order.endereco.complemento}` : ""}
-                </div>
-                <div>
-                  {order.endereco.bairro} - {order.endereco.cidade}/{order.endereco.estado}
-                </div>
-                <div>CEP: {order.endereco.cep}</div>
-                <div>Tel: {order.endereco.telefone}</div>
-              </div>
+              {order.endereco.deliveryMethod === "retirada" ? (
+                <>
+                  <h3 className="text-base mb-2 text-primary">📍 Retirada na Magazine Luiza</h3>
+                  <div className="text-sm text-text-muted leading-relaxed">
+                    <div className="font-semibold text-text-main">{order.endereco.nome}</div>
+                    <div>Tel: {order.endereco.telefone}</div>
+                  </div>
+                  <div className="mt-3 p-3 bg-blue-50 rounded-md border border-blue-200">
+                    <p className="text-xs text-blue-800 font-semibold">📍 Retirada na Magazine Luiza — Centro de Caruaru</p>
+                    <p className="text-xs text-blue-700 mt-1">
+                      Avisaremos quando o pedido estiver disponível para retirada. Dirija-se à Magazine Luiza no Centro de Caruaru para buscar seu pedido.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-base mb-2 text-primary">Endereço de Entrega</h3>
+                  <div className="text-sm text-text-muted leading-relaxed">
+                    <div className="font-semibold text-text-main">{order.endereco.nome}</div>
+                    <div>
+                      {order.endereco.rua}, {order.endereco.numero}
+                      {order.endereco.complemento ? ` - ${order.endereco.complemento}` : ""}
+                    </div>
+                    <div>
+                      {order.endereco.bairro} - {order.endereco.cidade}/{order.endereco.estado}
+                    </div>
+                    <div>CEP: {order.endereco.cep}</div>
+                    <div>Tel: {order.endereco.telefone}</div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -323,19 +341,37 @@ export default function OrderConfirmation() {
 
         {order.endereco && (
           <div className="mt-6 pt-4 border-t border-border">
-            <h3 className="text-base mb-2 text-primary">Endereço de Entrega</h3>
-            <div className="text-sm text-text-muted leading-relaxed">
-              <div className="font-semibold text-text-main">{order.endereco.nome}</div>
-              <div>
-                {order.endereco.rua}, {order.endereco.numero}
-                {order.endereco.complemento ? ` - ${order.endereco.complemento}` : ""}
-              </div>
-              <div>
-                {order.endereco.bairro} - {order.endereco.cidade}/{order.endereco.estado}
-              </div>
-              <div>CEP: {order.endereco.cep}</div>
-              <div>Tel: {order.endereco.telefone}</div>
-            </div>
+            {order.endereco.deliveryMethod === "retirada" ? (
+              <>
+                <h3 className="text-base mb-2 text-primary">📍 Retirada na Magazine Luiza</h3>
+                <div className="text-sm text-text-muted leading-relaxed">
+                  <div className="font-semibold text-text-main">{order.endereco.nome}</div>
+                  <div>Tel: {order.endereco.telefone}</div>
+                </div>
+                <div className="mt-3 p-3 bg-blue-50 rounded-md border border-blue-200">
+                  <p className="text-xs text-blue-800 font-semibold">📍 Retirada na Magazine Luiza — Centro de Caruaru</p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Avisaremos quando o pedido estiver disponível para retirada. Dirija-se à Magazine Luiza no Centro de Caruaru para buscar seu pedido.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-base mb-2 text-primary">Endereço de Entrega</h3>
+                <div className="text-sm text-text-muted leading-relaxed">
+                  <div className="font-semibold text-text-main">{order.endereco.nome}</div>
+                  <div>
+                    {order.endereco.rua}, {order.endereco.numero}
+                    {order.endereco.complemento ? ` - ${order.endereco.complemento}` : ""}
+                  </div>
+                  <div>
+                    {order.endereco.bairro} - {order.endereco.cidade}/{order.endereco.estado}
+                  </div>
+                  <div>CEP: {order.endereco.cep}</div>
+                  <div>Tel: {order.endereco.telefone}</div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

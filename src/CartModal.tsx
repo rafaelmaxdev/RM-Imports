@@ -155,6 +155,13 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
           ) : (
             /* ── Product form view ── */
             <>
+              <button
+                className="absolute top-3 right-3 text-text-muted hover:text-primary cursor-pointer bg-transparent border-none text-xl leading-none p-1 z-10"
+                onClick={onClose}
+                aria-label="Fechar"
+              >
+                ✕
+              </button>
               <h3 className="mb-4 text-primary font-semibold text-lg">Adicionar ao Carrinho</h3>
 
               <div className="mb-4 -mx-6 -mt-2">

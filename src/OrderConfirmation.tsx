@@ -11,11 +11,18 @@ const PAYMENT_LABELS: Record<string, string> = {
   debit_card: "Cartão de Débito",
 };
 
-const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  pendente: { label: "Aguardando pagamento", bg: "bg-yellow-100", text: "text-yellow-800" },
-  pago: { label: "Pagamento confirmado", bg: "bg-green-100", text: "text-green-800" },
-  entregue: { label: "Entregue", bg: "bg-cyan-100", text: "text-cyan-800" },
-  cancelado: { label: "Cancelado", bg: "bg-red-100", text: "text-red-800" },
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; icon: string }> = {
+  pendente: { label: "Aguardando pagamento", bg: "bg-yellow-100", text: "text-yellow-800", icon: "⏳" },
+  em_analise: { label: "Em análise", bg: "bg-orange-100", text: "text-orange-800", icon: "🔍" },
+  pago: { label: "Pagamento confirmado", bg: "bg-green-100", text: "text-green-800", icon: "✓" },
+  enviado_fornecedor: { label: "Enviado ao fornecedor", bg: "bg-blue-100", text: "text-blue-800", icon: "📤" },
+  em_producao: { label: "Em produção", bg: "bg-purple-100", text: "text-purple-800", icon: "🏭" },
+  a_caminho: { label: "A caminho", bg: "bg-indigo-100", text: "text-indigo-800", icon: "✈️" },
+  em_estoque: { label: "Em estoque", bg: "bg-teal-100", text: "text-teal-800", icon: "📦" },
+  em_entrega: { label: "Em entrega", bg: "bg-cyan-100", text: "text-cyan-800", icon: "🚚" },
+  entregue: { label: "Entregue", bg: "bg-emerald-100", text: "text-emerald-800", icon: "✅" },
+  cancelado: { label: "Cancelado", bg: "bg-red-100", text: "text-red-800", icon: "✕" },
+  reembolsado: { label: "Reembolsado", bg: "bg-gray-100", text: "text-gray-800", icon: "↩" },
 };
 
 export default function OrderConfirmation() {
@@ -38,7 +45,7 @@ export default function OrderConfirmation() {
       .then((o) => {
         setOrder(o);
         // If MP redirected with approved status, or order already paid
-        if (o?.status === "pago" || mpStatus === "approved" || mpCollectionStatus === "approved") {
+        if (["pago", "enviado_fornecedor", "em_producao", "a_caminho", "em_estoque", "em_entrega", "entregue"].includes(o?.status || "") || mpStatus === "approved" || mpCollectionStatus === "approved") {
           setConfirmed(true);
         }
       })
@@ -55,9 +62,9 @@ export default function OrderConfirmation() {
         const o = await getPedidoById(id);
         if (o) {
           setOrder(o);
-          if (o.status === "pago") {
+          if (["pago", "enviado_fornecedor", "em_producao", "a_caminho", "em_estoque", "em_entrega", "entregue"].includes(o.status)) {
             setConfirmed(true);
-          } else if (o.status === "cancelado") {
+          } else if (o.status === "cancelado" || o.status === "reembolsado") {
             setConfirmed(false);
             if (pollingRef.current) clearInterval(pollingRef.current);
           }
@@ -118,20 +125,20 @@ export default function OrderConfirmation() {
   const needsPayment = order.status === "pendente" && isMPPayment && !!order.mp_preference_id;
 
   // ── Payment confirmed screen ──
-  if (confirmed || order.status === "pago") {
+  if (confirmed || ["pago", "enviado_fornecedor", "em_producao", "a_caminho", "em_estoque", "em_entrega", "entregue"].includes(order.status)) {
     return (
       <div className="max-w-lg mx-auto px-4 py-8 text-center">
         {/* Success animation */}
         <div className="mb-6">
-          <div className="w-20 h-20 bg-green-500 text-white rounded-full flex items-center justify-center text-4xl mx-auto mb-4 animate-bounce">
+          <div className="w-20 h-20 bg-green-500 text-white rounded-full flex items-center justify-center text-4xl mx-auto mb-4 animate-bounce" aria-hidden="true">
             ✓
           </div>
-          <h2 className="text-2xl text-primary mb-2">Pagamento Confirmado!</h2>
+          <h2 className="text-2xl text-primary mb-2">{statusInfo.icon} {statusInfo.label}!</h2>
           <p className="text-text-muted">
             Pedido <strong>{order.id}</strong>
           </p>
-          <span className={`inline-block px-3 py-1 rounded text-sm font-semibold ${STATUS_CONFIG.pago.bg} ${STATUS_CONFIG.pago.text} mt-2`}>
-            {STATUS_CONFIG.pago.label}
+          <span className={`inline-block px-3 py-1 rounded text-sm font-semibold ${statusInfo.bg} ${statusInfo.text} mt-2`}>
+            {statusInfo.label}
           </span>
         </div>
 
@@ -153,6 +160,12 @@ export default function OrderConfirmation() {
               <span className="text-text-muted">Itens</span>
               <span className="font-medium">{order.itens.length} {order.itens.length === 1 ? "item" : "itens"}</span>
             </div>
+            {order.mp_payment_id && (
+              <div className="flex justify-between">
+                <span className="text-text-muted">ID da Transação</span>
+                <span className="font-medium text-xs">{order.mp_payment_id}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-4">
@@ -194,11 +207,28 @@ export default function OrderConfirmation() {
         </div>
 
         <div className="bg-green-50 rounded-md p-4 mb-6 border border-green-200">
-          <p className="text-sm text-green-800 font-semibold">✓ Pagamento confirmado!</p>
+          <p className="text-sm text-green-800 font-semibold">{statusInfo.icon} {statusInfo.label}!</p>
           <p className="text-xs text-green-700 mt-1">
-            Agora é só aguardar a entrega. Acompanhe o status do seu pedido nesta página.
+            Acompanhe o status do seu pedido nesta página.
           </p>
         </div>
+
+        <div className="bg-blue-50 rounded-md p-4 mb-6 border border-blue-200">
+          <p className="text-sm text-blue-800 font-semibold">📋 Salve o link desta página!</p>
+          <p className="text-xs text-blue-700 mt-1">
+            Acesse <strong>{window.location.href}</strong> para acompanhar seu pedido.
+            Guarde este link — ele é a forma de rastrear seu pedido.
+          </p>
+        </div>
+
+        {order.mp_payment_id && (
+          <div className="bg-blue-50 rounded-md p-4 mb-6 border border-blue-200">
+            <p className="text-sm text-blue-800 font-semibold">ID da Transação: {order.mp_payment_id}</p>
+            <p className="text-xs text-blue-700 mt-1">
+              Guarde este ID para suporte. Ele pode ser solicitado em caso de dúvidas sobre o pagamento.
+            </p>
+          </div>
+        )}
 
         <button
           className="px-8 py-3 text-base font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"

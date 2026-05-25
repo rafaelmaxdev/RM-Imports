@@ -253,6 +253,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
     if (p.promocao_tipo === "porcentagem") return `${p.promocao_valor}% OFF`;
     if (p.promocao_tipo === "novo_preco") return `Por ${formatarMoeda(p.preco_customizado ?? 0)}`;
     if (p.promocao_tipo === "leve_pague") return "Leve 1 Pague 2";
+    if (p.promocao_tipo === "leve_3_pague_2") return "Leve 3 Pague 2";
     return p.promocao_tipo ?? "";
   }
 
@@ -530,6 +531,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
                               <option value="porcentagem">Desconto por %</option>
                               <option value="novo_preco">Novo preço fixo</option>
                               <option value="leve_pague">Leve 1 Pague 2</option>
+                              <option value="leve_3_pague_2">Leve 3 Pague 2</option>
                             </select>
 
                             {editTipo === "porcentagem" && (
@@ -558,6 +560,12 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
                             {editTipo === "leve_pague" && (
                               <div className="text-xs text-accent font-medium px-1">
                                 O cliente leva 2 unidades pelo preço de 1
+                              </div>
+                            )}
+
+                            {editTipo === "leve_3_pague_2" && (
+                              <div className="text-xs text-accent font-medium px-1">
+                                O cliente leva 3 unidades e paga apenas 2
                               </div>
                             )}
 
@@ -694,6 +702,7 @@ function ProductPromoRow({
           <option value="porcentagem">Desconto por %</option>
           <option value="novo_preco">Novo preço fixo</option>
           <option value="leve_pague">Leve 1 Pague 2</option>
+          <option value="leve_3_pague_2">Leve 3 Pague 2</option>
         </select>
 
         {tipo === "porcentagem" && (
@@ -722,6 +731,12 @@ function ProductPromoRow({
         {tipo === "leve_pague" && (
           <div className="text-xs text-accent font-medium px-1">
             O cliente leva 2 unidades pelo preço de 1
+          </div>
+        )}
+
+        {tipo === "leve_3_pague_2" && (
+          <div className="text-xs text-accent font-medium px-1">
+            O cliente leva 3 unidades e paga apenas 2
           </div>
         )}
 

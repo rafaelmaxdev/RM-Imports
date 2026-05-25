@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
 import type { LojaConfig, PromocaoTipo } from "./types";
-import { TAMANHOS, PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto, TIPOS_SEM_PERSONALIZACAO, TIPOS_SEM_FEMININO } from "./types";
+import { TAMANHOS, PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto, TIPOS_SEM_PERSONALIZACAO } from "./types";
 import ImageCarousel from "./ImageCarousel";
 import { parseImageUrls } from "./lib/db";
 
@@ -14,6 +14,7 @@ interface CartModalProps {
     yupoo_url: string;
     tipo: string;
     temporada: string;
+    feminino: boolean;
     preco_customizado?: number | null;
     promocao_tipo?: string | null;
     promocao_valor?: number | null;
@@ -32,10 +33,10 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
   const [numeroPersonalizado, setNumeroPersonalizado] = useState("");
   const [erro, setErro] = useState("");
 
-  const semFeminino = TIPOS_SEM_FEMININO.includes(produto.tipo);
+  const temFeminino = produto.feminino === true;
   const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo);
 
-  const { base: precoBase, promo: precoPromo, emPromocao, badge } = getPrecoProduto(
+  const { base: precoBase, promo: precoPromo, emPromocao, discountLabel } = getPrecoProduto(
     produto.tipo,
     config,
     produto.preco_customizado,
@@ -65,6 +66,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
       temporada: produto.temporada,
       tamanho,
       genero,
+      feminino: produto.feminino,
       personalizado,
       nomePersonalizado: personalizado ? nomePersonalizado.trim() : undefined,
       numeroPersonalizado: personalizado ? numeroPersonalizado.trim() : undefined,
@@ -93,11 +95,6 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
 
         <div className="mb-4 pb-4 border-b border-border">
           <div className="font-semibold">{produto.nome}</div>
-          {emPromocao && badge && (
-            <span className="inline-block mt-1 text-[10px] font-extrabold px-2 py-0.5 bg-accent text-white rounded-sm uppercase tracking-wider">
-              {badge}
-            </span>
-          )}
           {emPromocao ? (
             <div className="flex items-baseline gap-2">
               <span className="text-accent font-bold text-lg">{formatarMoeda(precoPromo!)}</span>
@@ -105,6 +102,9 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
             </div>
           ) : (
             <div className="text-accent font-bold text-lg">{formatarMoeda(precoBase)}</div>
+          )}
+          {emPromocao && discountLabel && (
+            <span className="inline-block mt-1 text-[10px] font-extrabold px-2 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">{discountLabel}</span>
           )}
         </div>
 
@@ -150,7 +150,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
         <div className="mb-4">
           <label className="block text-sm font-semibold text-text-muted mb-2">Modelo</label>
           <div className="flex gap-2">
-            {["Masculino", ...(semFeminino ? [] : ["Feminino"] as const)].map((g) => (
+            {["Masculino", ...(temFeminino ? ["Feminino"] as const : [])].map((g) => (
               <button
                 key={g}
                 className={`px-4 py-2 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors ${

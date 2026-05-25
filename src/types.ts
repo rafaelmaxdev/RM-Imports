@@ -11,6 +11,7 @@ export interface CartItem {
   nomePersonalizado?: string;
   numeroPersonalizado?: string;
   preco: number;
+  feminino: boolean;
 }
 
 export interface OrderItem {
@@ -24,6 +25,7 @@ export interface OrderItem {
   numeroPersonalizado?: string;
   preco: number;
   yupooUrl: string;
+  feminino: boolean;
 }
 
 export interface OrderAddress {
@@ -46,11 +48,12 @@ export interface Order {
   hora: string;
   itens: OrderItem[];
   total: number;
-  status: "pendente" | "pago" | "entregue" | "cancelado";
+  status: "pendente" | "em_analise" | "pago" | "enviado_fornecedor" | "em_producao" | "a_caminho" | "em_estoque" | "em_entrega" | "entregue" | "cancelado" | "reembolsado";
   endereco?: OrderAddress;
   payment_method?: PaymentMethod;
   mp_preference_id?: string;
   mp_payment_id?: string;
+  admin_order?: boolean;
 }
 
 export const PRECOS_BASE: Record<string, number> = {
@@ -105,13 +108,10 @@ export const DEFAULT_CONFIG: LojaConfig = {
 
 export const TIPOS_CATEGORIA = ["Torcedor", "Jogador", "Retrô", "Manga Longa", "Goleiro", "Treinamento", "Polo", "NBA"] as const;
 
-export type PromocaoTipo = "porcentagem" | "novo_preco" | "leve_pague" | null;
+export type PromocaoTipo = "porcentagem" | "novo_preco" | "leve_pague" | "leve_3_pague_2" | null;
 
 /** Tipos que NÃO permitem personalização (nome/número) */
 export const TIPOS_SEM_PERSONALIZACAO = ["Polo"];
-
-/** Tipos que NÃO têm opção feminina */
-export const TIPOS_SEM_FEMININO = ["NBA", "Polo", "Treinamento", "Goleiro"];
 
 export interface PromocaoInfo {
   base: number;
@@ -120,6 +120,7 @@ export interface PromocaoInfo {
   promocaoTipo: PromocaoTipo;
   promocaoValor: number | null;
   badge: string | null;
+  discountLabel: string | null;
 }
 
 export function getPrecoProduto(
@@ -141,12 +142,14 @@ export function getPrecoProduto(
       emPromocao: true,
       promocaoTipo,
       promocaoValor,
-      badge: `${promocaoValor}% OFF`,
+      badge: "PROMO",
+      discountLabel: `${promocaoValor}% OFF`,
     };
   }
 
   if (promocaoTipo === "novo_preco" && precoCustomizado != null) {
     const originalBase = config.precos_base[tipo] ?? 89.90;
+    const discountPercent = Math.round(((originalBase - precoCustomizado) / originalBase) * 100);
     return {
       base: originalBase,
       promo: precoCustomizado,
@@ -154,6 +157,7 @@ export function getPrecoProduto(
       promocaoTipo,
       promocaoValor: null,
       badge: "PROMO",
+      discountLabel: `${discountPercent}% OFF`,
     };
   }
 
@@ -164,13 +168,27 @@ export function getPrecoProduto(
       emPromocao: true,
       promocaoTipo,
       promocaoValor: null,
-      badge: "LEVE 1 PAGUE 2",
+      badge: "PROMO",
+      discountLabel: "50% OFF",
+    };
+  }
+
+  if (promocaoTipo === "leve_3_pague_2") {
+    return {
+      base,
+      promo: null,
+      emPromocao: true,
+      promocaoTipo,
+      promocaoValor: null,
+      badge: "PROMO",
+      discountLabel: "33% OFF",
     };
   }
 
   // Category-level promo
   const emPromocao = config.promocao_ativa[tipo] ?? false;
   const promo = emPromocao ? (config.precos_promocao[tipo] ?? base) : null;
+  const discountPercent = emPromocao && promo !== null ? Math.round(((base - promo) / base) * 100) : null;
   return {
     base,
     promo,
@@ -178,28 +196,42 @@ export function getPrecoProduto(
     promocaoTipo: null,
     promocaoValor: null,
     badge: emPromocao ? "PROMO" : null,
+    discountLabel: emPromocao && discountPercent !== null ? `${discountPercent}% OFF` : null,
   };
 }
 
 export const PRECO_PERSONALIZACAO = 25.00;
 
 export const ADICIONAL_TAMANHO: Record<string, number> = {
-  "G1": 10.00,
-  "G2": 15.00,
-  "G3": 20.00,
+  "3XL": 10.00,
+  "4XL": 20.00,
 };
 
-export const TAMANHOS = ["P", "M", "G", "GG", "G1", "G2", "G3"];
+export const TAMANHOS = ["S", "M", "L", "XL", "2XL", "3XL", "4XL"];
+
+/** Mapeamento de tamanho BR → internacional para envio ao fornecedor */
+export const TAMANHO_FORNECEDOR: Record<string, string> = {
+  "S": "S",
+  "M": "M",
+  "L": "L",
+  "XL": "XL",
+  "2XL": "2XL",
+  "3XL": "3XL",
+  "4XL": "4XL",
+};
 
 export const FABRICANTES = ["Nike", "Adidas", "Puma", "New Balance", "Umbro", "Kappa", "Joma", "Outro"];
 
 export const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || "5511999999999";
+export const WHATSAPP_SUPPORT = import.meta.env.VITE_WHATSAPP_SUPPORT || "5511999999999";
 
 export function gerarId(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
   let result = "UL-";
   for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(bytes[i] % chars.length);
   }
   return result;
 }
@@ -257,20 +289,51 @@ export function montarMensagemPagamento(order: Order): string {
   return msg;
 }
 
-export function montarMensagemFornecedor(order: Order): string {
-  let msg = `*Pedido ${order.id}*\n\n`;
+const TIPO_ENGLISH: Record<string, string> = {
+  "Torcedor": "Fan",
+  "Jogador": "Player",
+  "Retrô": "Retro",
+  "Manga Longa": "Long Sleeve",
+  "Goleiro": "Goalkeeper",
+  "Treinamento": "Training",
+  "Polo": "Polo",
+  "NBA": "NBA",
+};
 
-  order.itens.forEach((item, i) => {
-    msg += `*${i + 1}. ${item.nome}*\n`;
-    msg += `   - Tipo: ${item.tipo}\n`;
-    msg += `   - Tamanho: ${item.tamanho}\n`;
-    msg += `   - Modelo: ${item.genero}\n`;
-    if (item.personalizado) {
-      msg += `   - Nome: ${item.nomePersonalizado}\n`;
-      msg += `   - Número: ${item.numeroPersonalizado}\n`;
-    }
-    msg += `   - Link: ${item.yupooUrl || "N/A"}\n\n`;
+export function montarMensagemPacote(orders: Order[]): string {
+  const totalCamisas = orders.reduce((sum, o) => sum + o.itens.length, 0);
+  let msg = `*Pacote RM Imports*\n`;
+  msg += `📦 ${orders.length} pedido(s) • ${totalCamisas} camisa(s)\n`;
+
+  orders.forEach((order) => {
+    msg += `\n━━━━━━━━━━━━━━━\n\n`;
+    msg += `*Pedido ${order.id}*\n`;
+
+    order.itens.forEach((item, i) => {
+      const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
+      const version = item.feminino && item.genero === "Feminino"
+        ? `${tipoEn} WOMANS`
+        : `${tipoEn} MALE`;
+
+      const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
+
+      msg += `${i + 1}.\n`;
+      msg += `Link: ${item.yupooUrl || "N/A"}\n`;
+      msg += `Size: ${sizeForSupplier}\n`;
+      if (item.temporada) {
+        msg += `Patch: ${item.temporada}\n`;
+      }
+      msg += `Version: ${version}\n`;
+      if (item.personalizado) {
+        msg += `Name: ${item.nomePersonalizado}\n`;
+        msg += `Number: ${item.numeroPersonalizado}\n`;
+      }
+      if (i < order.itens.length - 1) msg += `\n`;
+    });
   });
+
+  msg += `\n━━━━━━━━━━━━━━━\n`;
+  msg += `Total: ${totalCamisas} camisa(s) em ${orders.length} pedido(s)`;
 
   return msg;
 }

@@ -45,6 +45,11 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   const [produtoSelecionado, setProdutoSelecionado] = useState<DbProduto | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduto, setToastProduto] = useState("");
+  const [visibleCount, setVisibleCount] = useState(24);
+
+  useEffect(() => {
+    setVisibleCount(24);
+  }, [categoriaSelecionada, filtroTime, filtroTipo]);
 
   useEffect(() => {
     if (toastVisible) {
@@ -218,18 +223,20 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
       {produtosFiltrados.length === 0 ? (
         <div className="text-center py-16 text-text-muted">
-          <p>Nenhum produto disponível nesta categoria.</p>
+          <p className="text-4xl mb-4">🚧</p>
+          <p className="text-lg font-semibold text-primary mb-2">Em breve!</p>
+          <p>Estamos preparando novidades para esta categoria.</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 sm:gap-6 items-stretch">
-          {produtosFiltrados.map((p) => {
+          {produtosFiltrados.slice(0, visibleCount).map((p) => {
             const priceInfo = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor);
-            const { base, promo, emPromocao, badge } = priceInfo;
+            const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
 
             return (
               <div
                 key={p.id}
-                className="bg-card-bg rounded-md overflow-hidden shadow-card hover:-translate-y-1 hover:shadow-card-hover transition-all cursor-default flex flex-col h-full relative"
+                className="bg-card-bg rounded-lg overflow-hidden shadow-card border border-border hover:-translate-y-1 hover:shadow-card-hover hover:border-accent/20 transition-all duration-300 ease-out cursor-default flex flex-col h-full relative"
               >
                 {/* Promo/destaque tags */}
                 {emPromocao && (
@@ -273,9 +280,9 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                           <span className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(promo)}</span>
                           <span className="text-text-muted text-[10px] sm:text-sm line-through">{formatarMoeda(base)}</span>
                         </div>
-{badge && (
-                              <span className="inline-block mt-0.5 text-[9px] sm:text-[10px] font-extrabold px-1.5 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">{badge}</span>
-                            )}
+                        {badge && (
+                          <span className="inline-block mt-0.5 text-[9px] sm:text-[10px] font-extrabold px-1.5 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">{discountLabel || badge}</span>
+                        )}
                       </div>
                     ) : (
                       <div className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(base)}</div>
@@ -292,6 +299,17 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
               </div>
             );
           })}
+        </div>
+      )}
+
+      {visibleCount < produtosFiltrados.length && (
+        <div className="text-center mt-8">
+          <button
+            className="px-8 py-3 text-sm font-semibold bg-primary text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"
+            onClick={() => setVisibleCount((prev) => prev + 24)}
+          >
+            Mostrar mais ({produtosFiltrados.length - visibleCount} restantes)
+          </button>
         </div>
       )}
 

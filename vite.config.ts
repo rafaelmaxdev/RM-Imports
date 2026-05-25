@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -59,6 +60,16 @@ function imageProxyPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), ignoreApiDir(), imageProxyPlugin()],
+  build: {
+    rollupOptions: {
+      external: ['mercadopago'],
+    },
+  },
+  test: {
+    globals: true,
+    environment: "node",
+    include: ["src/**/__tests__/**/*.test.ts"],
+  },
   server: {
     proxy: {
       "/api/yupoo": {

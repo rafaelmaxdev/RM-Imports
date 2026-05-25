@@ -72,7 +72,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
 
   const [erro, setErro] = useState("");
 
-  // Fechar dropdown ao clicar fora
+  // Fechar dropdown ao clicar fora + limpar debounce ao desmontar
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (ruaRef.current && !ruaRef.current.contains(e.target as Node)) {
@@ -80,7 +80,10 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, []);
 
   const buscarCep = useCallback(async (cepDigits: string) => {
@@ -151,8 +154,25 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   }
 
   function handleNext() {
-    if (step === "cart") setStep("address");
-    else if (step === "address") setStep("payment");
+    if (step === "cart") {
+      setStep("address");
+    } else if (step === "address") {
+      if (
+        !endereco.nome.trim() ||
+        !endereco.rua.trim() ||
+        !endereco.numero.trim() ||
+        !endereco.bairro.trim() ||
+        !endereco.cidade.trim() ||
+        !endereco.estado ||
+        !endereco.cep.trim() ||
+        !endereco.telefone.trim()
+      ) {
+        setErro("Preencha todos os campos obrigatórios.");
+        return;
+      }
+      setErro("");
+      setStep("payment");
+    }
   }
 
   function handleConfirm() {
@@ -197,16 +217,38 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[1000]" onClick={onClose}>
-      <div className="absolute right-0 top-0 bottom-0 w-full max-w-100 bg-card-bg flex flex-col shadow-[-4px_0_16px_rgba(0,0,0,0.1)]" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] transition-colors duration-300" onClick={onClose}>
+      <div className="absolute right-0 top-0 bottom-0 w-full max-w-100 bg-card-bg flex flex-col shadow-[-8px_0_32px_rgba(0,0,0,0.2)] transition-transform duration-300 ease-out" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center px-6 py-4 border-b border-border">
           <h3 className="m-0 text-primary font-semibold">
             {step === "cart" ? `Carrinho (${cart.length})` : step === "address" ? "Endereço de Entrega" : "Pagamento"}
           </h3>
-          <button className="bg-none border-none text-xl cursor-pointer text-text-muted" onClick={onClose}>
+          <button className="bg-none border-none text-xl cursor-pointer text-text-muted hover:text-accent transition-colors w-8 h-8 flex items-center justify-center rounded-full" onClick={onClose}>
             ✕
           </button>
         </div>
+
+        {/* Step indicators */}
+        {cart.length > 0 && (
+          <div className="px-6 py-3 bg-gray-50 border-b border-border">
+            <div className="flex items-center justify-center gap-1 text-xs font-semibold">
+              <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-colors ${step === 'cart' ? 'bg-accent text-white' : 'text-text-muted'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${step === 'cart' ? 'bg-white text-accent' : 'bg-gray-300 text-white'}`}>1</span>
+                Carrinho
+              </span>
+              <span className="text-border mx-1">→</span>
+              <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-colors ${step === 'address' ? 'bg-accent text-white' : step === 'payment' ? 'text-primary' : 'text-text-muted'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${step === 'address' ? 'bg-white text-accent' : step === 'payment' ? 'bg-primary text-white' : 'bg-gray-300 text-white'}`}>2</span>
+                Endereço
+              </span>
+              <span className="text-border mx-1">→</span>
+              <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-colors ${step === 'payment' ? 'bg-accent text-white' : 'text-text-muted'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${step === 'payment' ? 'bg-white text-accent' : 'bg-gray-300 text-white'}`}>3</span>
+                Pagamento
+              </span>
+            </div>
+          </div>
+        )}
 
         {cart.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-text-muted">
@@ -224,6 +266,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                     }
                     alt={item.nome}
                     className="w-12.5 h-12.5 object-cover rounded-md"
+                    loading="lazy"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-sm whitespace-nowrap overflow-hidden text-ellipsis">
@@ -262,8 +305,9 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
           <>
             <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
               <div>
-                <label className="block text-sm font-semibold text-text-muted mb-1">Nome completo *</label>
+                <label htmlFor="cart-nome" className="block text-sm font-semibold text-text-muted mb-1">Nome completo *</label>
                 <input
+                  id="cart-nome"
                   type="text"
                   value={endereco.nome}
                   onChange={(e) => updateField("nome", e.target.value)}
@@ -272,8 +316,9 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-text-muted mb-1">Telefone *</label>
+                <label htmlFor="cart-telefone" className="block text-sm font-semibold text-text-muted mb-1">Telefone *</label>
                 <input
+                  id="cart-telefone"
                   type="tel"
                   value={endereco.telefone}
                   onChange={(e) => updateField("telefone", formatarTelefone(e.target.value))}
@@ -283,9 +328,10 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-text-muted mb-1">CEP *</label>
+                <label htmlFor="cart-cep" className="block text-sm font-semibold text-text-muted mb-1">CEP *</label>
                 <div className="relative">
                   <input
+                    id="cart-cep"
                     type="text"
                     value={endereco.cep}
                     onChange={(e) => handleCepChange(e.target.value)}
@@ -304,8 +350,9 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
               </div>
               <div className="flex gap-2">
                 <div className="flex-1 relative" ref={ruaRef}>
-                  <label className="block text-sm font-semibold text-text-muted mb-1">Rua *</label>
+                  <label htmlFor="cart-rua" className="block text-sm font-semibold text-text-muted mb-1">Rua *</label>
                   <input
+                    id="cart-rua"
                     type="text"
                     value={endereco.rua}
                     onChange={(e) => handleRuaChange(e.target.value)}
@@ -339,8 +386,9 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                   )}
                 </div>
                 <div className="w-20">
-                  <label className="block text-sm font-semibold text-text-muted mb-1">Número *</label>
+                  <label htmlFor="cart-numero" className="block text-sm font-semibold text-text-muted mb-1">Número *</label>
                   <input
+                    id="cart-numero"
                     type="text"
                     value={endereco.numero}
                     onChange={(e) => updateField("numero", e.target.value)}
@@ -350,8 +398,9 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-text-muted mb-1">Complemento</label>
+                <label htmlFor="cart-complemento" className="block text-sm font-semibold text-text-muted mb-1">Complemento</label>
                 <input
+                  id="cart-complemento"
                   type="text"
                   value={endereco.complemento}
                   onChange={(e) => updateField("complemento", e.target.value)}
@@ -360,8 +409,9 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-text-muted mb-1">Bairro *</label>
+                <label htmlFor="cart-bairro" className="block text-sm font-semibold text-text-muted mb-1">Bairro *</label>
                 <input
+                  id="cart-bairro"
                   type="text"
                   value={endereco.bairro}
                   onChange={(e) => updateField("bairro", e.target.value)}
@@ -371,8 +421,9 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
               </div>
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="block text-sm font-semibold text-text-muted mb-1">Cidade *</label>
+                  <label htmlFor="cart-cidade" className="block text-sm font-semibold text-text-muted mb-1">Cidade *</label>
                   <input
+                    id="cart-cidade"
                     type="text"
                     value={endereco.cidade}
                     onChange={(e) => updateField("cidade", e.target.value)}
@@ -381,8 +432,9 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                   />
                 </div>
                 <div className="w-20">
-                  <label className="block text-sm font-semibold text-text-muted mb-1">UF *</label>
+                  <label htmlFor="cart-estado" className="block text-sm font-semibold text-text-muted mb-1">UF *</label>
                   <select
+                    id="cart-estado"
                     value={endereco.estado}
                     onChange={(e) => updateField("estado", e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
@@ -429,6 +481,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                 {paymentOptions.map((opt) => (
                   <button
                     key={opt.value}
+                    role="radio"
+                    aria-checked={paymentMethod === opt.value}
                     className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer transition-colors text-left ${
                       paymentMethod === opt.value
                         ? "border-accent bg-accent/5"
@@ -455,6 +509,15 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                     {paymentMethod === "debit_card" && "Você será redirecionado ao Mercado Pago para pagar com cartão de débito."}
                   </p>
                 </div>
+
+              <div className="mt-4 p-3 bg-yellow-50 rounded-md border border-yellow-200">
+                <p className="text-xs text-yellow-800 font-semibold">⚠️ Importante:</p>
+                <ul className="text-xs text-yellow-700 mt-1 space-y-1 list-disc list-inside">
+                  <li>Confira seus dados antes de finalizar</li>
+                  <li>Após o pagamento, guarde o ID da transação para suporte</li>
+                  <li>A confirmação é automática via Mercado Pago</li>
+                </ul>
+              </div>
             </div>
 
             <div className="px-6 py-4 border-t border-border">

@@ -1,10 +1,16 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { MercadoPagoConfig, Preference } from "mercadopago";
+import { createClient } from "@supabase/supabase-js";
 
 const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN!,
   options: { timeout: 5000 },
 });
+
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
+);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -21,6 +27,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!items || !orderId) {
       return res.status(400).json({ error: "Missing items or orderId" });
+    }
+
+    // Validate prices are within reasonable range
+    for (const item of items) {
+      if (item.unit_price < 50 || item.unit_price > 500) {
+        return res.status(400).json({ error: "Invalid item price" });
+      }
+    }
+
+    // Verify order exists and is pending
+    const { data: order, error: orderError } = await supabase
+      .from("pedidos")
+      .select("id, status, total")
+      .eq("id", orderId)
+      .single();
+
+    if (orderError || !order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (order.status !== "pendente") {
+      return res.status(400).json({ error: "Order is not pending" });
+    }
+
+    const itemsTotal = items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+    if (Math.abs(itemsTotal - order.total) > 1) {
+      return res.status(400).json({ error: "Total mismatch" });
     }
 
     const preference = new Preference(client);

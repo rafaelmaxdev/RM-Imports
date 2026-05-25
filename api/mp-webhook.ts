@@ -18,6 +18,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // Verify MP webhook signature
+    const webhookSecret = process.env.MP_WEBHOOK_SECRET;
+    const xSignature = req.headers["x-signature"] as string | undefined;
+    const xRequestId = req.headers["x-request-id"] as string | undefined;
+
+    if (webhookSecret && xSignature) {
+      const parts = xSignature.split(",");
+      let ts = "";
+      let hash = "";
+      for (const part of parts) {
+        const [key, value] = part.split("=");
+        if (key?.trim() === "ts") ts = value?.trim() ?? "";
+        if (key?.trim() === "v1") hash = value?.trim() ?? "";
+      }
+      
+      const manifest = ts + "." + (typeof req.body === "string" ? req.body : JSON.stringify(req.body));
+      const crypto = await import("crypto");
+      const expectedHash = crypto.createHmac("sha256", webhookSecret).update(manifest).digest("hex");
+      
+      if (hash !== expectedHash) {
+        console.error("Webhook signature verification failed");
+        return res.status(401).send("Unauthorized");
+      }
+    } else if (webhookSecret) {
+      console.error("Missing x-signature header");
+      return res.status(401).send("Unauthorized");
+    }
+    // If MP_WEBHOOK_SECRET is not set, skip verification (for development)
+
     const body = req.body as {
       type?: string;
       action?: string;
@@ -46,18 +75,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (externalReference) {
         // Map MP status to our status
-        // Flow: pendente → pago → entregue / cancelado
+        // Flow: pendente → em_analise → pago → enviado_fornecedor → em_producao → a_caminho → em_estoque → em_entrega → entregue
+        // Flow: pendente → cancelado
+        // Flow: pago → reembolsado
         let orderStatus: string;
         switch (status) {
           case "approved":
             orderStatus = "pago";
             break;
+          case "in_process":
+          case "in_mediation":
+            orderStatus = "em_analise";
+            break;
           case "cancelled":
           case "rejected":
             orderStatus = "cancelado";
             break;
+          case "refunded":
+          case "charged_back":
+            orderStatus = "reembolsado";
+            break;
           default:
-            // pending, in_process, etc. — keep as pendente
+            // pending, etc. — keep as pendente
             orderStatus = "pendente";
         }
 

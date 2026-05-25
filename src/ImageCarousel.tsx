@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, memo } from "react";
 import { proxyImageUrl } from "./types";
 
 interface ImageCarouselProps {
@@ -54,12 +54,12 @@ function ImageWithLoader({
         draggable={false}
         onLoad={() => setLoaded(true)}
         onError={() => setErrored(true)}
-      />
+/>
     </>
   );
 }
 
-export default function ImageCarousel({
+export default memo(function ImageCarousel({
   images,
   alt,
   className = "",
@@ -200,5 +200,5 @@ export default function ImageCarousel({
         ))}
       </div>
     </div>
-  );
-}
+);
+});

@@ -14,8 +14,10 @@ export interface DbProduto {
   destaque: boolean;
   preco_customizado: number | null;
   promocao: boolean;
-  promocao_tipo: string | null;   // 'porcentagem' | 'novo_preco' | 'leve_pague' | null
+  promocao_tipo: string | null;   // 'porcentagem' | 'novo_preco' | 'leve_pague' | 'leve_3_pague_2' | null
   promocao_valor: number | null;  // percentage for 'porcentagem', null for others
+  feminino: boolean;
+  peca: string | null;            // 'camisa' | 'regata' — null means 'camisa' (default)
   created_at: string;
 }
 
@@ -149,6 +151,7 @@ export interface DbPedido {
   payment_method: string | null;
   mp_preference_id: string | null;
   mp_payment_id: string | null;
+  admin_order: boolean | null;
   created_at: string;
 }
 
@@ -166,6 +169,7 @@ function dbPedidoToOrder(db: DbPedido): import("../types").Order {
     payment_method: (db.payment_method as import("../types").PaymentMethod) || undefined,
     mp_preference_id: db.mp_preference_id || undefined,
     mp_payment_id: db.mp_payment_id || undefined,
+    admin_order: db.admin_order ?? false,
   };
 }
 
@@ -181,6 +185,7 @@ const row = {
     payment_method: order.payment_method || null,
     mp_preference_id: order.mp_preference_id || null,
     mp_payment_id: order.mp_payment_id || null,
+    admin_order: order.admin_order || null,
   };
 
   const { data, error } = await supabase
@@ -223,6 +228,15 @@ export async function updatePedidoStatus(id: string, status: string): Promise<vo
   const { error } = await supabase
     .from("pedidos")
     .update({ status })
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function updatePedidoAdminOrder(id: string, isAdmin: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("pedidos")
+    .update({ admin_order: isAdmin })
     .eq("id", id);
 
   if (error) throw error;

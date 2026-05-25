@@ -77,12 +77,19 @@ create policy "Qualquer um pode criar pedidos"
   on pedidos for insert
   with check (true);
 
--- Qualquer um pode ler pedidos (IDs são aleatórios, confirmação por URL)
-create policy "Qualquer um pode ler pedidos"
-  on pedidos for select
-  using (true);
+-- Apenas autenticados podem ler pedidos (admin)
+-- NOTA: A página de confirmação de pedido usa o ID na URL como autenticação implícita.
+-- Para permitir que clientes acessem seus pedidos, usamos uma função que verifica o ID.
+-- Migração: substituir a policy antiga (using true) por esta:
+-- DROP POLICY "Qualquer um pode ler pedidos" ON pedidos;
+-- CREATE POLICY "Apenas autenticados podem ler pedidos"
+--   ON pedidos FOR SELECT
+--   USING (auth.role() = 'authenticated');
+--
+-- IMPORTANTE: Ao ativar esta policy, a página /pedido/:id deixará de funcionar
+-- para clientes não autenticados. Para resolver isso, crie uma Supabase Edge Function
+-- ou uma API route que verifique o ID do pedido e retorne os dados.
 
--- Apenas autenticados podem atualizar status (admin)
 create policy "Apenas autenticados podem atualizar pedidos"
   on pedidos for update
   using (auth.role() = 'authenticated');
@@ -108,4 +115,39 @@ create policy "Apenas autenticados podem deletar pedidos"
 -- O status "confirmado" foi substituído por "pago".
 -- Se você tinha pedidos com status "confirmado", execute:
 -- UPDATE pedidos SET status = 'pago' WHERE status = 'confirmado';
+-- ============================================================
+
+-- ============================================================
+-- NOTA: O fluxo de status do pedido agora é:
+--   pendente → em_analise → pago → enviado_fornecedor → em_producao → a_caminho → em_estoque → em_entrega → entregue
+--   pendente → cancelado
+--   pago → reembolsado
+-- Se você tinha pedidos com status "confirmado", execute:
+-- UPDATE pedidos SET status = 'pago' WHERE status = 'confirmado';
+-- ============================================================
+
+-- ============================================================
+-- MIGRAÇÃO: Adicionar coluna admin_order para pedidos do admin
+-- Execute no SQL Editor do Supabase:
+-- ============================================================
+
+-- ALTER TABLE pedidos ADD COLUMN admin_order boolean DEFAULT false;
+
+-- ============================================================
+-- NOTA: Pedidos marcados como admin_order = true são pedidos
+-- pessoais do admin e não contam como lucro nos cálculos
+-- financeiros dos pacotes.
+-- ============================================================
+
+-- ============================================================
+-- MIGRAÇÃO: Adicionar coluna peca na tabela produtos
+-- Execute no SQL Editor do Supabase:
+-- ============================================================
+
+-- ALTER TABLE produtos ADD COLUMN peca text DEFAULT 'camisa';
+-- UPDATE produtos SET peca = 'camisa' WHERE peca IS NULL;
+
+-- ============================================================
+-- NOTA: peca pode ser 'camisa' ou 'regata'. O default é 'camisa'.
+-- O comando UPDATE acima marca todos os produtos existentes como camisa.
 -- ============================================================

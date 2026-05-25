@@ -225,7 +225,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
             {produtos.map((p) => {
               const imgs = parseImageUrls(p.imagem_urls);
               const img = imgs.length > 0 ? proxyImageUrl(imgs[0].replace(/\/(small|medium|large)\.jpg$/i, "/medium.jpg")) : "";
-              const { base, promo, emPromocao, badge } = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor);
+              const { base, promo, emPromocao, badge, discountLabel } = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor);
 
               return (
                 <div
@@ -268,7 +268,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
                           </div>
                           {badge && (
                             <span className="inline-block mt-1 text-[10px] font-extrabold px-2 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">
-                              {badge}
+                              {discountLabel || badge}
                             </span>
                           )}
                         </div>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import type { CartItem, Order, OrderAddress, PaymentMethod } from "./types";
 import { gerarId } from "./types";
 import { createPedido } from "./lib/db";
@@ -41,7 +41,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setCart([]);
   }, []);
 
-  const total = cart.reduce((sum, item) => sum + item.preco, 0);
+  const total = useMemo(() => cart.reduce((sum, item) => sum + item.preco, 0), [cart]);
 
   const createMPPreference = useCallback(
     async (orderId: string): Promise<{ preferenceId: string; initPoint: string } | null> => {
@@ -97,6 +97,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           numeroPersonalizado: item.numeroPersonalizado,
           preco: item.preco,
           yupooUrl: item.yupooUrl,
+          feminino: item.feminino,
         })),
         total,
         status: "pendente",
@@ -122,8 +123,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     [cart, total, createMPPreference]
   );
 
+  const contextValue = useMemo(
+    () => ({ cart, addToCart, removeFromCart, clearCart, total, createOrder, createMPPreference }),
+    [cart, addToCart, removeFromCart, clearCart, total, createOrder, createMPPreference]
+  );
+
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, clearCart, total, createOrder, createMPPreference }}>
+    <CartContext.Provider value={contextValue}>
       {children}
     </CartContext.Provider>
   );

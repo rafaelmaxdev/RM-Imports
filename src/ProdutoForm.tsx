@@ -91,18 +91,20 @@ function isRetro(valor: string, isAno: boolean): boolean {
   return anoCompleto <= 2021;
 }
 
-function montarNome(
+export function montarNome(
   time: string,
   tipo: string,
   periodo: string,
   nomeCustom: string,
-  localizacao: string
+  localizacao: string,
+  peca: string
 ): string {
   if (!time || !tipo || !periodo) return "";
   if (nomeCustom) return nomeCustom;
   const loc = localizacao ? ` (${localizacao})` : "";
-  if (tipo === "Retrô") return `${time} ${periodo} Retrô${loc}`;
-  return `${time} ${periodo} Versão ${tipo}${loc}`;
+  const pecaLabel = peca === "regata" ? "Regata" : "Camisa";
+  if (tipo === "Retrô") return `${pecaLabel} ${time} ${periodo} Retrô${loc}`;
+  return `${pecaLabel} ${time} ${periodo} Versão ${tipo}${loc}`;
 }
 
 async function fetchTimes(url: string): Promise<Time[]> {
@@ -140,10 +142,12 @@ function toDbProduto(p: {
   imagemUrls: string[];
   yupooUrl: string;
   destaque?: boolean;
+  feminino?: boolean;
   preco_customizado?: number | null;
   promocao?: boolean;
   promocao_tipo?: string | null;
   promocao_valor?: number | null;
+  peca?: string;
 }): Omit<DbProduto, "id" | "created_at"> {
   return {
     nome: p.nome,
@@ -154,10 +158,12 @@ function toDbProduto(p: {
     imagem_urls: p.imagemUrls.filter(Boolean),
     yupoo_url: p.yupooUrl,
     destaque: p.destaque ?? false,
+    feminino: p.feminino ?? false,
     preco_customizado: p.preco_customizado ?? null,
     promocao: p.promocao ?? false,
     promocao_tipo: p.promocao_tipo ?? null,
     promocao_valor: p.promocao_valor ?? null,
+    peca: p.peca ?? "camisa",
   };
 }
 
@@ -399,6 +405,8 @@ export default function ProdutoForm({
   const [promocaoTipo, setPromocaoTipo] = useState<string>("");
   const [promocaoValor, setPromocaoValor] = useState("");
   const [precoCustomizado, setPrecoCustomizado] = useState("");
+  const [feminino, setFeminino] = useState(false);
+  const [peca, setPeca] = useState("camisa");
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -470,7 +478,7 @@ export default function ProdutoForm({
     }
   }, [retro, isNBA]);
 
-  const nomeFinal = montarNome(time, tipo, periodo, nomeCustom, localizacao);
+  const nomeFinal = montarNome(time, tipo, periodo, nomeCustom, localizacao, peca);
 
   function limparForm() {
     setLiga("");
@@ -482,6 +490,8 @@ export default function ProdutoForm({
     setImagemUrls([""]);
     setYupooUrl("");
     setDestaque(false);
+    setFeminino(false);
+    setPeca("camisa");
     setPromocao(false);
     setPromocaoTipo("");
     setPromocaoValor("");
@@ -490,7 +500,7 @@ export default function ProdutoForm({
   }
 
   async function handleAdd() {
-    const nome = nomeCustom || montarNome(time, tipo, periodo, "", localizacao);
+    const nome = nomeCustom || montarNome(time, tipo, periodo, "", localizacao, peca);
     if (!nome || saving) return;
     setSaving(true);
 
@@ -505,6 +515,8 @@ export default function ProdutoForm({
           imagemUrls,
           yupooUrl,
           destaque,
+          feminino,
+          peca,
           promocao,
           promocao_tipo: promocao ? promocaoTipo || null : null,
           promocao_valor: promocao && promocaoTipo === "porcentagem" ? parseFloat(promocaoValor) || null : null,
@@ -532,6 +544,8 @@ export default function ProdutoForm({
     setImagemUrls(fp.imagemUrls.length > 0 ? [...fp.imagemUrls] : [""]);
     setYupooUrl(fp.yupooUrl);
     setDestaque(p.destaque);
+    setFeminino(p.feminino);
+    setPeca(p.peca ?? "camisa");
     setPromocao(p.promocao);
     setPromocaoTipo(p.promocao_tipo ?? "");
     setPromocaoValor(p.promocao_valor != null ? String(p.promocao_valor) : "");
@@ -542,12 +556,12 @@ export default function ProdutoForm({
     const loc = locMatch ? locMatch[1] : "";
     setLocalizacao(loc);
 
-    const nomeGerado = montarNome(normalizedTime, fp.tipo, fp.temporada, "", loc);
+    const nomeGerado = montarNome(normalizedTime, fp.tipo, fp.temporada, "", loc, p.peca ?? "camisa");
     setNomeCustom(fp.nome !== nomeGerado ? fp.nome : "");
   }
 
   async function handleSave() {
-    const nome = nomeCustom || montarNome(time, tipo, periodo, "", localizacao);
+    const nome = nomeCustom || montarNome(time, tipo, periodo, "", localizacao, peca);
     if (!nome || !editandoId || saving) return;
     setSaving(true);
 
@@ -563,6 +577,8 @@ export default function ProdutoForm({
           imagemUrls,
           yupooUrl,
           destaque,
+          feminino,
+          peca,
           promocao,
           promocao_tipo: promocao ? promocaoTipo || null : null,
           promocao_valor: promocao && promocaoTipo === "porcentagem" ? parseFloat(promocaoValor) || null : null,
@@ -765,6 +781,31 @@ export default function ProdutoForm({
             placeholder="https://..."
             className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
           />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            id="feminino-check"
+            type="checkbox"
+            checked={feminino}
+            onChange={(e) => setFeminino(e.target.checked)}
+            className="w-4 h-4 accent-primary cursor-pointer"
+          />
+          <label htmlFor="feminino-check" className="text-sm cursor-pointer select-none">
+            Tem versão feminina
+          </label>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-text-muted">Peça</label>
+          <select
+            value={peca}
+            onChange={(e) => setPeca(e.target.value)}
+            className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+          >
+            <option value="camisa">Camisa</option>
+            <option value="regata">Regata / Jersey</option>
+          </select>
         </div>
 
         <div className="flex flex-col gap-1">

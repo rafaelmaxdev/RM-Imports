@@ -1,11 +1,27 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+const ALLOWED_DOMAINS = [
+  "photo.yupoo.com",
+  "img.yupoo.com", 
+  "yupoo.com",
+];
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { url } = req.query;
 
   if (!url || typeof url !== 'string') {
     res.status(400).json({ error: 'Missing url parameter' });
     return;
+  }
+
+  // Validate domain whitelist
+  try {
+    const urlObj = new URL(url);
+    if (!ALLOWED_DOMAINS.some(d => urlObj.hostname === d || urlObj.hostname.endsWith("." + d))) {
+      return res.status(403).json({ error: "Domain not allowed" });
+    }
+  } catch {
+    return res.status(400).json({ error: "Invalid URL" });
   }
 
   try {

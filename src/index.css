@@ -47,10 +47,12 @@
 }
 
 .animate-marquee-left {
+  will-change: transform;
   animation: marquee-left 50s linear infinite;
 }
 
 .animate-marquee-right {
+  will-change: transform;
   animation: marquee-right 50s linear infinite;
 }
 
@@ -61,6 +63,7 @@
 }
 
 .animate-promo-pulse {
+  will-change: transform, opacity;
   animation: promo-pulse 2s ease-in-out infinite;
 }
 
@@ -72,3 +75,80 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Accessible focus styles */
+:focus-visible {
+  outline: 2px solid #e94560;
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #e94560;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #e94560;
+  outline-offset: 0;
+  border-color: #e94560;
+}
+
+/* Body subtle background */
+body {
+  background-color: #f8f9fa;
+  background-image: radial-gradient(#dee2e6 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Safari backdrop-filter compatibility */
+.backdrop-blur-sm,
+.backdrop-blur {
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Navbar gradient overlay enhancement */
+.nav-gradient-accent {
+  background: linear-gradient(to right, transparent, #e94560, transparent);
+}
+
+/* Hamburger menu animations */
+@keyframes menu-slide-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes menu-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes menu-item-in {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-menu-overlay {
+  animation: menu-fade-in 0.2s ease forwards;
+}
+
+.animate-menu-panel {
+  animation: menu-slide-in 0.25s ease-out forwards;
+}
+
+.animate-menu-item {
+  animation: menu-item-in 0.2s ease forwards;
+}
+
+.animate-menu-item:nth-child(1) { animation-delay: 0.05s; }
+.animate-menu-item:nth-child(2) { animation-delay: 0.1s; }
+.animate-menu-item:nth-child(3) { animation-delay: 0.15s; }
+.animate-menu-item:nth-child(4) { animation-delay: 0.2s; }

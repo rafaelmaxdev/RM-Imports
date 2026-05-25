@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getPedidos, updatePedidoStatus, getPacotes, createPacote, updatePacoteStatus, updatePacoteFinanceiro } from "./lib/db";
+import { getPedidos, updatePedidoStatus, getPacotes, createPacote, updatePacoteStatus, updatePacoteFinanceiro, removePedidoFromPacote, deletePacote } from "./lib/db";
 import type { Order } from "./types";
 import type { Pacote } from "./lib/db";
 import { montarMensagemPacote, WHATSAPP_NUMBER, formatarMoeda, TAMANHO_FORNECEDOR } from "./types";
@@ -183,6 +183,28 @@ export default function AdminPacotes() {
       );
     } catch (err) {
       console.error("Erro ao salvar financeiro:", err);
+    }
+  }
+
+  async function handleRemovePedido(pacoteId: string, pedidoId: string) {
+    if (!confirm(`Remover pedido ${pedidoId} deste pacote?`)) return;
+    try {
+      const updated = await removePedidoFromPacote(pacoteId, pedidoId);
+      setPacotes((prev) => prev.map((p) => p.id === pacoteId ? updated : p));
+    } catch (err) {
+      console.error("Erro ao remover pedido do pacote:", err);
+      alert("Erro ao remover pedido do pacote.");
+    }
+  }
+
+  async function handleDeletePacote(pacoteId: string) {
+    if (!confirm("Excluir este pacote do histórico? Os pedidos não serão excluídos.")) return;
+    try {
+      await deletePacote(pacoteId);
+      setPacotes((prev) => prev.filter((p) => p.id !== pacoteId));
+    } catch (err) {
+      console.error("Erro ao excluir pacote:", err);
+      alert("Erro ao excluir pacote.");
     }
   }
 
@@ -559,6 +581,8 @@ export default function AdminPacotes() {
                     pacote={pacote}
                     allOrders={allOrders}
                     onSaveFinanceiro={handleSaveFinanceiro}
+                    onRemovePedido={handleRemovePedido}
+                    onDeletePacote={handleDeletePacote}
                   />
                 ))}
               </div>
@@ -666,10 +690,14 @@ function DeliveredPacoteCard({
   pacote,
   allOrders,
   onSaveFinanceiro,
+  onRemovePedido,
+  onDeletePacote,
 }: {
   pacote: Pacote;
   allOrders: Order[];
   onSaveFinanceiro: (pacote: Pacote, field: "custo" | "frete" | "taxa_importacao", value: string) => void;
+  onRemovePedido: (pacoteId: string, pedidoId: string) => void;
+  onDeletePacote: (pacoteId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [localCusto, setLocalCusto] = useState(pacote.custo?.toString() ?? "");
@@ -719,6 +747,13 @@ function DeliveredPacoteCard({
               <div className="font-bold text-sm">{formatarMoeda(totalVendido)}</div>
               <div className="text-xs text-text-muted">vendido</div>
             </div>
+            <button
+              className="text-text-muted hover:text-red-500 transition-colors cursor-pointer text-sm"
+              onClick={(e) => { e.stopPropagation(); onDeletePacote(pacote.id); }}
+              title="Excluir pacote do histórico"
+            >
+              ✕
+            </button>
             <span className="text-text-muted text-sm">{expanded ? "▲" : "▼"}</span>
           </div>
         </div>
@@ -818,7 +853,16 @@ function DeliveredPacoteCard({
                       <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">👤</span>
                     )}
                   </div>
-                  <span className="font-semibold text-sm">{formatarMoeda(order.total)}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm">{formatarMoeda(order.total)}</span>
+                    <button
+                      className="text-text-muted hover:text-red-500 transition-colors cursor-pointer text-xs"
+                      onClick={() => onRemovePedido(pacote.id, order.id)}
+                      title="Remover pedido do pacote"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
                 <div className="text-xs text-text-muted mt-1">
                   {order.endereco?.nome} • {order.itens.length} camisa{order.itens.length !== 1 ? "s" : ""}

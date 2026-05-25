@@ -357,3 +357,37 @@ export async function updatePacoteFinanceiro(
 
   if (error) throw error;
 }
+
+export async function removePedidoFromPacote(pacoteId: string, pedidoId: string): Promise<Pacote> {
+  // First get the current pacote
+  const { data: pacote, error: fetchError } = await supabase
+    .from("pacotes")
+    .select("*")
+    .eq("id", pacoteId)
+    .single();
+
+  if (fetchError) throw fetchError;
+  if (!pacote) throw new Error("Pacote não encontrado");
+
+  const currentIds: string[] = typeof pacote.pedido_ids === "string" ? JSON.parse(pacote.pedido_ids) : pacote.pedido_ids;
+  const newIds = currentIds.filter((id: string) => id !== pedidoId);
+
+  const { data, error } = await supabase
+    .from("pacotes")
+    .update({ pedido_ids: JSON.stringify(newIds) })
+    .eq("id", pacoteId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return dbPacoteToPacote(data as DbPacote);
+}
+
+export async function deletePacote(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("pacotes")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+}

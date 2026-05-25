@@ -109,12 +109,6 @@ body {
   background-size: 32px 32px;
 }
 
-/* Safari backdrop-filter compatibility */
-.backdrop-blur-sm,
-.backdrop-blur {
-  -webkit-backdrop-filter: blur(8px);
-}
-
 /* Navbar gradient overlay enhancement */
 .nav-gradient-accent {
   background: linear-gradient(to right, transparent, #e94560, transparent);

@@ -38,6 +38,7 @@ export interface OrderAddress {
   estado: string;
   cep: string;
   telefone: string;
+  deliveryMethod: "entrega" | "retirada";
 }
 
 export type PaymentMethod = "pix" | "credit_card" | "debit_card";

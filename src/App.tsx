@@ -79,7 +79,7 @@ function AppContent() {
 
       {/* Mobile menu overlay */}
       {showMenu && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1001] animate-menu-overlay" onClick={() => setShowMenu(false)}>
+        <div className="fixed inset-0 bg-black/60 z-[1001] animate-menu-overlay" onClick={() => setShowMenu(false)}>
           <div className="absolute left-0 top-0 bottom-0 w-64 bg-primary text-white flex flex-col shadow-lg animate-menu-panel" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center px-5 py-4 border-b border-white/10">
               <span className="text-lg font-bold animate-menu-item">Menu</span>

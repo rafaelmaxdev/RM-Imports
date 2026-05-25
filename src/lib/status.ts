@@ -46,6 +46,7 @@ export const STATUS_FLOW: Record<string, string[]> = {
 // ── Package status pipeline ──
 
 export const PACKAGE_STATUS_PIPELINE = [
+  "pago",
   "enviado_fornecedor",
   "em_producao",
   "a_caminho",
@@ -55,6 +56,7 @@ export const PACKAGE_STATUS_PIPELINE = [
 ] as const;
 
 export const PACKAGE_STATUS_LABELS: Record<string, { label: string; bg: string; text: string }> = {
+  pago: { label: "Aguardando envio", bg: "bg-yellow-100", text: "text-yellow-800" },
   enviado_fornecedor: { label: "Enviado", bg: "bg-blue-100", text: "text-blue-800" },
   em_producao: { label: "Em produção", bg: "bg-purple-100", text: "text-purple-800" },
   a_caminho: { label: "A caminho", bg: "bg-indigo-100", text: "text-indigo-800" },
@@ -64,6 +66,7 @@ export const PACKAGE_STATUS_LABELS: Record<string, { label: string; bg: string; 
 };
 
 export const PACKAGE_NEXT_STATUS: Record<string, string> = {
+  pago: "enviado_fornecedor",
   enviado_fornecedor: "em_producao",
   em_producao: "a_caminho",
   a_caminho: "em_estoque",
@@ -77,6 +80,7 @@ export const PACKAGE_PREV_STATUS: Record<string, string> = {
   em_estoque: "a_caminho",
   em_entrega: "em_estoque",
   entregue: "em_entrega",
+  enviado_fornecedor: "pago",
 };
 
 export const PACKAGE_PREV_ACTION_LABELS: Record<string, string> = {
@@ -85,9 +89,11 @@ export const PACKAGE_PREV_ACTION_LABELS: Record<string, string> = {
   em_estoque: "A caminho",
   em_entrega: "Em estoque",
   entregue: "Em entrega",
+  enviado_fornecedor: "Pago",
 };
 
 export const PACKAGE_STATUS_ACTION_LABELS: Record<string, string> = {
+  pago: "Enviar ao Fornecedor",
   enviado_fornecedor: "Em Produção",
   em_producao: "A Caminho",
   a_caminho: "Em Estoque",

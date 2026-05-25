@@ -12,7 +12,7 @@ export default function Footer() {
           <div>
             <h3 className="text-lg font-bold mb-3">RM Imports</h3>
             <p className="text-white/70 text-sm leading-relaxed">
-              Camisas de futebol autênticas com qualidade premium. Entregamos em todo o Brasil.
+              Camisas de futebol autênticas com qualidade premium.
             </p>
           </div>
 
@@ -39,7 +39,6 @@ export default function Footer() {
             <ul className="space-y-2 text-sm text-white/70 list-none m-0 p-0">
               <li>🔒 Compra segura</li>
               <li>💳 Pix, Cartão de Crédito e Débito</li>
-              <li>🔄 Troca e reembolso</li>
             </ul>
           </div>
 

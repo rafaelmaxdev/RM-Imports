@@ -12,7 +12,7 @@ export default function Footer() {
           <div>
             <h3 className="text-lg font-bold mb-3">RM Imports</h3>
             <p className="text-white/70 text-sm leading-relaxed">
-              Camisas de futebol autênticas com qualidade premium.
+              Camisas de futebol com qualidade premium. Entrega em até 30 dias.
             </p>
           </div>
 

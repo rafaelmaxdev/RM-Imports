@@ -77,6 +77,18 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/yupoo/, ""),
       },
+      "/api/create-preference": {
+        target: "https://rm-imports.vercel.app",
+        changeOrigin: true,
+      },
+      "/api/mp-webhook": {
+        target: "https://rm-imports.vercel.app",
+        changeOrigin: true,
+      },
+      "/api/refund": {
+        target: "https://rm-imports.vercel.app",
+        changeOrigin: true,
+      },
     },
     watch: {
       ignored: ["**/api/**"],

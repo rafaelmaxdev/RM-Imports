@@ -267,20 +267,20 @@ function AdminProductCard({
           </div>
         )}
 
-        <div className="p-3 flex flex-col flex-1">
-          <div className="font-semibold text-sm line-clamp-2 mb-1">{p.nome}</div>
-          <div className="text-xs text-text-muted mb-2">
+        <div className="p-2 sm:p-3 flex flex-col flex-1">
+          <div className="font-semibold text-xs sm:text-sm line-clamp-2 mb-1">{p.nome}</div>
+          <div className="text-[10px] sm:text-xs text-text-muted mb-2">
             {p.liga} • {p.tipo} • {p.temporada}
           </div>
-          <div className="mt-auto flex gap-2">
+          <div className="mt-auto flex gap-1 sm:gap-2">
             <button
-              className="flex-1 bg-yellow-400 text-text-main px-2 py-1.5 text-xs font-semibold rounded-md cursor-pointer hover:opacity-90"
+              className="flex-1 bg-yellow-400 text-text-main px-1 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs font-semibold rounded-md cursor-pointer hover:opacity-90"
               onClick={() => onEdit(p)}
             >
               Editar
             </button>
             <button
-              className="flex-1 bg-red-500 text-white px-2 py-1.5 text-xs font-semibold rounded-md cursor-pointer hover:opacity-90"
+              className="flex-1 bg-red-500 text-white px-1 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs font-semibold rounded-md cursor-pointer hover:opacity-90"
               onClick={() => onRemove(p.id)}
             >
               Remover
@@ -918,7 +918,7 @@ export default function ProdutoForm({
                 Nenhum produto encontrado com os filtros selecionados.
               </p>
             ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 sm:gap-4">
                 {produtosFiltrados.map((p) => (
                   <AdminProductCard key={p.id} p={p} onEdit={handleEdit} onRemove={handleRemove} />
                 ))}

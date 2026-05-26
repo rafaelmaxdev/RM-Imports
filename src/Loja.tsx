@@ -25,15 +25,20 @@ const CATEGORIAS = [
 
 type Ordenacao = "time" | "preco-asc" | "preco-desc" | "categoria" | "temporada-asc" | "temporada-desc";
 
-/** Converte "25/26" → 2025, "98/99" → 1998, "2026" → 2026 */
-function parseAnoTemporada(t: string): number {
+/** Converte "2025/2026" → 2025, "1992/1994" → 1992, "25/26" → 2025, "98/99" → 1998, "2026" → 2026 */
+export function parseAnoTemporada(t: string): number {
   const slash = t.indexOf("/");
   if (slash === -1) {
     const n = parseInt(t, 10);
     return isNaN(n) ? 0 : n;
   }
-  const first = parseInt(t.slice(0, slash), 10);
-  return first >= 50 ? 1900 + first : 2000 + first;
+  const first = t.slice(0, slash);
+  const ano = parseInt(first, 10);
+  if (isNaN(ano)) return 0;
+  // Suporta formato completo (2025/2026) e curto (25/26)
+  return first.length <= 2
+    ? (ano >= 50 ? 1900 + ano : 2000 + ano)
+    : ano;
 }
 
 export default function Loja({ produtos, config }: { produtos: DbProduto[]; config: LojaConfig }) {

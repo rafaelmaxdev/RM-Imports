@@ -14,7 +14,8 @@ import {
   type Order,
   type OrderItem,
 } from "../types";
-import { montarNome } from "../ProdutoForm";
+import { montarNome, isRetro, formatarValor } from "../ProdutoForm";
+import { parseAnoTemporada } from "../Loja";
 
 // ---------------------------------------------------------------------------
 // Helper to create a config with specific category-level promo active
@@ -290,7 +291,7 @@ describe("montarMensagemPacote", () => {
   const baseItem: OrderItem = {
     nome: "Camisa Flamengo 2025 Versão Torcedor",
     tipo: "Torcedor",
-    temporada: "25/26",
+    temporada: "2025/2026",
     tamanho: "M",
     genero: "Masculino",
     personalizado: false,
@@ -391,7 +392,7 @@ describe("montarMensagemItem", () => {
   const baseItem: OrderItem = {
     nome: "Camisa Flamengo 2025 Versão Torcedor",
     tipo: "Torcedor",
-    temporada: "25/26",
+    temporada: "2025/2026",
     tamanho: "M",
     genero: "Masculino",
     personalizado: false,
@@ -450,24 +451,24 @@ describe("montarMensagemItem", () => {
 // ---------------------------------------------------------------------------
 describe("montarNome", () => {
   it("returns empty string when essential fields are missing", () => {
-    expect(montarNome("", "Torcedor", "25/26", "", "", "camisa")).toBe("");
-    expect(montarNome("Flamengo", "", "25/26", "", "", "camisa")).toBe("");
+    expect(montarNome("", "Torcedor", "2025/2026", "", "", "camisa")).toBe("");
+    expect(montarNome("Flamengo", "", "2025/2026", "", "", "camisa")).toBe("");
     expect(montarNome("Flamengo", "Torcedor", "", "", "", "camisa")).toBe("");
   });
 
   it("returns custom name when nomeCustom is provided", () => {
-    expect(montarNome("Flamengo", "Torcedor", "25/26", "CAMISA ESPECIAL", "", "camisa")).toBe("CAMISA ESPECIAL");
+    expect(montarNome("Flamengo", "Torcedor", "2025/2026", "CAMISA ESPECIAL", "", "camisa")).toBe("CAMISA ESPECIAL");
   });
 
   it('builds name with "Camisa" for non-retro camisa', () => {
-    expect(montarNome("Flamengo", "Torcedor", "25/26", "", "", "camisa")).toBe(
-      "Camisa Flamengo 25/26 Versão Torcedor"
+    expect(montarNome("Flamengo", "Torcedor", "2025/2026", "", "", "camisa")).toBe(
+      "Camisa Flamengo 2025/2026 Versão Torcedor"
     );
   });
 
   it('builds name with "Regata" for regata peca', () => {
-    expect(montarNome("Flamengo", "Torcedor", "25/26", "", "", "regata")).toBe(
-      "Regata Flamengo 25/26 Versão Torcedor"
+    expect(montarNome("Flamengo", "Torcedor", "2025/2026", "", "", "regata")).toBe(
+      "Regata Flamengo 2025/2026 Versão Torcedor"
     );
   });
 
@@ -484,8 +485,8 @@ describe("montarNome", () => {
   });
 
   it("includes localizacao in parentheses when provided", () => {
-    expect(montarNome("Flamengo", "Torcedor", "25/26", "", "Casa", "camisa")).toBe(
-      "Camisa Flamengo 25/26 Versão Torcedor (Casa)"
+    expect(montarNome("Flamengo", "Torcedor", "2025/2026", "", "Casa", "camisa")).toBe(
+      "Camisa Flamengo 2025/2026 Versão Torcedor (Casa)"
     );
   });
 
@@ -496,7 +497,7 @@ describe("montarNome", () => {
   });
 
   it("does not add empty parentheses when localizacao is empty", () => {
-    const result = montarNome("Flamengo", "Torcedor", "25/26", "", "", "camisa");
+    const result = montarNome("Flamengo", "Torcedor", "2025/2026", "", "", "camisa");
     expect(result).not.toContain("()");
   });
 
@@ -504,5 +505,139 @@ describe("montarNome", () => {
     expect(montarNome("Brasil", "Jogador", "2026", "", "", "regata")).toBe(
       "Regata Brasil 2026 Versão Jogador"
     );
+  });
+
+  it("handles Seleções gap format (1992/1994)", () => {
+    expect(montarNome("Brasil", "Retrô", "1992/1994", "", "", "camisa")).toBe(
+      "Camisa Brasil 1992/1994 Retrô"
+    );
+  });
+
+  it("handles Seleções gap format with localizacao", () => {
+    expect(montarNome("Brasil", "Retrô", "1992/1994", "", "Casa", "camisa")).toBe(
+      "Camisa Brasil 1992/1994 Retrô (Casa)"
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isRetro (from ProdutoForm)
+// ---------------------------------------------------------------------------
+describe("isRetro", () => {
+  // Clubes (isAno=false): limite 2021
+  it("returns false for current club season (2025/2026)", () => {
+    expect(isRetro("2025/2026", false)).toBe(false);
+  });
+
+  it("returns true for old club season (2020/2021)", () => {
+    expect(isRetro("2020/2021", false)).toBe(true);
+  });
+
+  it("returns true for club season exactly at cutoff (2021/2022)", () => {
+    expect(isRetro("2021/2022", false)).toBe(true);
+  });
+
+  it("returns false for club season just above cutoff (2022/2023)", () => {
+    expect(isRetro("2022/2023", false)).toBe(false);
+  });
+
+  it("handles short format for clubs (21/22 → retro)", () => {
+    expect(isRetro("21/22", false)).toBe(true);
+  });
+
+  it("handles short format for clubs (25/26 → not retro)", () => {
+    expect(isRetro("25/26", false)).toBe(false);
+  });
+
+  it("handles short format for clubs (98/99 → retro)", () => {
+    expect(isRetro("98/99", false)).toBe(true);
+  });
+
+  // Seleções (isAno=true): limite 2022
+  it("returns false for current Seleção year (2026)", () => {
+    expect(isRetro("2026", true)).toBe(false);
+  });
+
+  it("returns true for old Seleção year (2020)", () => {
+    expect(isRetro("2020", true)).toBe(true);
+  });
+
+  it("returns true for Seleção year exactly at cutoff (2022)", () => {
+    expect(isRetro("2022", true)).toBe(true);
+  });
+
+  it("returns false for Seleção year just above cutoff (2023)", () => {
+    expect(isRetro("2023", true)).toBe(false);
+  });
+
+  // Seleções com gap (1992/1994): usa o primeiro ano
+  it("returns true for Seleção gap format (1992/1994)", () => {
+    expect(isRetro("1992/1994", true)).toBe(true);
+  });
+
+  it("returns false for Seleção gap format (2024/2026)", () => {
+    expect(isRetro("2024/2026", true)).toBe(false);
+  });
+
+  it("uses first year for retro check in Seleção gap (2022/2024 → retro)", () => {
+    expect(isRetro("2022/2024", true)).toBe(true);
+  });
+
+  it("uses first year for retro check in Seleção gap (2023/2025 → not retro)", () => {
+    expect(isRetro("2023/2025", true)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseAnoTemporada (from Loja)
+// ---------------------------------------------------------------------------
+describe("parseAnoTemporada", () => {
+  it("parses full year format (2025/2026)", () => {
+    expect(parseAnoTemporada("2025/2026")).toBe(2025);
+  });
+
+  it("parses gap format (1992/1994)", () => {
+    expect(parseAnoTemporada("1992/1994")).toBe(1992);
+  });
+
+  it("parses short format (25/26)", () => {
+    expect(parseAnoTemporada("25/26")).toBe(2025);
+  });
+
+  it("parses short format for 90s (98/99)", () => {
+    expect(parseAnoTemporada("98/99")).toBe(1998);
+  });
+
+  it("parses single year (2026)", () => {
+    expect(parseAnoTemporada("2026")).toBe(2026);
+  });
+
+  it("returns 0 for invalid input", () => {
+    expect(parseAnoTemporada("abc")).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatarValor (from ProdutoForm)
+// ---------------------------------------------------------------------------
+describe("formatarValor", () => {
+  it("allows digits and slash for temporada format", () => {
+    expect(formatarValor("2025/2026")).toBe("2025/2026");
+  });
+
+  it("allows digits and slash for Seleção gap format", () => {
+    expect(formatarValor("1992/1994")).toBe("1992/1994");
+  });
+
+  it("allows single year for Seleções", () => {
+    expect(formatarValor("2026")).toBe("2026");
+  });
+
+  it("strips non-numeric characters except slash", () => {
+    expect(formatarValor("20a2b5/2c0d2e6")).toBe("2025/2026");
+  });
+
+  it("handles short format", () => {
+    expect(formatarValor("25/26")).toBe("25/26");
   });
 });

@@ -106,21 +106,22 @@ function getValorAtual(isAno: boolean): string {
   }
   const ano = new Date().getFullYear();
   const mes = new Date().getMonth() + 1;
-  const curto = ano % 100;
   if (mes >= 7) {
-    return `${curto}/${curto + 1}`;
+    return `${ano}/${ano + 1}`;
   }
-  return `${curto - 1}/${curto}`;
+  return `${ano - 1}/${ano}`;
 }
 
-function isRetro(valor: string, isAno: boolean): boolean {
-  if (isAno) {
-    return parseInt(valor) <= RETRO_ANO_SELECAO;
-  }
-  const [inicio] = valor.split("/").map(Number);
-  // Converte ano de 2 dígitos para 4 dígitos: >= 50 → 1900s, < 50 → 2000s
-  const anoCompleto = inicio >= 50 ? inicio + 1900 : inicio + 2000;
-  return anoCompleto <= 2021;
+export function isRetro(valor: string, isAno: boolean): boolean {
+  // Sempre usa o primeiro ano para determinar se é retrô
+  // Suporta: "2026", "1992/1994", "2025/2026", "25/26"
+  const first = valor.split("/")[0].trim();
+  const ano = parseInt(first, 10);
+  const anoCompleto = first.length <= 2
+    ? (ano >= 50 ? ano + 1900 : ano + 2000)
+    : ano;
+  const limite = isAno ? RETRO_ANO_SELECAO : 2021;
+  return anoCompleto <= limite;
 }
 
 export function montarNome(
@@ -149,10 +150,8 @@ function getTimesPorLiga(ligaNome: string): Time[] {
   }));
 }
 
-function formatarValor(value: string, isAno: boolean): string {
-  if (isAno) {
-    return value.replace(/[^0-9]/g, "");
-  }
+export function formatarValor(value: string): string {
+  // Permite dígitos e barra (Seleções aceita gap tipo 1992/1994 ou ano simples 2026)
   return value.replace(/[^0-9/]/g, "");
 }
 
@@ -683,8 +682,8 @@ export default function ProdutoForm({
         <input
           type="text"
           value={periodo}
-          onChange={(e) => setPeriodo(formatarValor(e.target.value, isAno))}
-          placeholder={isAno ? "ex: 2026" : "ex: 25/26"}
+          onChange={(e) => setPeriodo(formatarValor(e.target.value))}
+          placeholder={isAno ? "ex: 2026 ou 1992/1994" : "ex: 2025/2026"}
           className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
         />
       </div>
@@ -695,7 +694,7 @@ export default function ProdutoForm({
           {retro &&
             (isAno
               ? "(apenas Retrô para 2022 ou anterior)"
-              : "(apenas Retrô para 21/22 ou anterior)")}
+              : "(apenas Retrô para 2021/2022 ou anterior)")}
         </label>
         <select
           value={tipo}

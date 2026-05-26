@@ -164,49 +164,58 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
       <div className="grid grid-cols-2 sm:flex gap-2 mb-4">
         {timesDisponiveis.length > 0 && (
-          <select
-            value={filtroTime}
-            onChange={(e) => setFiltroTime(e.target.value)}
-            className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
-            aria-label="Filtrar por time"
-          >
-            <option value="">Todos os times</option>
-            {timesDisponiveis.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+          <label className="flex flex-col gap-0.5">
+            <span className="text-[10px] sm:text-xs text-text-muted font-medium pl-1">Time</span>
+            <select
+              value={filtroTime}
+              onChange={(e) => setFiltroTime(e.target.value)}
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
+              aria-label="Filtrar por time"
+            >
+              <option value="">Todos os times</option>
+              {timesDisponiveis.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
 
         {tiposDisponiveis.length > 0 && (
-          <select
-            value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value)}
-            className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
-            aria-label="Filtrar por tipo"
-          >
-            <option value="">Todos os tipos</option>
-            {tiposDisponiveis.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-            <option value="__feminino__">Tem versão feminina</option>
-          </select>
+          <label className="flex flex-col gap-0.5">
+            <span className="text-[10px] sm:text-xs text-text-muted font-medium pl-1">Tipo</span>
+            <select
+              value={filtroTipo}
+              onChange={(e) => setFiltroTipo(e.target.value)}
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
+              aria-label="Filtrar por tipo"
+            >
+              <option value="">Todos os tipos</option>
+              {tiposDisponiveis.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+              <option value="__feminino__">Tem versão feminina</option>
+            </select>
+          </label>
         )}
 
-        <select
-          value={ordenacao}
-          onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
-          className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
-          aria-label="Ordenar produtos"
-        >
-          <option value="time">Time / Nome</option>
-          <option value="preco-asc">Menor preço</option>
-          <option value="preco-desc">Maior preço</option>
-          <option value="categoria">Categoria</option>
-        </select>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[10px] sm:text-xs text-text-muted font-medium pl-1">Ordenar por</span>
+          <select
+            value={ordenacao}
+            onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
+            className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
+            aria-label="Ordenar produtos"
+          >
+            <option value="time">Time / Nome</option>
+            <option value="preco-asc">Menor preço</option>
+            <option value="preco-desc">Maior preço</option>
+            <option value="categoria">Categoria</option>
+          </select>
+        </label>
 
         {(filtroTime || filtroTipo) && (
           <button

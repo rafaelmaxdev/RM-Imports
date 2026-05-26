@@ -404,8 +404,29 @@ export default function ProdutoForm({
   produtos: DbProduto[];
   setProdutos: React.Dispatch<React.SetStateAction<DbProduto[]>>;
 }) {
-  const [timesPorLiga, setTimesPorLiga] = useState<Record<string, Time[]>>({});
-  const [loadingTimes, setLoadingTimes] = useState(true);
+  const CACHE_KEY = "yupoo_timesPorLiga";
+  const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+
+  const [timesPorLiga, setTimesPorLiga] = useState<Record<string, Time[]>>(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { data, ts } = JSON.parse(cached);
+        if (Date.now() - ts < CACHE_TTL) return data;
+      }
+    } catch {}
+    return {};
+  });
+  const [loadingTimes, setLoadingTimes] = useState(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { ts } = JSON.parse(cached);
+        if (Date.now() - ts < CACHE_TTL) return false;
+      }
+    } catch {}
+    return true;
+  });
 
   const [liga, setLiga] = useState("");
   const [time, setTime] = useState("");
@@ -458,6 +479,9 @@ export default function ProdutoForm({
       });
       setTimesPorLiga(mapa);
       setLoadingTimes(false);
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ data: mapa, ts: Date.now() }));
+      } catch {}
     }
 
     buscarTodos();

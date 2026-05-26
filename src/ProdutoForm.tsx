@@ -412,7 +412,7 @@ export default function ProdutoForm({
   produtos: DbProduto[];
   setProdutos: React.Dispatch<React.SetStateAction<DbProduto[]>>;
 }) {
-  const [timesPorLiga, setTimesPorLiga] = useState<Record<string, Time[]>>(() => {
+  const timesPorLiga: Record<string, Time[]> = useMemo(() => {
     const mapa: Record<string, Time[]> = {};
     ligas.forEach((l) => {
       if (l.url) {
@@ -421,8 +421,8 @@ export default function ProdutoForm({
       }
     });
     return mapa;
-  });
-  const [loadingTimes, setLoadingTimes] = useState(false);
+  }, []);
+  const loadingTimes = false;
 
   const [liga, setLiga] = useState("");
   const [time, setTime] = useState("");

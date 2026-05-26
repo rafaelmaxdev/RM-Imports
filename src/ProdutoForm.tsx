@@ -412,32 +412,17 @@ export default function ProdutoForm({
   produtos: DbProduto[];
   setProdutos: React.Dispatch<React.SetStateAction<DbProduto[]>>;
 }) {
-  const CACHE_KEY = "yupoo_timesPorLiga";
-  const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
-
-  function readCache(): Record<string, Time[]> | null {
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) {
-        const { data, ts } = JSON.parse(cached);
-        if (Date.now() - ts < CACHE_TTL) return data;
-      }
-    } catch {}
-    return null;
-  }
-
-  function writeCache(data: Record<string, Time[]>) {
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
-    } catch {}
-  }
-
   const [timesPorLiga, setTimesPorLiga] = useState<Record<string, Time[]>>(() => {
-    return readCache() ?? {};
+    const mapa: Record<string, Time[]> = {};
+    ligas.forEach((l) => {
+      if (l.url) {
+        const times = getTimesPorLiga(l.nome);
+        if (times.length > 0) mapa[l.nome] = times;
+      }
+    });
+    return mapa;
   });
-  const [loadingTimes, setLoadingTimes] = useState(() => {
-    return readCache() === null;
-  });
+  const [loadingTimes, setLoadingTimes] = useState(false);
 
   const [liga, setLiga] = useState("");
   const [time, setTime] = useState("");
@@ -469,26 +454,6 @@ export default function ProdutoForm({
       setPeriodo(getValorAtual(isAno));
     }
   }, [isAno]);
-
-  useEffect(() => {
-    if (readCache() !== null) return;
-
-    const mapa: Record<string, Time[]> = {};
-    ligas.forEach((l) => {
-      if (l.url) {
-        const times = getTimesPorLiga(l.nome);
-        if (times.length > 0) {
-          mapa[l.nome] = times;
-        }
-      }
-    });
-
-    if (Object.keys(mapa).length > 0) {
-      setTimesPorLiga(mapa);
-      writeCache(mapa);
-    }
-    setLoadingTimes(false);
-  }, []);
 
   const timesDaLiga = useMemo(() => {
     if (liga === "Seleções") {

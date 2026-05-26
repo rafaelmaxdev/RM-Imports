@@ -39,7 +39,7 @@ const NBA_FRANQUIAS = [
 const TIMES_POR_LIGA: Record<string, string[]> = {
   Brasileirão: [
     "Atlético Juventus", "Atlético Mineiro", "Atlético Paranaense", "Bahia", "Botafogo",
-    "Ceará Sporting", "Chapecoense", "Confiança", "Corinthians", "Coritiba", "Cruzeiro",
+    "Ceará", "Chapecoense", "Confiança", "Corinthians", "Coritiba", "Cruzeiro",
     "Cuiabá", "Flamengo", "Fluminense", "Fortaleza", "Gremio", "Internacional",
     "Nautico", "Palmeiras", "Paysandu", "Red Bull Bragantino", "Remo", "São Paulo",
     "Santa Cruz", "Santos", "Sport Recife", "Vasco da Gama", "Vitória",
@@ -74,13 +74,13 @@ const TIMES_POR_LIGA: Record<string, string[]> = {
   "Premier League": [
     "Arsenal", "Aston Villa", "Birmingham City", "Blackburn Rovers", "Brighton",
     "Chelsea", "Coventry City", "Crystal Palace", "Derby County", "Everton", "Fulham",
-    "Hull City", "Leeds United", "Leicester City", "LFC", "Lincoln City",
-    "Manchester City", "M-U", "Newcastle United", "Nottingham Forest", "Sheffield Wednesday",
-    "Southampton", "Sunderland", "Tottenham Hotspur", "West Ham United", "Wolves",
+    "Hull City", "Leeds United", "Leicester City",     "Liverpool", "Lincoln City",
+    "Manchester City",     "Manchester United", "Newcastle United", "Nottingham Forest", "Sheffield Wednesday",
+    "Southampton", "Sunderland", "Tottenham Hotspur",     "West Ham", "Wolves",
   ],
   "Serie A": [
-    "AC Milan", "Atalanta", "Bologna", "Brescia Calcio", "Cremonese", "Fiorentina",
-    "Genoa", "Inter Milan", "Juv", "Lazio", "Napoli", "Parma Calcio", "Pisa", "Roma",
+    "AC Milan", "Atalanta", "Bologna",     "Brescia", "Cremonese", "Fiorentina",
+    "Genoa", "Inter Milan",     "Juventus", "Lazio", "Napoli",     "Parma", "Pisa", "Roma",
     "Sampdoria", "Sassuolo", "SSC Bari", "Torino", "Venezia",
   ],
 };

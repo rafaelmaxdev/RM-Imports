@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import axios from "axios";
 import { supabase } from "./lib/supabase";
 import { addProduto, updateProduto, deleteProduto, parseImageUrls } from "./lib/db";
 import type { DbProduto } from "./lib/db";
@@ -35,6 +34,56 @@ const NBA_FRANQUIAS = [
   "Portland Trail Blazers", "Sacramento Kings", "San Antonio Spurs", "Toronto Raptors",
   "Utah Jazz", "Washington Wizards",
 ].sort((a, b) => a.localeCompare(b));
+
+// Times hardcoded extraídos diretamente da Yupoo — elimina fragilidade do scraper
+const TIMES_POR_LIGA: Record<string, string[]> = {
+  Brasileirão: [
+    "Atlético Juventus", "Atlético Mineiro", "Atlético Paranaense", "Bahia", "Botafogo",
+    "Ceará Sporting", "Chapecoense", "Confiança", "Corinthians", "Coritiba", "Cruzeiro",
+    "Cuiabá", "Flamengo", "Fluminense", "Fortaleza", "Gremio", "Internacional",
+    "Nautico", "Palmeiras", "Paysandu", "Red Bull Bragantino", "Remo", "São Paulo",
+    "Santa Cruz", "Santos", "Sport Recife", "Vasco da Gama", "Vitória",
+  ],
+  Bundesliga: [
+    "Augsburg", "Bayer Leverkusen", "Bayern Munich", "Borussia Dortmund",
+    "Borussia Monchengladbach", "Frankfurt", "Freiburg", "Hamburger SV", "Köln",
+    "MSV Duisburg", "Nurnberg FC", "RB Leipzig", "Rot-Weiss Essen", "Schalke 04",
+    "St. Pauli", "Werder Bremen", "Wolfsburg",
+  ],
+  Eredivisie: [
+    "AFC Ajax", "Feyenoord", "PSV Eindhoven",
+  ],
+  "La Liga": [
+    "Albacete", "Athletic Bilbao", "Atletico Madrid", "Barcelona", "Basque Country",
+    "Burgos", "Cadiz CF", "Cartagena", "Celta de Vigo", "Compostela", "Cordoba",
+    "Deportivo Alavés", "Deportivo La Coruna", "Elche", "Espanyol", "Getafe", "Girona",
+    "Granada", "Hércules", "Las Palmas", "Leganes", "Levante UD", "Malaga", "Mallorca",
+    "Osasuna", "Racing de Santander", "Rayo Vallecano", "Real Betis", "Real Madrid",
+    "Real Murcia", "Real Oviedo", "Real Sociedad", "Real Valladolid", "Sevilla",
+    "Sporting de Gijon", "Tenerife", "UD Almeria", "Valencia", "Villarreal", "Zaragoza",
+  ],
+  "Ligue 1": [
+    "AS Cannes", "Girondins Bordeaux", "Monaco", "OGC Nice", "Olympique de Marseille",
+    "Olympique lyonnais", "Paris FC", "PSG", "Stade Rennais",
+  ],
+  MLS: [
+    "Atlanta United FC", "Austin FC", "Charlotte FC", "D.C. United", "Inter Miami CF",
+    "LA Galaxy", "Los Angeles FC", "New York City FC", "New York Red Bulls",
+    "Orlando City SC", "San Diego FC",
+  ],
+  "Premier League": [
+    "Arsenal", "Aston Villa", "Birmingham City", "Blackburn Rovers", "Brighton",
+    "Chelsea", "Coventry City", "Crystal Palace", "Derby County", "Everton", "Fulham",
+    "Hull City", "Leeds United", "Leicester City", "LFC", "Lincoln City",
+    "Manchester City", "M-U", "Newcastle United", "Nottingham Forest", "Sheffield Wednesday",
+    "Southampton", "Sunderland", "Tottenham Hotspur", "West Ham United", "Wolves",
+  ],
+  "Serie A": [
+    "AC Milan", "Atalanta", "Bologna", "Brescia Calcio", "Cremonese", "Fiorentina",
+    "Genoa", "Inter Milan", "Juv", "Lazio", "Napoli", "Parma Calcio", "Pisa", "Roma",
+    "Sampdoria", "Sassuolo", "SSC Bari", "Torino", "Venezia",
+  ],
+};
 
 const ligas: Liga[] = [
   { nome: "Brasileirão", url: "/api/yupoo/categories/680738" },
@@ -90,59 +139,14 @@ export function montarNome(
   return `${pecaLabel} ${time} ${periodo} Versão ${tipo}${loc}`;
 }
 
-async function fetchTimes(url: string): Promise<Time[]> {
-  const { data } = await axios.get(url);
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(data, "text/html");
-
-  // Extract category ID from URL (e.g., "/api/yupoo/categories/680738" → "680738")
-  const categoryId = new URL(url, "https://x.yupoo.com").pathname.split("/").pop();
-
-  // Yupoo layout: try multiple selectors to find team links
-  // 1. Sidebar links grouped by <ul id="child_category_{id}"
-  // 2. Fallback: all .showheader__child_link on the page
-  // 3. Fallback: any <a> inside .category__list or .showheader__categories
-  // 4. Fallback: newer layout .categories__box-right-category-item
-  let elementos: NodeListOf<Element> | Element[] = [];
-
-  if (categoryId) {
-    const list = doc.querySelector(`#child_category_${categoryId}`);
-    if (list) {
-      elementos = list.querySelectorAll(".showheader__child_link");
-    }
-  }
-
-  // Fallback: try broader selectors if no elements found
-  if (elementos.length === 0) {
-    elementos = doc.querySelectorAll(".showheader__child_link");
-  }
-  if (elementos.length === 0) {
-    elementos = doc.querySelectorAll(".category__list a, .showheader__categories a");
-  }
-  if (elementos.length === 0) {
-    elementos = doc.querySelectorAll(".categories__box-right-category-item");
-  }
-  if (elementos.length === 0) {
-    // Last resort: find all links that look like category/team pages
-    const allLinks = doc.querySelectorAll("a[href*='/categories/']");
-    elementos = Array.from(allLinks).filter((el) => {
-      const text = el.textContent?.trim() || "";
-      // Filter out empty or very long links (likely navigation, not teams)
-      return text.length > 0 && text.length < 100;
-    });
-  }
-
-  const times = Array.from(elementos).map((el, i) => {
-    const nomeOriginal = el.textContent?.trim() || "";
-    const nome = normalizeNome(nomeOriginal);
-    return {
-      id: `${url}-${i}`,
-      nome,
-      href: (el as HTMLAnchorElement).getAttribute("href") || "",
-    };
-  });
-
-  return times.sort((a, b) => a.nome.localeCompare(b.nome));
+function getTimesPorLiga(ligaNome: string): Time[] {
+  const nomes = TIMES_POR_LIGA[ligaNome];
+  if (!nomes) return [];
+  return nomes.map((nome, i) => ({
+    id: `${ligaNome}-${i}`,
+    nome: normalizeNome(nome),
+    href: "",
+  }));
 }
 
 function formatarValor(value: string, isAno: boolean): string {
@@ -467,38 +471,23 @@ export default function ProdutoForm({
   }, [isAno]);
 
   useEffect(() => {
-    // Skip fetch if cache is still fresh
     if (readCache() !== null) return;
 
-    async function buscarTodos() {
-      const ligasComUrl = ligas.filter((l) => l.url);
-      const resultados = await Promise.allSettled(
-        ligasComUrl.map(async (l) => ({
-          nome: l.nome,
-          times: await fetchTimes(l.url),
-        }))
-      );
-
-      const mapa: Record<string, Time[]> = {};
-      let algumOk = false;
-      resultados.forEach((r, i) => {
-        if (r.status === "fulfilled" && r.value.times.length > 0) {
-          mapa[r.value.nome] = r.value.times;
-          algumOk = true;
-        } else if (r.status === "rejected") {
-          console.error(`Erro ao buscar times da liga "${ligasComUrl[i].nome}":`, r.reason);
+    const mapa: Record<string, Time[]> = {};
+    ligas.forEach((l) => {
+      if (l.url) {
+        const times = getTimesPorLiga(l.nome);
+        if (times.length > 0) {
+          mapa[l.nome] = times;
         }
-      });
-
-      // Only overwrite state/cache if we got at least some data
-      if (algumOk) {
-        setTimesPorLiga(mapa);
-        writeCache(mapa);
       }
-      setLoadingTimes(false);
-    }
+    });
 
-    buscarTodos();
+    if (Object.keys(mapa).length > 0) {
+      setTimesPorLiga(mapa);
+      writeCache(mapa);
+    }
+    setLoadingTimes(false);
   }, []);
 
   const timesDaLiga = useMemo(() => {

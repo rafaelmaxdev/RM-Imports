@@ -407,7 +407,7 @@ export default function ProdutoForm({
   const CACHE_KEY = "yupoo_timesPorLiga";
   const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
 
-  const [timesPorLiga, setTimesPorLiga] = useState<Record<string, Time[]>>(() => {
+  function readCache(): Record<string, Time[]> | null {
     try {
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
@@ -415,17 +415,20 @@ export default function ProdutoForm({
         if (Date.now() - ts < CACHE_TTL) return data;
       }
     } catch {}
-    return {};
+    return null;
+  }
+
+  function writeCache(data: Record<string, Time[]>) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+    } catch {}
+  }
+
+  const [timesPorLiga, setTimesPorLiga] = useState<Record<string, Time[]>>(() => {
+    return readCache() ?? {};
   });
   const [loadingTimes, setLoadingTimes] = useState(() => {
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) {
-        const { ts } = JSON.parse(cached);
-        if (Date.now() - ts < CACHE_TTL) return false;
-      }
-    } catch {}
-    return true;
+    return readCache() === null;
   });
 
   const [liga, setLiga] = useState("");
@@ -460,6 +463,9 @@ export default function ProdutoForm({
   }, [isAno]);
 
   useEffect(() => {
+    // Skip fetch if cache is still fresh
+    if (readCache() !== null) return;
+
     async function buscarTodos() {
       const ligasComUrl = ligas.filter((l) => l.url);
       const resultados = await Promise.allSettled(
@@ -470,18 +476,22 @@ export default function ProdutoForm({
       );
 
       const mapa: Record<string, Time[]> = {};
+      let algumOk = false;
       resultados.forEach((r, i) => {
-        if (r.status === "fulfilled") {
+        if (r.status === "fulfilled" && r.value.times.length > 0) {
           mapa[r.value.nome] = r.value.times;
-        } else {
+          algumOk = true;
+        } else if (r.status === "rejected") {
           console.error(`Erro ao buscar times da liga "${ligasComUrl[i].nome}":`, r.reason);
         }
       });
-      setTimesPorLiga(mapa);
+
+      // Only overwrite state/cache if we got at least some data
+      if (algumOk) {
+        setTimesPorLiga(mapa);
+        writeCache(mapa);
+      }
       setLoadingTimes(false);
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ data: mapa, ts: Date.now() }));
-      } catch {}
     }
 
     buscarTodos();

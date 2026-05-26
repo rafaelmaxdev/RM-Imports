@@ -233,18 +233,23 @@ export async function getPedidos(): Promise<import("../types").Order[]> {
 }
 
 export async function getPedidoById(id: string): Promise<import("../types").Order | null> {
-  const { data, error } = await supabase
-    .from("pedidos")
-    .select("*")
-    .eq("id", id)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null; // not found
-    throw error;
+  // Use the API route for unauthenticated access (RLS restricts direct Supabase reads)
+  try {
+    const res = await fetch(`/api/order/${encodeURIComponent(id)}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`Failed to fetch order: ${res.status}`);
+    const data = await res.json();
+    return {
+      ...data,
+      itens: typeof data.itens === "string" ? JSON.parse(data.itens) : data.itens,
+      endereco: data.endereco
+        ? (typeof data.endereco === "string" ? JSON.parse(data.endereco) : data.endereco)
+        : undefined,
+    };
+  } catch (err) {
+    console.error("Error fetching order via API:", err);
+    return null;
   }
-  if (!data) return null;
-  return dbPedidoToOrder(data as DbPedido);
 }
 
 export async function updatePedidoStatus(id: string, status: string): Promise<void> {
@@ -253,7 +258,13 @@ export async function updatePedidoStatus(id: string, status: string): Promise<vo
     .update({ status })
     .eq("id", id);
 
-  if (error) throw error;
+  if (error) {
+    // Provide user-friendly message for status transition violations
+    if (error.message?.includes("Invalid status transition") || error.message?.includes("Invalid initial status")) {
+      throw new Error(error.message);
+    }
+    throw error;
+  }
 }
 
 export async function updatePedidoAdminOrder(id: string, isAdmin: boolean): Promise<void> {
@@ -271,7 +282,12 @@ export async function deletePedido(id: string): Promise<void> {
     .delete()
     .eq("id", id);
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === "42501" || error.message?.includes("policy") || error.message?.includes("RLS")) {
+      throw new Error("Apenas pedidos cancelados podem ser excluídos.");
+    }
+    throw error;
+  }
 }
 
 // ── Pacotes ──
@@ -310,7 +326,7 @@ function dbPacoteToPacote(db: DbPacote): Pacote {
 
 export async function createPacote(pedido_ids: string[]): Promise<Pacote> {
   const row = {
-    status: "enviado_fornecedor",
+    status: "pago",
     custo: null,
     frete: null,
     taxa_importacao: null,
@@ -356,7 +372,12 @@ export async function updatePacoteFinanceiro(
     .update(financeiro)
     .eq("id", id);
 
-  if (error) throw error;
+  if (error) {
+    if (error.message?.includes("chk_") || error.message?.includes("non_negative") || error.message?.includes("check constraint")) {
+      throw new Error("Valores financeiros não podem ser negativos.");
+    }
+    throw error;
+  }
 }
 
 export async function removePedidoFromPacote(pacoteId: string, pedidoId: string): Promise<Pacote> {
@@ -370,6 +391,11 @@ export async function removePedidoFromPacote(pacoteId: string, pedidoId: string)
   if (fetchError) throw fetchError;
   if (!pacote) throw new Error("Pacote não encontrado");
 
+  // Check if pacote is already delivered
+  if (pacote.status === "entregue") {
+    throw new Error("Não é possível remover pedidos de um pacote já entregue.");
+  }
+
   const currentIds: string[] = typeof pacote.pedido_ids === "string" ? JSON.parse(pacote.pedido_ids) : pacote.pedido_ids;
   const newIds = currentIds.filter((id: string) => id !== pedidoId);
 
@@ -380,7 +406,12 @@ export async function removePedidoFromPacote(pacoteId: string, pedidoId: string)
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.message?.includes("entregue") || error.message?.includes("delivered")) {
+      throw new Error("Não é possível modificar pedidos de um pacote já entregue.");
+    }
+    throw error;
+  }
   return dbPacoteToPacote(data as DbPacote);
 }
 
@@ -390,5 +421,10 @@ export async function deletePacote(id: string): Promise<void> {
     .delete()
     .eq("id", id);
 
-  if (error) throw error;
+  if (error) {
+    if (error.message?.includes("entregue") || error.message?.includes("delivered")) {
+      throw new Error("Não é possível excluir um pacote já entregue.");
+    }
+    throw error;
+  }
 }

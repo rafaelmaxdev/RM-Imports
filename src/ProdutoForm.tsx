@@ -98,15 +98,34 @@ async function fetchTimes(url: string): Promise<Time[]> {
   // Extract category ID from URL (e.g., "/api/yupoo/categories/680738" → "680738")
   const categoryId = new URL(url, "https://x.yupoo.com").pathname.split("/").pop();
 
-  // New Yupoo layout: sidebar links grouped by <ul id="child_category_{id}">
-  let elementos: NodeListOf<Element>;
+  // Yupoo layout: try multiple selectors to find team links
+  // 1. Sidebar links grouped by <ul id="child_category_{id}">
+  // 2. Fallback: all .showheader__child_link on the page
+  // 3. Fallback: any <a> inside .category__list or .showheader__categories
+  let elementos: NodeListOf<Element> | Element[] = [];
+
   if (categoryId) {
     const list = doc.querySelector(`#child_category_${categoryId}`);
-    elementos = list
-      ? list.querySelectorAll(".showheader__child_link")
-      : doc.querySelectorAll(".showheader__child_link");
-  } else {
+    if (list) {
+      elementos = list.querySelectorAll(".showheader__child_link");
+    }
+  }
+
+  // Fallback: try broader selectors if no elements found
+  if (elementos.length === 0) {
     elementos = doc.querySelectorAll(".showheader__child_link");
+  }
+  if (elementos.length === 0) {
+    elementos = doc.querySelectorAll(".category__list a, .showheader__categories a");
+  }
+  if (elementos.length === 0) {
+    // Last resort: find all links that look like category/team pages
+    const allLinks = doc.querySelectorAll("a[href*='/categories/']");
+    elementos = Array.from(allLinks).filter((el) => {
+      const text = el.textContent?.trim() || "";
+      // Filter out empty or very long links (likely navigation, not teams)
+      return text.length > 0 && text.length < 100;
+    });
   }
 
   const times = Array.from(elementos).map((el, i) => {
@@ -421,26 +440,24 @@ export default function ProdutoForm({
 
   useEffect(() => {
     async function buscarTodos() {
-      try {
-        const resultados = await Promise.all(
-          ligas
-            .filter((l) => l.url)
-            .map(async (l) => ({
-              nome: l.nome,
-              times: await fetchTimes(l.url),
-            }))
-        );
+      const ligasComUrl = ligas.filter((l) => l.url);
+      const resultados = await Promise.allSettled(
+        ligasComUrl.map(async (l) => ({
+          nome: l.nome,
+          times: await fetchTimes(l.url),
+        }))
+      );
 
-        const mapa: Record<string, Time[]> = {};
-        resultados.forEach((r) => {
-          mapa[r.nome] = r.times;
-        });
-        setTimesPorLiga(mapa);
-      } catch {
-        console.error("Erro ao buscar categorias");
-      } finally {
-        setLoadingTimes(false);
-      }
+      const mapa: Record<string, Time[]> = {};
+      resultados.forEach((r, i) => {
+        if (r.status === "fulfilled") {
+          mapa[r.value.nome] = r.value.times;
+        } else {
+          console.error(`Erro ao buscar times da liga "${ligasComUrl[i].nome}":`, r.reason);
+        }
+      });
+      setTimesPorLiga(mapa);
+      setLoadingTimes(false);
     }
 
     buscarTodos();

@@ -106,11 +106,21 @@ export default function AdminOrders() {
       } else {
         // No MP payment ID — just update status (manual payment)
         if (!confirm(`Alterar status para "${label}"? (Pedido sem pagamento no Mercado Pago)`)) return;
-        await updatePedidoStatus(id, newStatus);
+        try {
+          await updatePedidoStatus(id, newStatus);
+        } catch (err: any) {
+          alert(err.message || "Erro ao atualizar status do pedido.");
+          return;
+        }
       }
     } else {
       if (!confirm(`Alterar status para "${label}"?`)) return;
-      await updatePedidoStatus(id, newStatus);
+      try {
+        await updatePedidoStatus(id, newStatus);
+      } catch (err: any) {
+        alert(err.message || "Erro ao atualizar status do pedido.");
+        return;
+      }
     }
 
     if (["entregue", "cancelado", "reembolsado"].includes(newStatus)) {
@@ -121,9 +131,19 @@ export default function AdminOrders() {
   }
 
   async function handleDelete(id: string) {
+    const order = orders.find((o) => o.id === id);
+    if (!order) return;
+    if (order.status !== "cancelado") {
+      alert("Apenas pedidos cancelados podem ser excluídos. Cancele o pedido primeiro.");
+      return;
+    }
     if (!confirm(`Excluir pedido ${id}? Esta ação não pode ser desfeita.`)) return;
-    await deletePedido(id);
-    setOrders((prev) => prev.filter((o) => o.id !== id));
+    try {
+      await deletePedido(id);
+      setOrders((prev) => prev.filter((o) => o.id !== id));
+    } catch (err: any) {
+      alert(err.message || "Erro ao excluir pedido.");
+    }
   }
 
   if (loading) {
@@ -218,13 +238,15 @@ export default function AdminOrders() {
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="font-bold text-lg text-accent">{formatarMoeda(order.total)}</div>
-                      <button
-                        className="bg-none border-none text-text-muted cursor-pointer text-lg leading-none hover:text-accent transition-colors"
-                        onClick={(e) => { e.stopPropagation(); handleDelete(order.id); }}
-                        title="Excluir pedido"
-                      >
-                        ✕
-                      </button>
+                      {order.status === "cancelado" && (
+                        <button
+                          className="bg-none border-none text-text-muted cursor-pointer text-lg leading-none hover:text-red-500 transition-colors"
+                          onClick={(e) => { e.stopPropagation(); handleDelete(order.id); }}
+                          title="Excluir pedido (apenas cancelados)"
+                        >
+                          ✕
+                        </button>
+                      )}
                       <span className={`text-text-muted text-sm transition-transform ${isExpanded ? "rotate-180" : ""}`}>▼</span>
                     </div>
                   </div>

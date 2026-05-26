@@ -188,7 +188,7 @@ create policy "Apenas autenticados podem alterar config"
 -- ============================================================
 create table if not exists pacotes (
   id uuid default gen_random_uuid() primary key,
-  status text not null default 'enviado_fornecedor',
+  status text not null default 'pago',
   custo numeric,
   frete numeric,
   taxa_importacao numeric,
@@ -215,3 +215,234 @@ create policy "Apenas autenticados podem atualizar pacotes"
 create policy "Apenas autenticados podem deletar pacotes"
   on pacotes for delete
   using (auth.role() = 'authenticated');
+
+-- ============================================================
+-- SEGURANÇA: Correções e triggers
+-- Execute CADA COMANDO SEPARADAMENTE no SQL Editor do Supabase.
+-- ============================================================
+
+-- ────────────────────────────────────────────────────────────
+-- 1. FIX PEDIDOS RLS — PII leak
+-- Atualmente QUALQUER UM pode ler todos os pedidos (incluindo PII).
+-- Substituir por: apenas autenticados podem ler.
+-- A API route /api/order/:id já existe para acesso não autenticado.
+-- ────────────────────────────────────────────────────────────
+
+-- Remover a policy antiga (se existir) que permite leitura pública
+DROP POLICY IF EXISTS "Qualquer um pode ler pedidos" ON pedidos;
+
+-- Criar policy restritiva: apenas autenticados podem ler pedidos
+CREATE POLICY "Apenas autenticados podem ler pedidos"
+  ON pedidos FOR SELECT
+  USING (auth.role() = 'authenticated');
+
+-- ────────────────────────────────────────────────────────────
+-- 2. PEDIDO STATUS TRANSITION TRIGGER
+-- Garante que transições de status sigam o fluxo permitido.
+-- ────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION check_pedido_status_transition()
+RETURNS trigger AS $$
+DECLARE
+  allowed_transitions text[];
+BEGIN
+  allowed_transitions := ARRAY[
+    'pendente→pago',
+    'pendente→cancelado',
+    'pago→reembolsado',
+    'pago→cancelado',
+    'pago→enviado_fornecedor',
+    'enviado_fornecedor→em_producao',
+    'em_producao→a_caminho',
+    'a_caminho→em_estoque',
+    'em_estoque→em_entrega',
+    'em_entrega→entregue'
+  ];
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.status NOT IN ('pendente', 'pago') THEN
+      RAISE EXCEPTION 'Invalid initial status: %. Must be "pendente" or "pago".', NEW.status;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    IF OLD.status = NEW.status THEN
+      RETURN NEW;
+    END IF;
+
+    IF NOT (OLD.status || '→' || NEW.status = ANY(allowed_transitions)) THEN
+      RAISE EXCEPTION 'Invalid status transition: % → %. Allowed transitions: %',
+        OLD.status, NEW.status, array_to_string(allowed_transitions, ', ');
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_pedido_status_transition ON pedidos;
+CREATE TRIGGER trg_pedido_status_transition
+  BEFORE INSERT OR UPDATE OF status ON pedidos
+  FOR EACH ROW
+  EXECUTE FUNCTION check_pedido_status_transition();
+
+-- ────────────────────────────────────────────────────────────
+-- 3. PACOTE SHIRT LIMIT TRIGGER
+-- Limita cada pacote a no máximo 8 camisas (soma de itens dos pedidos).
+-- ────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION check_pacote_shirt_limit()
+RETURNS trigger AS $$
+DECLARE
+  total_shirts int;
+  pedido_id text;
+  pedido_itens jsonb;
+BEGIN
+  -- On INSERT, check total shirts in the new pacote
+  IF TG_OP = 'INSERT' THEN
+    total_shirts := 0;
+    FOR pedido_id IN SELECT jsonb_array_elements_text(NEW.pedido_ids)
+    LOOP
+      SELECT itens INTO pedido_itens FROM pedidos WHERE id = pedido_id;
+      IF pedido_itens IS NOT NULL THEN
+        total_shirts := total_shirts + jsonb_array_length(pedido_itens);
+      END IF;
+    END LOOP;
+    IF total_shirts > 8 THEN
+      RAISE EXCEPTION 'Pacote excede o limite de 8 camisas (total: %).', total_shirts;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  -- On UPDATE, check total shirts if pedido_ids changed
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.pedido_ids IS DISTINCT FROM OLD.pedido_ids THEN
+      total_shirts := 0;
+      FOR pedido_id IN SELECT jsonb_array_elements_text(NEW.pedido_ids)
+      LOOP
+        SELECT itens INTO pedido_itens FROM pedidos WHERE id = pedido_id;
+        IF pedido_itens IS NOT NULL THEN
+          total_shirts := total_shirts + jsonb_array_length(pedido_itens);
+        END IF;
+      END LOOP;
+      IF total_shirts > 8 THEN
+        RAISE EXCEPTION 'Pacote excede o limite de 8 camisas (total: %).', total_shirts;
+      END IF;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_pacote_shirt_limit ON pacotes;
+CREATE TRIGGER trg_pacote_shirt_limit
+  BEFORE INSERT OR UPDATE OF pedido_ids ON pacotes
+  FOR EACH ROW
+  EXECUTE FUNCTION check_pacote_shirt_limit();
+
+-- ────────────────────────────────────────────────────────────
+-- 4. CHECK CONSTRAINTS FOR FINANCEIRO
+-- Valida que custo, frete e taxa_importacao são >= 0 quando definidos.
+-- ────────────────────────────────────────────────────────────
+
+ALTER TABLE pacotes ADD CONSTRAINT chk_custo_non_negative
+  CHECK (custo IS NULL OR custo >= 0);
+
+ALTER TABLE pacotes ADD CONSTRAINT chk_frete_non_negative
+  CHECK (frete IS NULL OR frete >= 0);
+
+ALTER TABLE pacotes ADD CONSTRAINT chk_taxa_importacao_non_negative
+  CHECK (taxa_importacao IS NULL OR taxa_importacao >= 0);
+
+-- ────────────────────────────────────────────────────────────
+-- 5. DELETE PEDIDO STATUS GUARD RLS
+-- Impede exclusão de pedidos que não estejam em status "cancelado".
+-- Apenas pedidos cancelados podem ser excluídos.
+-- ────────────────────────────────────────────────────────────
+
+-- Remover a policy antiga que permite qualquer autenticado deletar
+DROP POLICY IF EXISTS "Apenas autenticados podem deletar pedidos" ON pedidos;
+
+-- Criar policy que só permite deletar pedidos cancelados
+CREATE POLICY "Apenas autenticados podem deletar pedidos cancelados"
+  ON pedidos FOR DELETE
+  USING (auth.role() = 'authenticated' AND status = 'cancelado');
+
+-- ────────────────────────────────────────────────────────────
+-- 6. PACOTE REMOVE-FROM-DELIVERED TRIGGER
+-- Impede remover pedidos de pacotes já entregues.
+-- ────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION check_pacote_not_delivered()
+RETURNS trigger AS $$
+BEGIN
+  -- On UPDATE, if status is 'entregue', prevent changes to pedido_ids
+  IF TG_OP = 'UPDATE' THEN
+    IF OLD.status = 'entregue' AND NEW.pedido_ids IS DISTINCT FROM OLD.pedido_ids THEN
+      RAISE EXCEPTION 'Não é possível modificar pedidos de um pacote já entregue.';
+    END IF;
+  END IF;
+
+  -- On DELETE, prevent deleting a delivered pacote
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.status = 'entregue' THEN
+      RAISE EXCEPTION 'Não é possível excluir um pacote já entregue.';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_pacote_not_delivered ON pacotes;
+CREATE TRIGGER trg_pacote_not_delivered
+  BEFORE UPDATE OF pedido_ids ON pacotes
+  FOR EACH ROW
+  EXECUTE FUNCTION check_pacote_not_delivered();
+
+-- ────────────────────────────────────────────────────────────
+-- 7. PEDIDOS VALID STATUS CHECK CONSTRAINT
+-- Garante que o status do pedido seja um valor válido.
+-- ────────────────────────────────────────────────────────────
+
+ALTER TABLE pedidos ADD CONSTRAINT chk_pedido_status_valid
+  CHECK (status IN (
+    'pendente',
+    'pago',
+    'enviado_fornecedor',
+    'em_producao',
+    'a_caminho',
+    'em_estoque',
+    'em_entrega',
+    'entregue',
+    'cancelado',
+    'reembolsado'
+  ));
+
+-- ────────────────────────────────────────────────────────────
+-- 8. PACOTES VALID STATUS CHECK CONSTRAINT
+-- Garante que o status do pacote seja um valor válido.
+-- ────────────────────────────────────────────────────────────
+
+ALTER TABLE pacotes ADD CONSTRAINT chk_pacote_status_valid
+  CHECK (status IN (
+    'pago',
+    'enviado_fornecedor',
+    'em_producao',
+    'a_caminho',
+    'em_estoque',
+    'em_entrega',
+    'entregue'
+  ));
+
+-- ────────────────────────────────────────────────────────────
+-- 9. PEDIDOS TOTAL NON-NEGATIVE CHECK CONSTRAINT
+-- Garante que o total do pedido seja >= 0.
+-- ────────────────────────────────────────────────────────────
+
+ALTER TABLE pedidos ADD CONSTRAINT chk_pedido_total_non_negative
+  CHECK (total >= 0);

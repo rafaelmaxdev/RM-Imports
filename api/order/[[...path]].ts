@@ -11,9 +11,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { id } = req.query;
+  // Extract order ID from path: /api/order/UL-XXXX
+  const { path } = req.query;
+  const id = Array.isArray(path) ? path[0] : path;
 
-  if (!id || typeof id !== "string") {
+  if (!id) {
     return res.status(400).json({ error: "Missing order ID" });
   }
 

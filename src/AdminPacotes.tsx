@@ -34,7 +34,9 @@ export default function AdminPacotes() {
       setLoading(true);
       const [all, pacotesData, prods] = await Promise.all([getPedidos(), getPacotes(), getProdutos()]);
       setAllOrders(all);
-      setOrders(all.filter((o) => o.status === "pago"));
+      // Only show "pago" orders that are NOT already in a pacote
+      const inPacote = new Set(pacotesData.flatMap((p) => p.pedido_ids));
+      setOrders(all.filter((o) => o.status === "pago" && !inPacote.has(o.id)));
       setPacotes(pacotesData);
       setProdutos(prods);
     } catch (err) {
@@ -125,33 +127,27 @@ export default function AdminPacotes() {
 
   async function handleSend() {
     if (selectedOrders.length === 0) return;
-
-    const items = selectedOrders.flatMap((o) => o.itens);
     setSending(true);
-    setSharing({
-      items,
-      index: 0,
-      onDone: async () => {
-        try {
-          // Update all orders to enviado_fornecedor
-          await Promise.all(selectedOrders.map((o) => updatePedidoStatus(o.id, "enviado_fornecedor")));
+    try {
+      // Create pacote in DB — orders stay as "pago", sharing happens when advancing to "enviado_fornecedor"
+      const novoPacote = await createPacote(selectedOrders.map((o) => o.id));
 
-          // Create pacote in DB
-          const novoPacote = await createPacote(selectedOrders.map((o) => o.id));
-
-          setOrders((prev) => prev.filter((o) => !selectedIds.has(o.id)));
-          setSelectedIds(new Set());
-          setStep("select");
-          setPacotes((prev) => [novoPacote, ...prev]);
-          setTab("pacotes");
-        } catch (err) {
-          console.error("Erro ao criar pacote:", err);
-          alert("Erro ao criar pacote. Verifique manualmente.");
-        }
-        setSharing(null);
-        setSending(false);
-      },
-    });
+      // Remove orders from the "pago" list (they're now in a pacote)
+      setOrders((prev) => prev.filter((o) => !selectedIds.has(o.id)));
+      setSelectedIds(new Set());
+      setStep("select");
+      setPacotes((prev) => [novoPacote, ...prev]);
+      setTab("pacotes");
+    } catch (err: any) {
+      console.error("Erro ao criar pacote:", err);
+      const msg = err?.message || "Erro ao criar pacote. Verifique manualmente.";
+      if (msg.includes("8 camisas") || msg.includes("limite")) {
+        alert(`Erro: ${msg}`);
+      } else {
+        alert(msg);
+      }
+    }
+    setSending(false);
   }
 
   async function handleAdvancePackage(pacote: Pacote) {
@@ -178,9 +174,9 @@ export default function AdminPacotes() {
               setPacotes((prev) =>
                 prev.map((p) => p.id === pacote.id ? { ...p, status: nextStatus } : p)
               );
-            } catch (err) {
+            } catch (err: any) {
               console.error("Erro ao atualizar status:", err);
-              alert("Erro ao atualizar status. Verifique manualmente.");
+              alert(err?.message || "Erro ao atualizar status. Verifique manualmente.");
             }
             setSharing(null);
           },
@@ -198,9 +194,9 @@ export default function AdminPacotes() {
       setPacotes((prev) =>
         prev.map((p) => p.id === pacote.id ? { ...p, status: nextStatus } : p)
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro ao atualizar status:", err);
-      alert("Erro ao atualizar status. Verifique manualmente.");
+      alert(err?.message || "Erro ao atualizar status. Verifique manualmente.");
     }
   }
 
@@ -218,9 +214,9 @@ export default function AdminPacotes() {
       setPacotes((prev) =>
         prev.map((p) => p.id === pacote.id ? { ...p, status: prevStatus } : p)
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro ao voltar status:", err);
-      alert("Erro ao voltar status. Verifique manualmente.");
+      alert(err?.message || "Erro ao voltar status. Verifique manualmente.");
     }
   }
 
@@ -244,9 +240,9 @@ export default function AdminPacotes() {
     try {
       const updated = await removePedidoFromPacote(pacoteId, pedidoId);
       setPacotes((prev) => prev.map((p) => p.id === pacoteId ? updated : p));
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro ao remover pedido do pacote:", err);
-      alert("Erro ao remover pedido do pacote.");
+      alert(err.message || "Erro ao remover pedido do pacote.");
     }
   }
 
@@ -255,9 +251,9 @@ export default function AdminPacotes() {
     try {
       await deletePacote(pacoteId);
       setPacotes((prev) => prev.filter((p) => p.id !== pacoteId));
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro ao excluir pacote:", err);
-      alert("Erro ao excluir pacote.");
+      alert(err?.message || "Erro ao excluir pacote.");
     }
   }
 
@@ -365,7 +361,7 @@ export default function AdminPacotes() {
             disabled={sending}
             className="px-6 py-3 bg-green-600 text-white rounded-md font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {sending ? "Enviando..." : "✓ Confirmar e Enviar ao Fornecedor"}
+            {sending ? "Criando..." : "✓ Confirmar Pacote"}
           </button>
         </div>
       </div>

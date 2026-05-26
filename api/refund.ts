@@ -30,6 +30,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
+    // Verify admin role via app_metadata
+    const role = user.app_metadata?.role;
+    if (role !== "admin") {
+      return res.status(403).json({ error: "Forbidden: admin role required" });
+    }
+
     const { orderId } = req.body as { orderId: string };
 
     if (!orderId) {

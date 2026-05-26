@@ -99,9 +99,10 @@ async function fetchTimes(url: string): Promise<Time[]> {
   const categoryId = new URL(url, "https://x.yupoo.com").pathname.split("/").pop();
 
   // Yupoo layout: try multiple selectors to find team links
-  // 1. Sidebar links grouped by <ul id="child_category_{id}">
+  // 1. Sidebar links grouped by <ul id="child_category_{id}"
   // 2. Fallback: all .showheader__child_link on the page
   // 3. Fallback: any <a> inside .category__list or .showheader__categories
+  // 4. Fallback: newer layout .categories__box-right-category-item
   let elementos: NodeListOf<Element> | Element[] = [];
 
   if (categoryId) {
@@ -117,6 +118,9 @@ async function fetchTimes(url: string): Promise<Time[]> {
   }
   if (elementos.length === 0) {
     elementos = doc.querySelectorAll(".category__list a, .showheader__categories a");
+  }
+  if (elementos.length === 0) {
+    elementos = doc.querySelectorAll(".categories__box-right-category-item");
   }
   if (elementos.length === 0) {
     // Last resort: find all links that look like category/team pages

@@ -23,7 +23,18 @@ const CATEGORIAS = [
   "Seleções",
 ].sort((a, b) => (a === "Todas" ? -1 : b === "Todas" ? 1 : a.localeCompare(b)));
 
-type Ordenacao = "time" | "preco-asc" | "preco-desc" | "categoria";
+type Ordenacao = "time" | "preco-asc" | "preco-desc" | "categoria" | "temporada-asc" | "temporada-desc";
+
+/** Converte "25/26" → 2025, "98/99" → 1998, "2026" → 2026 */
+function parseAnoTemporada(t: string): number {
+  const slash = t.indexOf("/");
+  if (slash === -1) {
+    const n = parseInt(t, 10);
+    return isNaN(n) ? 0 : n;
+  }
+  const first = parseInt(t.slice(0, slash), 10);
+  return first >= 50 ? 1900 + first : 2000 + first;
+}
 
 export default function Loja({ produtos, config }: { produtos: DbProduto[]; config: LojaConfig }) {
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("Todas");
@@ -100,6 +111,12 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       case "categoria":
         res.sort((a, b) => a.tipo.localeCompare(b.tipo) || a.time.localeCompare(b.time) || a.nome.localeCompare(b.nome));
         break;
+      case "temporada-asc":
+        res.sort((a, b) => parseAnoTemporada(a.temporada) - parseAnoTemporada(b.temporada) || a.time.localeCompare(b.time) || a.nome.localeCompare(b.nome));
+        break;
+      case "temporada-desc":
+        res.sort((a, b) => parseAnoTemporada(b.temporada) - parseAnoTemporada(a.temporada) || a.time.localeCompare(b.time) || a.nome.localeCompare(b.nome));
+        break;
     }
 
     return res;
@@ -162,7 +179,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
         ))}
       </nav>
 
-      <div className="grid grid-cols-2 sm:flex gap-2 mb-4">
+      <div className="grid grid-cols-2 sm:flex gap-1 sm:gap-2 my-4">
         {timesDisponiveis.length > 0 && (
           <label className="flex flex-col gap-0.5">
             <span className="text-[10px] sm:text-xs text-text-muted font-medium pl-1">Time</span>
@@ -214,6 +231,8 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
             <option value="preco-asc">Menor preço</option>
             <option value="preco-desc">Maior preço</option>
             <option value="categoria">Categoria</option>
+            <option value="temporada-asc">Temp. mais antiga</option>
+            <option value="temporada-desc">Temp. mais recente</option>
           </select>
         </label>
 

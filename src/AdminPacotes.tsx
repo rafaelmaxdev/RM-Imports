@@ -132,17 +132,22 @@ export default function AdminPacotes() {
       items,
       index: 0,
       onDone: async () => {
-        // Update all orders to enviado_fornecedor
-        await Promise.all(selectedOrders.map((o) => updatePedidoStatus(o.id, "enviado_fornecedor")));
+        try {
+          // Update all orders to enviado_fornecedor
+          await Promise.all(selectedOrders.map((o) => updatePedidoStatus(o.id, "enviado_fornecedor")));
 
-        // Create pacote in DB
-        const novoPacote = await createPacote(selectedOrders.map((o) => o.id));
+          // Create pacote in DB
+          const novoPacote = await createPacote(selectedOrders.map((o) => o.id));
 
-        setOrders((prev) => prev.filter((o) => !selectedIds.has(o.id)));
-        setSelectedIds(new Set());
-        setStep("select");
-        setPacotes((prev) => [novoPacote, ...prev]);
-        setTab("pacotes");
+          setOrders((prev) => prev.filter((o) => !selectedIds.has(o.id)));
+          setSelectedIds(new Set());
+          setStep("select");
+          setPacotes((prev) => [novoPacote, ...prev]);
+          setTab("pacotes");
+        } catch (err) {
+          console.error("Erro ao criar pacote:", err);
+          alert("Erro ao criar pacote. Verifique manualmente.");
+        }
         setSharing(null);
         setSending(false);
       },

@@ -643,6 +643,49 @@ export default function AdminPacotes() {
         </>
       )}
 
+      {/* ── Tab: Histórico (pacotes entregues + financeiro) ── */}
+      {tab === "historico" && (
+        <>
+          {deliveredPacotes.length === 0 ? (
+            <div className="text-center py-16 text-text-muted">
+              <p className="text-4xl mb-4">📊</p>
+              <p>Nenhum pacote entregue ainda.</p>
+              <p className="text-sm mt-2">Os pacotes entregues aparecerão aqui com o resumo financeiro.</p>
+            </div>
+          ) : (
+            <>
+              {/* Profit summary at top */}
+              <ProfitSummary pacotes={deliveredPacotes} allOrders={allOrders} />
+
+              {/* Delivered packages list */}
+              <div className="flex flex-col gap-4 mt-6">
+                {(showAllHistorico ? deliveredPacotes : deliveredPacotes.slice(0, 5)).map((pacote) => (
+                  <DeliveredPacoteCard
+                    key={pacote.id}
+                    pacote={pacote}
+                    allOrders={allOrders}
+                    onSaveFinanceiro={handleSaveFinanceiro}
+                    onRemovePedido={handleRemovePedido}
+                    onDeletePacote={handleDeletePacote}
+                  />
+                ))}
+              </div>
+
+              {deliveredPacotes.length > 5 && (
+                <div className="text-center mt-4">
+                  <button
+                    className="px-4 py-2 text-sm font-semibold text-accent hover:underline cursor-pointer"
+                    onClick={() => setShowAllHistorico(!showAllHistorico)}
+                  >
+                    {showAllHistorico ? "Mostrar menos" : `Mostrar mais (${deliveredPacotes.length - 5} restantes)`}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
       {/* ── Copied toast ── */}
       {copied && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-semibold z-50 animate-toast-in">

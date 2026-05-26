@@ -215,8 +215,8 @@ export const TAMANHOS = ["P", "M", "G", "GG", "G1", "G2", "G3"];
 /** Tamanhos disponíveis por tipo de produto */
 export const TAMANHOS_POR_TIPO: Record<string, string[]> = {
   "Torcedor": ["P", "M", "G", "GG", "G1", "G2", "G3"],
-  "Manga Longa": ["P", "M", "G", "GG", "G1", "G2", "G3"],
-  "Goleiro": ["P", "M", "G", "GG", "G1", "G2", "G3"],
+  "Manga Longa": ["P", "M", "G", "GG", "G1"],
+  "Goleiro": ["P", "M", "G", "GG", "G1"],
   "Jogador": ["P", "M", "G", "GG", "G1", "G2", "G3"],
   "Retrô": ["P", "M", "G", "GG", "G1"],
   "Treinamento": ["P", "M", "G", "GG", "G1"],

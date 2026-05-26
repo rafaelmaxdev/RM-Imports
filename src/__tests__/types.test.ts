@@ -496,6 +496,12 @@ describe("montarNome", () => {
     );
   });
 
+  it("includes Terceira localizacao", () => {
+    expect(montarNome("Flamengo", "Torcedor", "2025/2026", "", "Terceira", "camisa")).toBe(
+      "Camisa Flamengo 2025/2026 Versão Torcedor (Terceira)"
+    );
+  });
+
   it("does not add empty parentheses when localizacao is empty", () => {
     const result = montarNome("Flamengo", "Torcedor", "2025/2026", "", "", "camisa");
     expect(result).not.toContain("()");

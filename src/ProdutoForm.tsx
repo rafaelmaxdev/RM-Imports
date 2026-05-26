@@ -35,53 +35,53 @@ const NBA_FRANQUIAS = [
   "Utah Jazz", "Washington Wizards",
 ].sort((a, b) => a.localeCompare(b));
 
-// Times hardcoded extraídos diretamente da Yupoo — elimina fragilidade do scraper
+// Times hardcoded com nomes conhecidos no Brasil
 const TIMES_POR_LIGA: Record<string, string[]> = {
   Brasileirão: [
-    "Atlético Juventus", "Atlético Mineiro", "Atlético Paranaense", "Bahia", "Botafogo",
+    "Athletico Paranaense", "Atlético Mineiro", "Atlético Juventus", "Bahia", "Botafogo",
     "Ceará", "Chapecoense", "Confiança", "Corinthians", "Coritiba", "Cruzeiro",
-    "Cuiabá", "Flamengo", "Fluminense", "Fortaleza", "Gremio", "Internacional",
-    "Nautico", "Palmeiras", "Paysandu", "Red Bull Bragantino", "Remo", "São Paulo",
+    "Cuiabá", "Flamengo", "Fluminense", "Fortaleza", "Grêmio", "Internacional",
+    "Náutico", "Palmeiras", "Paysandu", "Red Bull Bragantino", "Remo", "São Paulo",
     "Santa Cruz", "Santos", "Sport Recife", "Vasco da Gama", "Vitória",
   ],
   Bundesliga: [
-    "Augsburg", "Bayer Leverkusen", "Bayern Munich", "Borussia Dortmund",
-    "Borussia Monchengladbach", "Frankfurt", "Freiburg", "Hamburger SV", "Köln",
-    "MSV Duisburg", "Nurnberg FC", "RB Leipzig", "Rot-Weiss Essen", "Schalke 04",
+    "Augsburg", "Bayer Leverkusen", "Bayern de Munique", "Borussia Dortmund",
+    "Borussia Mönchengladbach", "Eintracht Frankfurt", "Freiburg", "Hamburgo", "Colônia",
+    "MSV Duisburg", "Nürnberg", "RB Leipzig", "Rot-Weiss Essen", "Schalke 04",
     "St. Pauli", "Werder Bremen", "Wolfsburg",
   ],
   Eredivisie: [
-    "AFC Ajax", "Feyenoord", "PSV Eindhoven",
+    "Ajax", "Feyenoord", "PSV Eindhoven",
   ],
   "La Liga": [
-    "Albacete", "Athletic Bilbao", "Atletico Madrid", "Barcelona", "Basque Country",
-    "Burgos", "Cadiz CF", "Cartagena", "Celta de Vigo", "Compostela", "Cordoba",
-    "Deportivo Alavés", "Deportivo La Coruna", "Elche", "Espanyol", "Getafe", "Girona",
-    "Granada", "Hércules", "Las Palmas", "Leganes", "Levante UD", "Malaga", "Mallorca",
+    "Albacete", "Athletic Bilbao", "Atlético de Madrid", "Barcelona", "País Basco",
+    "Burgos", "Cádiz", "Cartagena", "Celta de Vigo", "Compostela", "Córdoba",
+    "Deportivo Alavés", "Deportivo La Coruña", "Elche", "Espanyol", "Getafe", "Girona",
+    "Granada", "Hércules", "Las Palmas", "Leganés", "Levante", "Málaga", "Mallorca",
     "Osasuna", "Racing de Santander", "Rayo Vallecano", "Real Betis", "Real Madrid",
     "Real Murcia", "Real Oviedo", "Real Sociedad", "Real Valladolid", "Sevilla",
-    "Sporting de Gijon", "Tenerife", "UD Almeria", "Valencia", "Villarreal", "Zaragoza",
+    "Sporting Gijón", "Tenerife", "Almería", "Valencia", "Villarreal", "Real Zaragoza",
   ],
   "Ligue 1": [
-    "AS Cannes", "Girondins Bordeaux", "Monaco", "OGC Nice", "Olympique de Marseille",
-    "Olympique lyonnais", "Paris FC", "PSG", "Stade Rennais",
+    "Cannes", "Bordeaux", "Monaco", "Nice", "Marseille",
+    "Lyon", "Paris FC", "PSG", "Rennes",
   ],
   MLS: [
-    "Atlanta United FC", "Austin FC", "Charlotte FC", "D.C. United", "Inter Miami CF",
+    "Atlanta United", "Austin FC", "Charlotte FC", "D.C. United", "Inter Miami",
     "LA Galaxy", "Los Angeles FC", "New York City FC", "New York Red Bulls",
-    "Orlando City SC", "San Diego FC",
+    "Orlando City", "San Diego FC",
   ],
   "Premier League": [
     "Arsenal", "Aston Villa", "Birmingham City", "Blackburn Rovers", "Brighton",
     "Chelsea", "Coventry City", "Crystal Palace", "Derby County", "Everton", "Fulham",
-    "Hull City", "Leeds United", "Leicester City",     "Liverpool", "Lincoln City",
-    "Manchester City",     "Manchester United", "Newcastle United", "Nottingham Forest", "Sheffield Wednesday",
-    "Southampton", "Sunderland", "Tottenham Hotspur",     "West Ham", "Wolves",
+    "Hull City", "Leeds United", "Leicester City", "Liverpool", "Lincoln City",
+    "Manchester City", "Manchester United", "Newcastle United", "Nottingham Forest", "Sheffield Wednesday",
+    "Southampton", "Sunderland", "Tottenham", "West Ham", "Wolverhampton",
   ],
   "Serie A": [
-    "AC Milan", "Atalanta", "Bologna",     "Brescia", "Cremonese", "Fiorentina",
-    "Genoa", "Inter Milan",     "Juventus", "Lazio", "Napoli",     "Parma", "Pisa", "Roma",
-    "Sampdoria", "Sassuolo", "SSC Bari", "Torino", "Venezia",
+    "Milan", "Atalanta", "Bologna", "Brescia", "Cremonese", "Fiorentina",
+    "Genoa", "Inter de Milão", "Juventus", "Lazio", "Napoli", "Parma", "Pisa", "Roma",
+    "Sampdoria", "Sassuolo", "Bari", "Torino", "Venezia",
   ],
 };
 

@@ -484,6 +484,10 @@ export default function ProdutoForm({
     }
   }, [retro, isNBA]);
 
+  useEffect(() => {
+    if (tipo !== "Torcedor") setFeminino(false);
+  }, [tipo]);
+
   const nomeFinal = montarNome(time, tipo, periodo, nomeCustom, localizacao, peca);
 
   function limparForm() {
@@ -787,9 +791,10 @@ export default function ProdutoForm({
           type="checkbox"
           checked={feminino}
           onChange={(e) => setFeminino(e.target.checked)}
-          className="w-4 h-4 accent-primary cursor-pointer"
+          disabled={tipo !== "Torcedor"}
+          className="w-4 h-4 accent-primary cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
         />
-        <label htmlFor="feminino-check" className="text-sm cursor-pointer select-none">
+        <label htmlFor="feminino-check" className={`text-sm select-none ${tipo !== "Torcedor" ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}>
           Tem versão feminina
         </label>
       </div>

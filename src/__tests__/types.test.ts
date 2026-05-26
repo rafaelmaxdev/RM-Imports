@@ -5,6 +5,7 @@ import {
   formatarMoeda,
   gerarId,
   montarMensagemPacote,
+  montarMensagemItem,
   DEFAULT_CONFIG,
   ADICIONAL_TAMANHO,
   PRECO_PERSONALIZACAO,
@@ -312,12 +313,8 @@ describe("montarMensagemPacote", () => {
 
   it("includes order header and item details for single order", () => {
     const msg = montarMensagemPacote([makeOrder()]);
-    expect(msg).toContain("*Pacote RM Imports*");
-    expect(msg).toContain("1 camisa(s) — 1 pedido(s)");
-    expect(msg).toContain("*Pedido UL-TEST1234*");
-    expect(msg).toContain("Link: https://yupoo.com/item123");
     expect(msg).toContain("Size: M");
-    expect(msg).toContain("Version: Fan MALE");
+    expect(msg).toContain("Version: Fan");
   });
 
   it("maps tamanho via TAMANHO_FORNECEDOR", () => {
@@ -338,7 +335,7 @@ describe("montarMensagemPacote", () => {
     const item = { ...baseItem, feminino: true, genero: "Feminino" };
     const order = makeOrder({ itens: [item] });
     const msg = montarMensagemPacote([order]);
-    expect(msg).toContain("Version: Fan WOMANS");
+    expect(msg).toContain("Version: Fan WOMENS");
   });
 
   it("includes personalization details when item is personalized", () => {
@@ -364,28 +361,87 @@ describe("montarMensagemPacote", () => {
     const order1 = makeOrder({ id: "UL-AAAA1111", itens: [baseItem] });
     const order2 = makeOrder({ id: "UL-BBBB2222", itens: [baseItem, baseItem] });
     const msg = montarMensagemPacote([order1, order2]);
-    expect(msg).toContain("3 camisa(s) — 2 pedido(s)");
-    expect(msg).toContain("*Pedido UL-AAAA1111*");
-    expect(msg).toContain("*Pedido UL-BBBB2222*");
+    expect(msg).toContain("-------");
   });
 
   it("uses N/A when yupooUrl is empty", () => {
     const item = { ...baseItem, yupooUrl: "" };
     const order = makeOrder({ itens: [item] });
     const msg = montarMensagemPacote([order]);
-    expect(msg).toContain("Link: N/A");
+    expect(msg).not.toContain("Link:");
   });
 
   it("includes the Retrô mapping (Retro) for tipo", () => {
     const item = { ...baseItem, tipo: "Retrô" };
     const order = makeOrder({ itens: [item] });
     const msg = montarMensagemPacote([order]);
-    expect(msg).toContain("Version: Retro MALE");
+    expect(msg).toContain("Version: Retro");
   });
 
   it("does not include resumo section", () => {
     const msg = montarMensagemPacote([makeOrder()]);
     expect(msg).not.toContain("Resumo do Pacote:");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// montarMensagemItem
+// ---------------------------------------------------------------------------
+describe("montarMensagemItem", () => {
+  const baseItem: OrderItem = {
+    nome: "Camisa Flamengo 2025 Versão Torcedor",
+    tipo: "Torcedor",
+    temporada: "25/26",
+    tamanho: "M",
+    genero: "Masculino",
+    personalizado: false,
+    preco: 129.90,
+    yupooUrl: "https://yupoo.com/item123",
+    feminino: false,
+  };
+
+  it("formats basic item with Version and Size", () => {
+    const msg = montarMensagemItem(baseItem);
+    expect(msg).toBe("Version: Fan\nSize: M");
+  });
+
+  it("maps tamanho via TAMANHO_FORNECEDOR", () => {
+    const item = { ...baseItem, tamanho: "GG" };
+    expect(montarMensagemItem(item)).toContain(`Size: ${TAMANHO_FORNECEDOR["GG"]}`);
+  });
+
+  it("includes WOMENS version when feminino and genero is Feminino", () => {
+    const item = { ...baseItem, feminino: true, genero: "Feminino" };
+    expect(montarMensagemItem(item)).toContain("Version: Fan WOMENS");
+  });
+
+  it("does not include WOMENS when feminino but genero is not Feminino", () => {
+    const item = { ...baseItem, feminino: true, genero: "Masculino" };
+    expect(montarMensagemItem(item)).toContain("Version: Fan");
+    expect(montarMensagemItem(item)).not.toContain("WOMENS");
+  });
+
+  it("includes personalization when item is personalized", () => {
+    const item = {
+      ...baseItem,
+      personalizado: true,
+      nomePersonalizado: "Jorge",
+      numeroPersonalizado: "23",
+    };
+    const msg = montarMensagemItem(item);
+    expect(msg).toContain("Name: Jorge");
+    expect(msg).toContain("Number: 23");
+  });
+
+  it("omits personalization when not applicable", () => {
+    const msg = montarMensagemItem(baseItem);
+    expect(msg).not.toContain("Name:");
+    expect(msg).not.toContain("Number:");
+  });
+
+  it("maps Retrò to Retro", () => {
+    const item = { ...baseItem, tipo: "Retrô" };
+    expect(montarMensagemItem(item)).toContain("Version: Retro");
   });
 });
 

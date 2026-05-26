@@ -134,6 +134,10 @@ body {
   animation: menu-fade-in 0.2s ease both;
 }
 
+.animate-toast-in {
+  animation: toast-in 0.3s ease both;
+}
+
 .animate-menu-panel {
   animation: menu-slide-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: transform;

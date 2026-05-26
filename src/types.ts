@@ -308,35 +308,34 @@ export function montarMensagemPagamento(order: Order): string {
 
 import { TIPO_ENGLISH } from "./lib/status";
 
+export function montarMensagemItem(item: OrderItem): string {
+  const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
+  const version = item.feminino && item.genero === "Feminino"
+    ? `${tipoEn} WOMENS`
+    : `${tipoEn}`;
+  const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
+
+  const lines: string[] = [];
+  lines.push(`Version: ${version}`);
+  lines.push(`Size: ${sizeForSupplier}`);
+  if (item.personalizado) {
+    lines.push(`Name: ${item.nomePersonalizado}`);
+    lines.push(`Number: ${item.numeroPersonalizado}`);
+  }
+  return lines.join("\n");
+}
+
 export function montarMensagemPacote(orders: Order[]): string {
-  const totalCamisas = orders.reduce((sum, o) => sum + o.itens.length, 0);
+  const items = orders.flatMap((o) => o.itens);
+  const lines: string[] = [];
 
-  let msg = `*Pacote RM Imports*\n`;
-  msg += `📦 ${totalCamisas} camisa(s) — ${orders.length} pedido(s)\n`;
-
-  orders.forEach((order) => {
-    msg += `\n━━━━━━━━━━━━━━━\n`;
-    msg += `*Pedido ${order.id}*\n`;
-
-    order.itens.forEach((item, i) => {
-      const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
-      const version = item.feminino && item.genero === "Feminino"
-        ? `${tipoEn} WOMANS`
-        : `${tipoEn} MALE`;
-      const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
-
-      msg += `${i + 1}. ${item.nome}\n`;
-      msg += `   Link: ${item.yupooUrl || "N/A"}\n`;
-      msg += `   Size: ${sizeForSupplier}\n`;
-      msg += `   Version: ${version}\n`;
-      if (item.personalizado) {
-        msg += `   Name: ${item.nomePersonalizado}\n`;
-        msg += `   Number: ${item.numeroPersonalizado}\n`;
-      }
-    });
+  items.forEach((item, i) => {
+    if (i > 0) lines.push("-------");
+    lines.push("");
+    lines.push(montarMensagemItem(item));
   });
 
-  return msg;
+  return lines.join("\n").trimEnd();
 }
 
 export function proxyImageUrl(url: string): string {

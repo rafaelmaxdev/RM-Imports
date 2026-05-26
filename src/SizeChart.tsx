@@ -59,7 +59,7 @@ export default function SizeChart() {
                           <td
                             key={h}
                             className={`px-4 py-2.5 whitespace-nowrap text-center ${
-                              h === "Tam." || h === "Tamanho"
+                              h === "Tam." || h === "Tamanho" || h === "Tamanho BR"
                                 ? "font-bold text-primary"
                                 : "text-text-main"
                             }`}

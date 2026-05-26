@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
 import type { LojaConfig, PromocaoTipo } from "./types";
-import { TAMANHOS, PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto, TIPOS_SEM_PERSONALIZACAO } from "./types";
+import { PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto, TIPOS_SEM_PERSONALIZACAO, tamanhosDisponiveis } from "./types";
 import ImageCarousel from "./ImageCarousel";
 import ImageLightbox from "./ImageLightbox";
 import { parseImageUrls } from "./lib/db";
@@ -53,6 +53,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
 
   const temFeminino = produto.feminino === true;
   const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo);
+  const tamanhosTipo = tamanhosDisponiveis(produto.tipo, genero === "Feminino");
 
   const { base: precoBase, promo: precoPromo, emPromocao, discountLabel } = getPrecoProduto(
     produto.tipo,
@@ -143,7 +144,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
                                   <td
                                     key={h}
                                     className={`px-2 py-1.5 whitespace-nowrap text-center ${
-                                      h === "Tam." || h === "Tamanho" ? "font-bold text-primary" : "text-text-main"
+                                      h === "Tam." || h === "Tamanho" || h === "Tamanho BR" ? "font-bold text-primary" : "text-text-main"
                                     }`}
                                   >
                                     {row[key] || "—"}
@@ -223,7 +224,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
                   </button>
                 </div>
                 <div className="flex gap-2 flex-wrap mb-2">
-                  {TAMANHOS.filter((t) => !ADICIONAL_TAMANHO[t]).map((t) => (
+                  {tamanhosTipo.filter((t) => !ADICIONAL_TAMANHO[t]).map((t) => (
                     <button
                       key={t}
                       className={`px-3 py-1.5 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors ${
@@ -239,7 +240,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
                   ))}
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  {TAMANHOS.filter((t) => ADICIONAL_TAMANHO[t]).map((t) => (
+                  {tamanhosTipo.filter((t) => ADICIONAL_TAMANHO[t]).map((t) => (
                     <button
                       key={t}
                       className={`px-3 py-1.5 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors flex flex-col items-center gap-0.5 ${
@@ -268,7 +269,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
                       className={`px-4 py-2 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors ${
                         genero === g ? "bg-primary text-white border-primary" : ""
                       }`}
-                      onClick={() => setGenero(g)}
+                      onClick={() => { setGenero(g); setTamanho(""); setErro(""); }}
                     >
                       {g}
                     </button>

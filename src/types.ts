@@ -212,6 +212,27 @@ export const ADICIONAL_TAMANHO: Record<string, number> = {
 /** Tamanhos exibidos para o cliente (modelo brasileiro) */
 export const TAMANHOS = ["P", "M", "G", "GG", "G1", "G2", "G3"];
 
+/** Tamanhos disponíveis por tipo de produto */
+export const TAMANHOS_POR_TIPO: Record<string, string[]> = {
+  "Torcedor": ["P", "M", "G", "GG", "G1", "G2", "G3"],
+  "Manga Longa": ["P", "M", "G", "GG", "G1", "G2", "G3"],
+  "Goleiro": ["P", "M", "G", "GG", "G1", "G2", "G3"],
+  "Jogador": ["P", "M", "G", "GG", "G1", "G2", "G3"],
+  "Retrô": ["P", "M", "G", "GG", "G1"],
+  "Treinamento": ["P", "M", "G", "GG", "G1"],
+  "NBA": ["P", "M", "G", "GG", "G1", "G2"],
+  "Polo": ["P", "M", "G", "GG"],
+};
+
+/** Tamanhos da versão feminina */
+export const TAMANHOS_FEMININA = ["P", "M", "G", "GG"];
+
+/** Retorna tamanhos disponíveis para o tipo e gênero do produto */
+export function tamanhosDisponiveis(tipo: string, feminino: boolean): string[] {
+  if (feminino) return TAMANHOS_FEMININA;
+  return TAMANHOS_POR_TIPO[tipo] ?? TAMANHOS;
+}
+
 /** Mapeamento de tamanho BR → internacional para envio ao fornecedor */
 export const TAMANHO_FORNECEDOR: Record<string, string> = {
   "P": "S",

@@ -151,6 +151,36 @@ export async function setPromocaoCategoria(tipo: string, ativa: boolean): Promis
   if (error) throw error;
 }
 
+export async function setDescontoGlobal(porcentagem: number): Promise<DbProduto[]> {
+  const { data, error } = await supabase
+    .from("produtos")
+    .update({
+      promocao: true,
+      promocao_tipo: "porcentagem",
+      promocao_valor: porcentagem,
+    })
+    .neq("id", "")
+    .select();
+
+  if (error) throw error;
+  return data as DbProduto[];
+}
+
+export async function removeDescontoGlobal(): Promise<DbProduto[]> {
+  const { data, error } = await supabase
+    .from("produtos")
+    .update({
+      promocao: false,
+      promocao_tipo: null,
+      promocao_valor: null,
+    })
+    .eq("promocao_tipo", "porcentagem")
+    .select();
+
+  if (error) throw error;
+  return data as DbProduto[];
+}
+
 export async function updateProdutoCustomPrice(id: string, preco_customizado: number | null): Promise<void> {
   const { error } = await supabase
     .from("produtos")

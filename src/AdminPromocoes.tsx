@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import type { DbProduto } from "./lib/db";
-import { setPromocaoCategoria, updateProduto, parseImageUrls } from "./lib/db";
+import { setPromocaoCategoria, updateProduto, parseImageUrls, setDescontoGlobal as setDescontoGlobalDb, removeDescontoGlobal as removeDescontoGlobalDb } from "./lib/db";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { TIPOS_CATEGORIA, DEFAULT_CONFIG, formatarMoeda, proxyImageUrl } from "./types";
 import { updateLojaConfig } from "./lib/db";
@@ -28,6 +28,10 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
   const [editTipo, setEditTipo] = useState("");
   const [editValor, setEditValor] = useState("");
   const [editNovoPreco, setEditNovoPreco] = useState("");
+
+  // Global discount state
+  const [descontoGlobal, setDescontoGlobalInput] = useState("");
+  const [savingGlobal, setSavingGlobal] = useState(false);
 
   // Filter state
   const [promoFilter, setPromoFilter] = useState<"ativas" | "todas" | "inativas">("ativas");
@@ -79,6 +83,51 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
       console.error("Erro ao toggle todas:", err);
       setMessage("Erro ao atualizar promoções. Tente uma por uma.");
       setTimeout(() => setMessage(""), 4000);
+    }
+  }
+
+  async function handleDescontoGlobal() {
+    const pct = parseFloat(descontoGlobal);
+    if (!pct || pct <= 0 || pct >= 100) {
+      setMessage("Insira uma porcentagem válida (1-99).");
+      setTimeout(() => setMessage(""), 3000);
+      return;
+    }
+    setSavingGlobal(true);
+    try {
+      const updated = await setDescontoGlobalDb(pct);
+      setProdutos((prev) => {
+        const map = new Map(updated.map((p: DbProduto) => [p.id, p]));
+        return prev.map((p) => map.get(p.id) ?? p);
+      });
+      setMessage(`Desconto de ${pct}% aplicado em todos os ${updated.length} produtos!`);
+      setTimeout(() => setMessage(""), 4000);
+      setDescontoGlobalInput("");
+    } catch (err) {
+      console.error("Erro ao aplicar desconto global:", err);
+      setMessage("Erro ao aplicar desconto global.");
+      setTimeout(() => setMessage(""), 4000);
+    } finally {
+      setSavingGlobal(false);
+    }
+  }
+
+  async function handleRemoverDescontoGlobal() {
+    setSavingGlobal(true);
+    try {
+      const updated = await removeDescontoGlobalDb();
+      setProdutos((prev) => {
+        const map = new Map(updated.map((p: DbProduto) => [p.id, p]));
+        return prev.map((p) => map.get(p.id) ?? p);
+      });
+      setMessage(`Desconto global removido de ${updated.length} produtos.`);
+      setTimeout(() => setMessage(""), 4000);
+    } catch (err) {
+      console.error("Erro ao remover desconto global:", err);
+      setMessage("Erro ao remover desconto global.");
+      setTimeout(() => setMessage(""), 4000);
+    } finally {
+      setSavingGlobal(false);
     }
   }
 
@@ -303,6 +352,43 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
         >
           Desativar Todas
         </button>
+      </div>
+
+      {/* Global percentage discount */}
+      <div className="mb-6 p-4 rounded-lg border-2 border-dashed border-accent/40 bg-accent/5">
+        <h4 className="text-sm font-bold text-primary mb-2">Desconto Global por Porcentagem</h4>
+        <p className="text-xs text-text-muted mb-3">
+          Aplica um desconto percentual a todos os produtos de uma vez. Produtos que já têm promoção individual serão sobrescritos.
+        </p>
+        <div className="flex gap-2 items-end">
+          <div className="flex-1">
+            <label className="block text-[10px] text-text-muted mb-0.5">Desconto (%)</label>
+            <input
+              type="number"
+              min="1"
+              max="99"
+              step="1"
+              value={descontoGlobal}
+              onChange={(e) => setDescontoGlobalInput(e.target.value)}
+              placeholder="Ex: 20"
+              className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+            />
+          </div>
+          <button
+            className="px-4 py-2 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+            onClick={handleDescontoGlobal}
+            disabled={savingGlobal || !descontoGlobal}
+          >
+            {savingGlobal ? "Aplicando..." : "Aplicar a Todos"}
+          </button>
+          <button
+            className="px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+            onClick={handleRemoverDescontoGlobal}
+            disabled={savingGlobal}
+          >
+            {savingGlobal ? "Removendo..." : "Remover Desconto"}
+          </button>
+        </div>
       </div>
 
       {/* Category cards */}

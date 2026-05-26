@@ -94,7 +94,20 @@ async function fetchTimes(url: string): Promise<Time[]> {
   const { data } = await axios.get(url);
   const parser = new DOMParser();
   const doc = parser.parseFromString(data, "text/html");
-  const elementos = doc.querySelectorAll(".categories__box-right-category-item");
+
+  // Extract category ID from URL (e.g., "/api/yupoo/categories/680738" → "680738")
+  const categoryId = new URL(url, "https://x.yupoo.com").pathname.split("/").pop();
+
+  // New Yupoo layout: sidebar links grouped by <ul id="child_category_{id}">
+  let elementos: NodeListOf<Element>;
+  if (categoryId) {
+    const list = doc.querySelector(`#child_category_${categoryId}`);
+    elementos = list
+      ? list.querySelectorAll(".showheader__child_link")
+      : doc.querySelectorAll(".showheader__child_link");
+  } else {
+    elementos = doc.querySelectorAll(".showheader__child_link");
+  }
 
   const times = Array.from(elementos).map((el, i) => {
     const nomeOriginal = el.textContent?.trim() || "";

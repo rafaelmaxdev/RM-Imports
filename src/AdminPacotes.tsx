@@ -2,11 +2,17 @@ import { useState, useEffect, useCallback } from "react";
 import { getPedidos, updatePedidoStatus, getPacotes, createPacote, updatePacoteStatus, updatePacoteFinanceiro, removePedidoFromPacote, deletePacote, getProdutos } from "./lib/db";
 import type { Order, OrderItem } from "./types";
 import type { Pacote, DbProduto } from "./lib/db";
-import { montarMensagemPacote, montarMensagemItem, formatarMoeda, TAMANHO_FORNECEDOR, yupooThumbnailUrl } from "./types";
+import { montarMensagemItem, formatarMoeda, TAMANHO_FORNECEDOR, yupooThumbnailUrl } from "./types";
 import { PAYMENT_LABELS_SHORT, TIPO_ENGLISH, PACKAGE_STATUS_PIPELINE, PACKAGE_STATUS_LABELS, PACKAGE_NEXT_STATUS, PACKAGE_PREV_STATUS, PACKAGE_PREV_ACTION_LABELS, PACKAGE_STATUS_ACTION_LABELS, getMPFeeRate } from "./lib/status";
 
 type Tab = "montar" | "pacotes" | "historico";
 type Step = "select" | "review";
+
+interface SharingState {
+  items: OrderItem[];
+  index: number;
+  onDone: () => void;
+}
 
 export default function AdminPacotes() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -21,6 +27,7 @@ export default function AdminPacotes() {
   const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
   const [showAllHistorico, setShowAllHistorico] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState<SharingState | null>(null);
 
   const loadOrders = useCallback(async () => {
     try {
@@ -78,24 +85,13 @@ export default function AdminPacotes() {
     return "";
   }
 
-  // Collect unique image URLs from order items
-  function getItemImageUrls(items: OrderItem[]): string[] {
-    const seen = new Set<string>();
-    const urls: string[] = [];
-    for (const item of items) {
-      const img = getProductImage(item.yupooUrl);
-      if (img && !seen.has(img)) {
-        seen.add(img);
-        urls.push(img);
-      }
-    }
-    return urls;
-  }
+  // Share single item via Web Share API (mobile) or clipboard (desktop)
+  async function shareItem(item: OrderItem) {
+    const msg = montarMensagemItem(item);
+    const img = getProductImage(item.yupooUrl);
+    const imageUrls = img ? [img] : [];
 
-  // Share via Web Share API with images (mobile) or copy message (desktop)
-  async function shareWithImages(msg: string, imageUrls: string[]) {
-    // Try Web Share API with files (mobile)
-    if (navigator.share && navigator.canShare) {
+    if (imageUrls.length > 0 && navigator.share && navigator.canShare) {
       try {
         const blobs = await Promise.all(
           imageUrls.map(async (url) => {
@@ -114,7 +110,6 @@ export default function AdminPacotes() {
       }
     }
 
-    // Desktop fallback: copy message with visual feedback
     await navigator.clipboard.writeText(msg);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -131,31 +126,27 @@ export default function AdminPacotes() {
   async function handleSend() {
     if (selectedOrders.length === 0) return;
 
+    const items = selectedOrders.flatMap((o) => o.itens);
     setSending(true);
-    try {
-      const msg = montarMensagemPacote(selectedOrders);
-      const items = selectedOrders.flatMap((o) => o.itens);
-      const imageUrls = getItemImageUrls(items);
+    setSharing({
+      items,
+      index: 0,
+      onDone: async () => {
+        // Update all orders to enviado_fornecedor
+        await Promise.all(selectedOrders.map((o) => updatePedidoStatus(o.id, "enviado_fornecedor")));
 
-      await shareWithImages(msg, imageUrls);
+        // Create pacote in DB
+        const novoPacote = await createPacote(selectedOrders.map((o) => o.id));
 
-      // Update all orders to enviado_fornecedor
-      await Promise.all(selectedOrders.map((o) => updatePedidoStatus(o.id, "enviado_fornecedor")));
-
-      // Create pacote in DB
-      const novoPacote = await createPacote(selectedOrders.map((o) => o.id));
-
-      setOrders((prev) => prev.filter((o) => !selectedIds.has(o.id)));
-      setSelectedIds(new Set());
-      setStep("select");
-      setPacotes((prev) => [novoPacote, ...prev]);
-      setTab("pacotes");
-    } catch (err) {
-      console.error("Erro ao enviar pacote:", err);
-      alert("Erro ao criar pacote. Verifique manualmente.");
-    } finally {
-      setSending(false);
-    }
+        setOrders((prev) => prev.filter((o) => !selectedIds.has(o.id)));
+        setSelectedIds(new Set());
+        setStep("select");
+        setPacotes((prev) => [novoPacote, ...prev]);
+        setTab("pacotes");
+        setSharing(null);
+        setSending(false);
+      },
+    });
   }
 
   async function handleAdvancePackage(pacote: Pacote) {
@@ -165,16 +156,31 @@ export default function AdminPacotes() {
     const label = PACKAGE_STATUS_ACTION_LABELS[pacote.status] || nextStatus;
     if (!confirm(`Avançar Pacote para "${label}"?`)) return;
 
-    // If advancing from "pago" to "enviado_fornecedor", share with images
+    // If advancing from "pago" to "enviado_fornecedor", share items one by one
     if (pacote.status === "pago") {
       const pacoteOrders = pacote.pedido_ids
         .map((id) => allOrders.find((o) => o.id === id))
         .filter((o): o is Order => !!o);
       if (pacoteOrders.length > 0) {
-        const msg = montarMensagemPacote(pacoteOrders);
         const items = pacoteOrders.flatMap((o) => o.itens);
-        const imageUrls = getItemImageUrls(items);
-        await shareWithImages(msg, imageUrls);
+        setSharing({
+          items,
+          index: 0,
+          onDone: async () => {
+            try {
+              await Promise.all(pacote.pedido_ids.map((id) => updatePedidoStatus(id, nextStatus)));
+              await updatePacoteStatus(pacote.id, nextStatus);
+              setPacotes((prev) =>
+                prev.map((p) => p.id === pacote.id ? { ...p, status: nextStatus } : p)
+              );
+            } catch (err) {
+              console.error("Erro ao atualizar status:", err);
+              alert("Erro ao atualizar status. Verifique manualmente.");
+            }
+            setSharing(null);
+          },
+        });
+        return; // Don't proceed with status update here — onDone handles it
       }
     }
 
@@ -685,6 +691,85 @@ export default function AdminPacotes() {
           )}
         </>
       )}
+
+      {/* ── Sharing stepper modal ── */}
+      {sharing && (() => {
+        const item = sharing.items[sharing.index];
+        const isLast = sharing.index === sharing.items.length - 1;
+        const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
+        const version = item.feminino && item.genero === "Feminino" ? `${tipoEn} WOMENS` : `${tipoEn}`;
+        const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
+        const img = getProductImage(item.yupooUrl);
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSharing(null)}>
+            <div className="bg-card-bg rounded-xl shadow-2xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="text-center mb-2">
+                <span className="text-xs font-semibold text-text-muted">
+                  Camisa {sharing.index + 1} de {sharing.items.length}
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full bg-gray-200 rounded-full h-1.5 mb-4">
+                <div
+                  className="bg-accent h-1.5 rounded-full transition-all"
+                  style={{ width: `${((sharing.index + 1) / sharing.items.length) * 100}%` }}
+                />
+              </div>
+
+              {/* Item card */}
+              <div className="flex gap-3 mb-4">
+                {img && (
+                  <img src={img} alt={item.nome} className="w-20 h-20 object-cover rounded flex-shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm mb-1">{item.nome}</p>
+                  <div className="text-xs text-text-muted space-y-0.5">
+                    <p>Version: {version}</p>
+                    <p>Size: {sizeForSupplier}</p>
+                    {item.personalizado && (
+                      <>
+                        <p>Name: {item.nomePersonalizado}</p>
+                        <p>Number: {item.numeroPersonalizado}</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-2">
+                <button
+                  className="w-full px-4 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent/90 transition-colors cursor-pointer"
+                  onClick={() => shareItem(item)}
+                >
+                  {typeof navigator.share === "function" ? "📤 Compartilhar" : "📋 Copiar"}
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    className="flex-1 px-4 py-2.5 bg-gray-200 text-text-main rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
+                    onClick={() => setSharing(null)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="flex-1 px-4 py-2.5 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors cursor-pointer"
+                    onClick={() => {
+                      if (isLast) {
+                        sharing.onDone();
+                      } else {
+                        setSharing({ ...sharing, index: sharing.index + 1 });
+                      }
+                    }}
+                  >
+                    {isLast ? "✓ Finalizar" : "Próximo →"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Copied toast ── */}
       {copied && (

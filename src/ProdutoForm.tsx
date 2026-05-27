@@ -469,15 +469,15 @@ export default function ProdutoForm({
   const tiposDisponiveis = isNBA
     ? ["NBA"]
     : retro
-      ? ["Retrô"]
-      : ["Torcedor", "Jogador", "Manga Longa", "Goleiro", "Treinamento", "Polo"];
+      ? ["Retrô", "Manga Longa Retrô"]
+      : ["Torcedor", "Jogador", "Manga Longa Torcedor", "Manga Longa Jogador", "Goleiro", "Treinamento", "Polo"];
 
   useEffect(() => {
     if (isNBA && tipo !== "NBA") {
       setTipo("NBA");
-    } else if (retro && tipo !== "Retrô") {
+    } else if (retro && tipo !== "Retrô" && tipo !== "Manga Longa Retrô") {
       setTipo("Retrô");
-    } else if (!retro && !isNBA && tipo === "Retrô") {
+    } else if (!retro && !isNBA && (tipo === "Retrô" || tipo === "Manga Longa Retrô")) {
       setTipo("Torcedor");
     } else if (!retro && !isNBA && tipo === "NBA") {
       setTipo("Torcedor");
@@ -485,7 +485,7 @@ export default function ProdutoForm({
   }, [retro, isNBA]);
 
   useEffect(() => {
-    if (tipo !== "Torcedor") setFeminino(false);
+    if (tipo !== "Torcedor" && tipo !== "Manga Longa Torcedor") setFeminino(false);
   }, [tipo]);
 
   const nomeFinal = montarNome(time, tipo, periodo, nomeCustom, localizacao, peca);
@@ -919,7 +919,7 @@ export default function ProdutoForm({
                 className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
               >
                 <option value="">Todos os tipos</option>
-                {["Torcedor", "Jogador", "Manga Longa", "Retrô", "Goleiro", "Treinamento", "Polo", "NBA"].map((t) => (
+                {["Torcedor", "Jogador", "Manga Longa Torcedor", "Manga Longa Jogador", "Manga Longa Retrô", "Retrô", "Goleiro", "Treinamento", "Polo", "NBA"].map((t) => (
                   <option key={t} value={t}>
                     {t}
                   </option>

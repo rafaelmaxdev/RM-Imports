@@ -250,24 +250,25 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           </label>
 
           <label className="flex flex-col gap-0.5">
-          <select
-            value={ordenacao}
-            onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
-            className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
-            aria-label="Ordenar produtos"
-          >
-            <option value="time">Time / Nome</option>
-            <option value="preco-asc">Menor preço</option>
-            <option value="preco-desc">Maior preço</option>
-            <option value="categoria">Categoria</option>
-            <option value="temporada-asc">Temp. mais antiga</option>
-            <option value="temporada-desc">Temp. mais recente</option>
-          </select>
-        </label>
+            <span className="text-[10px] sm:text-xs text-text-muted font-medium pl-1">Ordenar</span>
+            <select
+              value={ordenacao}
+              onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
+              aria-label="Ordenar produtos"
+            >
+              <option value="time">Time / Nome</option>
+              <option value="preco-asc">Menor preço</option>
+              <option value="preco-desc">Maior preço</option>
+              <option value="categoria">Categoria</option>
+              <option value="temporada-asc">Temp. mais antiga</option>
+              <option value="temporada-desc">Temp. mais recente</option>
+            </select>
+          </label>
 
         {(filtroTime || filtroTipo || filtroBusca) && (
           <button
-            className="px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90 whitespace-nowrap"
+            className="self-center px-2 py-1.5 sm:px-3 sm:py-2 text-[10px] sm:text-xs bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90 whitespace-nowrap"
             onClick={() => { setFiltroTime(""); setFiltroTipo(""); setFiltroBusca(""); }}
             aria-label="Limpar filtros"
           >
@@ -278,9 +279,19 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
       {produtosFiltrados.length === 0 ? (
         <div className="text-center py-16 text-text-muted">
-          <p className="text-4xl mb-4">🚧</p>
-          <p className="text-lg font-semibold text-primary mb-2">Em breve!</p>
-          <p>Estamos preparando novidades para esta categoria.</p>
+          {(filtroTime || filtroTipo || filtroBusca) ? (
+            <>
+              <p className="text-4xl mb-4">🔍</p>
+              <p className="text-lg font-semibold text-primary mb-2">Nenhum produto encontrado</p>
+              <p>Tente ajustar os filtros ou a busca.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-4xl mb-4">🚧</p>
+              <p className="text-lg font-semibold text-primary mb-2">Em breve!</p>
+              <p>Estamos preparando novidades para esta categoria.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 sm:gap-6 items-stretch">

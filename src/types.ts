@@ -62,7 +62,9 @@ export const PRECOS_BASE: Record<string, number> = {
   "Torcedor": 129.90,
   "Jogador": 169.90,
   "Retrô": 169.90,
-  "Manga Longa": 159.90,
+  "Manga Longa Torcedor": 159.90,
+  "Manga Longa Jogador": 169.90,
+  "Manga Longa Retrô": 169.90,
   "Goleiro": 129.90,
   "Treinamento": 139.90,
   "Polo": 139.90,
@@ -80,7 +82,9 @@ export const DEFAULT_CONFIG: LojaConfig = {
     "Torcedor": 129.90,
     "Jogador": 169.90,
     "Retrô": 169.90,
-    "Manga Longa": 159.90,
+    "Manga Longa Torcedor": 159.90,
+    "Manga Longa Jogador": 169.90,
+    "Manga Longa Retrô": 169.90,
     "Goleiro": 129.90,
     "Treinamento": 139.90,
     "Polo": 139.90,
@@ -90,7 +94,9 @@ export const DEFAULT_CONFIG: LojaConfig = {
     "Torcedor": 109.90,
     "Jogador": 139.90,
     "Retrô": 149.90,
-    "Manga Longa": 139.90,
+    "Manga Longa Torcedor": 139.90,
+    "Manga Longa Jogador": 149.90,
+    "Manga Longa Retrô": 149.90,
     "Goleiro": 109.90,
     "Treinamento": 119.90,
     "Polo": 119.90,
@@ -100,7 +106,9 @@ export const DEFAULT_CONFIG: LojaConfig = {
     "Torcedor": false,
     "Jogador": false,
     "Retrô": false,
-    "Manga Longa": false,
+    "Manga Longa Torcedor": false,
+    "Manga Longa Jogador": false,
+    "Manga Longa Retrô": false,
     "Goleiro": false,
     "Treinamento": false,
     "Polo": false,
@@ -108,7 +116,7 @@ export const DEFAULT_CONFIG: LojaConfig = {
   },
 };
 
-export const TIPOS_CATEGORIA = ["Torcedor", "Jogador", "Retrô", "Manga Longa", "Goleiro", "Treinamento", "Polo", "NBA"] as const;
+export const TIPOS_CATEGORIA = ["Torcedor", "Jogador", "Retrô", "Manga Longa Torcedor", "Manga Longa Jogador", "Manga Longa Retrô", "Goleiro", "Treinamento", "Polo", "NBA"] as const;
 
 export type PromocaoTipo = "porcentagem" | "novo_preco" | "leve_pague" | "leve_3_pague_2" | null;
 
@@ -215,7 +223,9 @@ export const TAMANHOS = ["P", "M", "G", "GG", "G1", "G2", "G3"];
 /** Tamanhos disponíveis por tipo de produto */
 export const TAMANHOS_POR_TIPO: Record<string, string[]> = {
   "Torcedor": ["P", "M", "G", "GG", "G1", "G2", "G3"],
-  "Manga Longa": ["P", "M", "G", "GG", "G1"],
+  "Manga Longa Torcedor": ["P", "M", "G", "GG", "G1"],
+  "Manga Longa Jogador": ["P", "M", "G", "GG", "G1", "G2", "G3"],
+  "Manga Longa Retrô": ["P", "M", "G", "GG", "G1"],
   "Goleiro": ["P", "M", "G", "GG", "G1"],
   "Jogador": ["P", "M", "G", "GG", "G1", "G2", "G3"],
   "Retrô": ["P", "M", "G", "GG", "G1"],

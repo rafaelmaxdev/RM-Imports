@@ -115,7 +115,7 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
             className="px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
           >
             <option value="">Todos os tipos</option>
-            {["Torcedor", "Jogador", "Manga Longa", "Retrô"].map((t) => (
+            {["Torcedor", "Jogador", "Manga Longa Torcedor", "Manga Longa Jogador", "Manga Longa Retrô", "Retrô"].map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>

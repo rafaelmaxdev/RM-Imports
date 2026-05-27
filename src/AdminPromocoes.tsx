@@ -3,6 +3,7 @@ import type { DbProduto } from "./lib/db";
 import { setPromocaoCategoria, updateProduto, parseImageUrls } from "./lib/db";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { TIPOS_CATEGORIA, DEFAULT_CONFIG, formatarMoeda, proxyImageUrl } from "./types";
+import { normalizarBusca } from "./lib/utils";
 import { updateLojaConfig } from "./lib/db";
 
 interface AdminPromocoesProps {
@@ -237,12 +238,12 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
   const promosAtivasProduto = produtosComPromocao.filter((p) => p.promocao).length;
 
   const resultadosBusca = useMemo(() => {
-    const q = busca.toLowerCase().trim();
+    const q = normalizarBusca(busca);
     return produtos.filter((p) => {
       if (p.promocao_tipo) return false;
       if (filtroTipo && p.tipo !== filtroTipo) return false;
       if (q) {
-        const campos = [p.nome, p.time, p.tipo, p.temporada].join(" ").toLowerCase();
+        const campos = normalizarBusca([p.nome, p.time, p.tipo, p.temporada].join(" "));
         if (!campos.includes(q)) return false;
       }
       return true;

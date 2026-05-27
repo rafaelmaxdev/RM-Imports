@@ -7,7 +7,7 @@ import ImageLightbox from "./ImageLightbox";
 import DestaqueCarousel from "./DestaqueCarousel";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { formatarMoeda, getPrecoProduto } from "./types";
-import { normalizeNome } from "./lib/utils";
+import { normalizeNome, normalizarBusca } from "./lib/utils";
 
 const CATEGORIAS = [
   "Todas",
@@ -72,11 +72,6 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       liga: normalizeNome(p.liga),
     }));
   }, [produtos]);
-
-  /** Remove /, (, ) so searches like "2025 2026" match "2025/2026" and "Casa" matches "(Casa)" */
-  function normalizarBusca(s: string): string {
-    return s.toLowerCase().replace(/[\/()]/g, " ").replace(/\s+/g, " ").trim();
-  }
 
   const produtosFiltrados = useMemo(() => {
     let res = [...produtosNormalizados];

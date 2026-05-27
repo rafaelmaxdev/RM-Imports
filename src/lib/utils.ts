@@ -22,3 +22,14 @@ export function normalizeNome(nome: string): string {
   });
   return result;
 }
+
+/** Remove accents/diacritics, /, (), collapse whitespace, lowercase — for search matching */
+export function normalizarBusca(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[\/()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}

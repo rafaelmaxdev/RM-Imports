@@ -3,6 +3,7 @@ import { supabase } from "./lib/supabase";
 import { addProduto, updateProduto, deleteProduto, parseImageUrls } from "./lib/db";
 import type { DbProduto } from "./lib/db";
 import { proxyImageUrl } from "./types";
+import { normalizarBusca } from "./lib/utils";
 import { normalizeNome } from "./lib/utils";
 
 interface Time {
@@ -624,12 +625,12 @@ export default function ProdutoForm({
   }
 
   const produtosFiltrados = useMemo(() => {
-    const busca = filtroBusca.toLowerCase().trim();
+    const busca = normalizarBusca(filtroBusca);
     return produtos.filter((p) => {
       if (filtroTime && p.time !== filtroTime) return false;
       if (filtroTipo && p.tipo !== filtroTipo) return false;
       if (busca) {
-        const campos = [p.nome, p.time, p.tipo, p.temporada].join(" ").toLowerCase();
+        const campos = normalizarBusca([p.nome, p.time, p.tipo, p.temporada].join(" "));
         if (!campos.includes(busca)) return false;
       }
       return true;

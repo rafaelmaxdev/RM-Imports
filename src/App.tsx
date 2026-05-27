@@ -31,6 +31,16 @@ function AppContent() {
   const navigate = useNavigate();
   const { cart, createOrder } = useCart();
 
+  // Lock body scroll when menu or cart is open
+  useEffect(() => {
+    if (showMenu || showCart) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [showMenu, showCart]);
+
   useEffect(() => {
     Promise.all([
       getProdutos().then(setProdutos).catch(console.error),

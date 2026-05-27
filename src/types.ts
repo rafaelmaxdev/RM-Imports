@@ -142,14 +142,14 @@ export function getPrecoProduto(
   promocaoTipo?: PromocaoTipo,
   promocaoValor?: number | null,
 ): PromocaoInfo {
-  const base = precoCustomizado ?? config.precos_base[tipo] ?? 89.90;
+  const basePrice = config.precos_base[tipo] ?? 89.90;
 
-  // Individual product promo takes priority
+  // Individual product promo takes priority — discount always based on base price
   if (promocaoTipo === "porcentagem" && promocaoValor) {
-    const desconto = base * (promocaoValor / 100);
-    const promoPrice = Math.round((base - desconto) * 100) / 100;
+    const desconto = basePrice * (promocaoValor / 100);
+    const promoPrice = Math.round((basePrice - desconto) * 100) / 100;
     return {
-      base,
+      base: basePrice,
       promo: promoPrice,
       emPromocao: true,
       promocaoTipo,
@@ -160,10 +160,9 @@ export function getPrecoProduto(
   }
 
   if (promocaoTipo === "novo_preco" && precoCustomizado != null) {
-    const originalBase = config.precos_base[tipo] ?? 89.90;
-    const discountPercent = Math.round(((originalBase - precoCustomizado) / originalBase) * 100);
+    const discountPercent = Math.round(((basePrice - precoCustomizado) / basePrice) * 100);
     return {
-      base: originalBase,
+      base: basePrice,
       promo: precoCustomizado,
       emPromocao: true,
       promocaoTipo,
@@ -175,7 +174,7 @@ export function getPrecoProduto(
 
   if (promocaoTipo === "leve_pague") {
     return {
-      base,
+      base: basePrice,
       promo: null,
       emPromocao: true,
       promocaoTipo,
@@ -187,7 +186,7 @@ export function getPrecoProduto(
 
   if (promocaoTipo === "leve_3_pague_2") {
     return {
-      base,
+      base: basePrice,
       promo: null,
       emPromocao: true,
       promocaoTipo,
@@ -197,12 +196,39 @@ export function getPrecoProduto(
     };
   }
 
+  // Custom price overrides category promotion — show as promo based on base price
+  if (precoCustomizado != null && precoCustomizado < basePrice) {
+    const discountPercent = Math.round(((basePrice - precoCustomizado) / basePrice) * 100);
+    return {
+      base: basePrice,
+      promo: precoCustomizado,
+      emPromocao: true,
+      promocaoTipo: null,
+      promocaoValor: null,
+      badge: "PROMO",
+      discountLabel: discountPercent > 0 ? `${discountPercent}% OFF` : null,
+    };
+  }
+
+  // Custom price equal or higher than base — use as base price (no promo)
+  if (precoCustomizado != null) {
+    return {
+      base: precoCustomizado,
+      promo: null,
+      emPromocao: false,
+      promocaoTipo: null,
+      promocaoValor: null,
+      badge: null,
+      discountLabel: null,
+    };
+  }
+
   // Category-level promo
   const emPromocao = config.promocao_ativa[tipo] ?? false;
-  const promo = emPromocao ? (config.precos_promocao[tipo] ?? base) : null;
-  const discountPercent = emPromocao && promo !== null ? Math.round(((base - promo) / base) * 100) : null;
+  const promo = emPromocao ? (config.precos_promocao[tipo] ?? basePrice) : null;
+  const discountPercent = emPromocao && promo !== null ? Math.round(((basePrice - promo) / basePrice) * 100) : null;
   return {
-    base,
+    base: basePrice,
     promo,
     emPromocao,
     promocaoTipo: null,

@@ -30,10 +30,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Verify admin role via app_metadata
-    const role = user.app_metadata?.role;
-    if (role !== "admin") {
-      return res.status(403).json({ error: "Forbidden: admin role required" });
+    // Verify admin role — check app_metadata from JWT first,
+    // then query auth.users directly (service role) as authoritative source.
+    // Never trust user_metadata (client-writable = privilege escalation).
+    const jwtRole = user.app_metadata?.role;
+    if (jwtRole === "admin") {
+      // Fast path: JWT already has admin claim
+    } else {
+      // Authoritative check: query auth.users with service role key
+      const { data: adminUser, error: adminError } = await supabase.auth.admin.getUserById(user.id);
+      if (adminError || !adminUser) {
+        return res.status(403).json({ error: "Forbidden: admin role required" });
+      }
+      const dbRole = adminUser.user?.app_metadata?.role;
+      if (dbRole !== "admin") {
+        return res.status(403).json({ error: "Forbidden: admin role required" });
+      }
     }
 
     const { orderId } = req.body as { orderId: string };

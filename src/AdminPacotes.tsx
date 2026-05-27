@@ -29,6 +29,16 @@ export default function AdminPacotes() {
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState<SharingState | null>(null);
 
+  // Lock body scroll when sharing modal is open
+  useEffect(() => {
+    if (sharing) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [sharing]);
+
   const loadOrders = useCallback(async () => {
     try {
       setLoading(true);

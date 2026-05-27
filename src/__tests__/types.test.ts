@@ -56,8 +56,9 @@ describe("getPrecoProduto", () => {
 
   it("applies porcentagem promo with custom base", () => {
     const r = getPrecoProduto("Jogador", DEFAULT_CONFIG, 199.90, "porcentagem", 15);
-    const expected = Math.round((199.90 - 199.90 * 0.15) * 100) / 100;
-    expect(r.base).toBe(199.90);
+    // Discount is always based on the base price (169.90), not the custom price
+    const expected = Math.round((169.90 - 169.90 * 0.15) * 100) / 100;
+    expect(r.base).toBe(169.90);
     expect(r.promo).toBe(expected);
     expect(r.badge).toBe("PROMO");
     expect(r.discountLabel).toBe("15% OFF");
@@ -134,6 +135,20 @@ describe("getPrecoProduto", () => {
     expect(r.badge).toBeNull();
   });
 
+  // ── Custom price overrides category promo ──
+
+  it("custom price overrides category promo", () => {
+    const cfg = categoriaEmPromocao("Torcedor", true);
+    const r = getPrecoProduto("Torcedor", cfg, 119.90);
+    // Custom price (119.90) should override category promo price (109.90)
+    // Discount should be based on base price (129.90)
+    expect(r.base).toBe(129.90);
+    expect(r.promo).toBe(119.90);
+    expect(r.emPromocao).toBe(true);
+    expect(r.badge).toBe("PROMO");
+    expect(r.discountLabel).toBe("8% OFF");
+  });
+
   // ── Unknown / fallback ──
 
   it("uses fallback base price for unknown tipo", () => {
@@ -142,10 +157,20 @@ describe("getPrecoProduto", () => {
     expect(r.promo).toBeNull();
   });
 
-  it("uses custom precoCustomizado as base when provided", () => {
+  it("uses custom precoCustomizado as promo when lower than base price", () => {
+    const r = getPrecoProduto("NBA", DEFAULT_CONFIG, 159.90);
+    expect(r.base).toBe(189.90);
+    expect(r.promo).toBe(159.90);
+    expect(r.emPromocao).toBe(true);
+    expect(r.badge).toBe("PROMO");
+    expect(r.discountLabel).toBe("16% OFF");
+  });
+
+  it("uses custom precoCustomizado as base when equal or higher than base price", () => {
     const r = getPrecoProduto("NBA", DEFAULT_CONFIG, 250.00);
     expect(r.base).toBe(250.00);
     expect(r.promo).toBeNull();
+    expect(r.emPromocao).toBe(false);
   });
 
   // ── Edge: porcentagem with null valor does NOT apply ──

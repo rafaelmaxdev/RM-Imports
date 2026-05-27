@@ -442,6 +442,16 @@ export default function ProdutoForm({
   const [peca, setPeca] = useState("camisa");
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
+
+  // Lock body scroll when edit modal is open
+  useEffect(() => {
+    if (editandoId) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [editandoId]);
   const [saving, setSaving] = useState(false);
 
   const [filtroTime, setFiltroTime] = useState("");

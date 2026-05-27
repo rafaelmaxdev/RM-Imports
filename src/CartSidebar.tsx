@@ -275,13 +275,17 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
     { value: "debit_card", label: "Cartão de Débito", icon: "🏦", desc: "Débito à vista" },
   ];
 
-  // Close on Escape key
+  // Close on Escape key + lock body scroll
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
   }, [onClose]);
 
   return (

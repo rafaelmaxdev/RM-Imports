@@ -14,6 +14,8 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
   const reorderRef = useRef(0);
 
   // Normalize ordem_destaque: assign sequential values to nulls, sort by ordem
@@ -85,24 +87,12 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
     }
   }
 
-  const handleMove = useCallback(
-    async (index: number, direction: "up" | "down") => {
-      if (direction === "up" && index === 0) return;
-      if (direction === "down" && index === destaques.length - 1) return;
-
-      const swapIndex = direction === "up" ? index - 1 : index + 1;
-
-      // Build new order: swap the two items, then re-index all
-      const newOrder = [...destaques];
-      [newOrder[index], newOrder[swapIndex]] = [newOrder[swapIndex], newOrder[index]];
-
-      // Assign sequential ordem_destaque to all items
+  const persistOrder = useCallback(
+    async (newOrder: DbProduto[]) => {
       const updates = newOrder.map((p, i) => ({
         id: p.id,
         ordem_destaque: i + 1,
       }));
-
-      // Optimistic local update
       const updateMap = new Map(updates.map((u) => [u.id, u.ordem_destaque]));
       setProdutos((prev) =>
         prev.map((p) => {
@@ -111,8 +101,6 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
           return p;
         })
       );
-
-      // Debounce persist: only send the latest reorder
       const opId = ++reorderRef.current;
       try {
         await reorderDestaques(updates);
@@ -122,8 +110,90 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
         }
       }
     },
-    [destaques, setProdutos]
+    [setProdutos]
   );
+
+  const handleMove = useCallback(
+    async (index: number, direction: "up" | "down") => {
+      if (direction === "up" && index === 0) return;
+      if (direction === "down" && index === destaques.length - 1) return;
+
+      const swapIndex = direction === "up" ? index - 1 : index + 1;
+      const newOrder = [...destaques];
+      [newOrder[index], newOrder[swapIndex]] = [newOrder[swapIndex], newOrder[index]];
+
+      await persistOrder(newOrder);
+    },
+    [destaques, persistOrder]
+  );
+
+  // ── Drag & Drop handlers ──
+
+  const scrollEdgeRef = useRef<number | null>(null);
+
+  const startEdgeScroll = useCallback((direction: "up" | "down") => {
+    if (scrollEdgeRef.current) return;
+    const speed = 8;
+    const tick = () => {
+      window.scrollBy(0, direction === "up" ? -speed : speed);
+      scrollEdgeRef.current = window.requestAnimationFrame(tick);
+    };
+    scrollEdgeRef.current = window.requestAnimationFrame(tick);
+  }, []);
+
+  const stopEdgeScroll = useCallback(() => {
+    if (scrollEdgeRef.current != null) {
+      cancelAnimationFrame(scrollEdgeRef.current);
+      scrollEdgeRef.current = null;
+    }
+  }, []);
+
+  const handleDragStart = useCallback((index: number) => {
+    setDragIndex(index);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDropIndex(index);
+
+    // Auto-scroll when dragging near viewport edges.
+    // Top threshold accounts for the sticky header (~56px).
+    const topMargin = 120;
+    const bottomMargin = 60;
+    const y = e.clientY;
+    if (y < topMargin) {
+      startEdgeScroll("up");
+    } else if (y > window.innerHeight - bottomMargin) {
+      startEdgeScroll("down");
+    } else {
+      stopEdgeScroll();
+    }
+  }, [startEdgeScroll, stopEdgeScroll]);
+
+  const handleDragLeave = useCallback(() => {
+    setDropIndex(null);
+  }, []);
+
+  const handleDrop = useCallback(async () => {
+    stopEdgeScroll();
+    if (dragIndex === null || dropIndex === null || dragIndex === dropIndex) {
+      setDragIndex(null);
+      setDropIndex(null);
+      return;
+    }
+    const newOrder = [...destaques];
+    const [moved] = newOrder.splice(dragIndex, 1);
+    newOrder.splice(dropIndex, 0, moved);
+    setDragIndex(null);
+    setDropIndex(null);
+    await persistOrder(newOrder);
+  }, [dragIndex, dropIndex, destaques, persistOrder, stopEdgeScroll]);
+
+  const handleDragEnd = useCallback(() => {
+    stopEdgeScroll();
+    setDragIndex(null);
+    setDropIndex(null);
+  }, [stopEdgeScroll]);
 
   return (
     <div>
@@ -133,17 +203,42 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
       {destaques.length > 0 ? (
         <div className="mb-6">
           <h4 className="text-sm font-semibold text-text-muted mb-2">
-            Produtos em destaque ({destaques.length})
+            Produtos em destaque ({destaques.length}) — arraste para reordenar
           </h4>
           <div className="flex flex-col gap-2">
             {destaques.map((p, index) => {
               const imgs = parseImageUrls(p.imagem_urls);
               const img = imgs.length > 0 ? proxyImageUrl(imgs[0].replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")) : "";
+              const isDragging = dragIndex === index;
+              const isDropTarget = dropIndex === index && dragIndex !== index;
               return (
                 <div
                   key={p.id}
-                  className="flex items-center gap-2 p-2 bg-card-bg rounded-md border border-border"
+                  draggable
+                  onDragStart={() => handleDragStart(index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  className={`flex items-center gap-2 p-2 bg-card-bg rounded-md border cursor-grab active:cursor-grabbing select-none transition-all ${
+                    isDragging
+                      ? "border-accent opacity-40 scale-[0.98]"
+                      : isDropTarget
+                        ? "border-accent shadow-[0_2px_8px_rgba(0,0,0,0.1)] -translate-y-0.5"
+                        : "border-border hover:border-accent/40"
+                  }`}
                 >
+                  {/* Drag handle */}
+                  <div className="flex flex-col items-center gap-0.5 text-text-muted cursor-grab active:cursor-grabbing px-0.5" title="Arrastar para reordenar">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="4" cy="3" r="1.5"/>
+                      <circle cx="10" cy="3" r="1.5"/>
+                      <circle cx="4" cy="7" r="1.5"/>
+                      <circle cx="10" cy="7" r="1.5"/>
+                      <circle cx="4" cy="11" r="1.5"/>
+                      <circle cx="10" cy="11" r="1.5"/>
+                    </svg>
+                  </div>
                   {/* Up/Down arrows */}
                   <div className="flex flex-col gap-0.5">
                     <button

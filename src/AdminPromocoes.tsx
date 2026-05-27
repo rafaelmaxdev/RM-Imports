@@ -242,7 +242,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
       if (p.promocao_tipo) return false;
       if (filtroTipo && p.tipo !== filtroTipo) return false;
       if (q) {
-        const campos = [p.nome, p.time, p.liga, p.tipo, p.temporada].join(" ").toLowerCase();
+        const campos = [p.nome, p.time, p.tipo, p.temporada].join(" ").toLowerCase();
         if (!campos.includes(q)) return false;
       }
       return true;

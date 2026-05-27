@@ -628,7 +628,7 @@ export default function ProdutoForm({
       if (filtroTime && p.time !== filtroTime) return false;
       if (filtroTipo && p.tipo !== filtroTipo) return false;
       if (busca) {
-        const campos = [p.nome, p.time, p.liga, p.tipo, p.temporada].join(" ").toLowerCase();
+        const campos = [p.nome, p.time, p.tipo, p.temporada].join(" ").toLowerCase();
         if (!campos.includes(busca)) return false;
       }
       return true;

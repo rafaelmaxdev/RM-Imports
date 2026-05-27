@@ -12,12 +12,24 @@ interface AdminDestaquesProps {
 export default function AdminDestaques({ produtos, setProdutos }: AdminDestaquesProps) {
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
+  const [ordenacao, setOrdenacao] = useState<"time" | "temporada-asc" | "temporada-desc">("time");
   const [saving, setSaving] = useState<string | null>(null);
 
-  const destaques = useMemo(
-    () => produtos.filter((p) => p.destaque),
-    [produtos]
-  );
+  const destaques = useMemo(() => {
+    const res = produtos.filter((p) => p.destaque);
+    switch (ordenacao) {
+      case "time":
+        res.sort((a, b) => a.time.localeCompare(b.time) || a.nome.localeCompare(b.nome));
+        break;
+      case "temporada-asc":
+        res.sort((a, b) => a.temporada.localeCompare(b.temporada) || a.time.localeCompare(b.time));
+        break;
+      case "temporada-desc":
+        res.sort((a, b) => b.temporada.localeCompare(a.temporada) || a.time.localeCompare(b.time));
+        break;
+    }
+    return res;
+  }, [produtos, ordenacao]);
 
   const resultados = useMemo(() => {
     const q = busca.toLowerCase().trim();
@@ -53,9 +65,20 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
       {/* Current destaques */}
       {destaques.length > 0 ? (
         <div className="mb-6">
-          <h4 className="text-sm font-semibold text-text-muted mb-2">
-            Produtos em destaque ({destaques.length})
-          </h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold text-text-muted">
+              Produtos em destaque ({destaques.length})
+            </h4>
+            <select
+              value={ordenacao}
+              onChange={(e) => setOrdenacao(e.target.value as typeof ordenacao)}
+              className="px-2 py-1 border border-border rounded-md bg-card-bg text-xs"
+            >
+              <option value="time">Time / Nome</option>
+              <option value="temporada-asc">Temp. mais antiga</option>
+              <option value="temporada-desc">Temp. mais recente</option>
+            </select>
+          </div>
           <div className="flex flex-col gap-2">
             {destaques.map((p) => {
               const imgs = parseImageUrls(p.imagem_urls);

@@ -92,6 +92,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
       nomePersonalizado: personalizado ? nomePersonalizado.trim() : undefined,
       numeroPersonalizado: personalizado ? numeroPersonalizado.trim() : undefined,
       preco: precoFinal,
+      precoBase: precoBase + adicionalTam + adicionalPers,
     };
 
     addToCart(item);

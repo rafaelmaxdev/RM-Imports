@@ -7,15 +7,62 @@ const supabase = createClient(
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   // Extract order ID from path: /api/order/UL-XXXX
+  // Try multiple methods since Vercel's query parsing varies by runtime version
+  let id: string | undefined;
+
+  // Method 1: req.query.path (Vercel catch-all route parameter)
   const { path } = req.query;
-  const id = Array.isArray(path) ? path[0] : path;
+  if (Array.isArray(path)) {
+    id = path[0];
+  } else if (typeof path === "string" && path) {
+    id = path;
+  }
+
+  // Method 2: Direct regex on req.url (most reliable)
+  if (!id && req.url) {
+    const cleanUrl = req.url.split("?")[0].split("#")[0];
+    const match = cleanUrl.match(/\/order\/([^/]+)$/);
+    if (match) {
+      id = decodeURIComponent(match[1]);
+    }
+  }
+
+  // Method 3: Full URL parsing fallback
+  if (!id && req.url) {
+    try {
+      const urlPath = new URL(req.url, `https://${req.headers.host || "localhost"}`).pathname;
+      const match = urlPath.match(/\/order\/([^/]+)$/);
+      if (match) {
+        id = decodeURIComponent(match[1]);
+      }
+    } catch {
+      // URL parsing failed, skip
+    }
+  }
+
+  // Method 4: Check req.query.id as a fallback
+  if (!id) {
+    const queryId = req.query.id;
+    if (typeof queryId === "string" && queryId) {
+      id = queryId;
+    }
+  }
 
   if (!id) {
+    console.error("Failed to extract order ID", { url: req.url, query: req.query, path: req.query?.path });
     return res.status(400).json({ error: "Missing order ID" });
   }
 

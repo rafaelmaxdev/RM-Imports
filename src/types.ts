@@ -11,6 +11,7 @@ export interface CartItem {
   nomePersonalizado?: string;
   numeroPersonalizado?: string;
   preco: number;
+  precoBase: number;       // Total price without any discount (base + add-ons)
   feminino: boolean;
 }
 
@@ -24,6 +25,7 @@ export interface OrderItem {
   nomePersonalizado?: string;
   numeroPersonalizado?: string;
   preco: number;
+  precoBase?: number;      // Total price without any discount (base + add-ons); optional for backward compat
   yupooUrl: string;
   feminino: boolean;
 }
@@ -318,7 +320,11 @@ export function montarMensagemPagamento(order: Order): string {
       msg += `   • Nome: ${item.nomePersonalizado}\n`;
       msg += `   • Número: ${item.numeroPersonalizado}\n`;
     }
-    msg += `   • Valor: ${formatarMoeda(item.preco)}\n`;
+    if (item.precoBase != null && item.precoBase > item.preco) {
+      msg += `   • Valor: ~~${formatarMoeda(item.precoBase)}~~ ${formatarMoeda(item.preco)}\n`;
+    } else {
+      msg += `   • Valor: ${formatarMoeda(item.preco)}\n`;
+    }
   });
 
   if (order.endereco) {

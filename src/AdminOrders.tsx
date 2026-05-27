@@ -276,7 +276,14 @@ export default function AdminOrders() {
                               )}
                             </div>
                             <div className="font-bold text-sm text-accent whitespace-nowrap">
-                              {formatarMoeda(item.preco)}
+                              {item.precoBase != null && item.precoBase > item.preco ? (
+                                <span className="flex items-baseline gap-1">
+                                  <span className="text-text-muted text-xs line-through">{formatarMoeda(item.precoBase)}</span>
+                                  <span>{formatarMoeda(item.preco)}</span>
+                                </span>
+                              ) : (
+                                <span>{formatarMoeda(item.preco)}</span>
+                              )}
                             </div>
                           </div>
                         ))}

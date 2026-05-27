@@ -176,7 +176,15 @@ export default function OrderConfirmation() {
                   <span>Tamanho: {item.tamanho}</span>
                   <span>Modelo: {item.genero}</span>
                 </div>
-                <div className="font-bold text-accent mt-1">{formatarMoeda(item.preco)}</div>
+                {item.precoBase != null && item.precoBase > item.preco ? (
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-text-muted text-sm line-through">{formatarMoeda(item.precoBase)}</span>
+                    <span className="font-bold text-accent">{formatarMoeda(item.preco)}</span>
+                    <span className="text-xs font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">{Math.round(((item.precoBase - item.preco) / item.precoBase) * 100)}% OFF</span>
+                  </div>
+                ) : (
+                  <div className="font-bold text-accent mt-1">{formatarMoeda(item.preco)}</div>
+                )}
               </div>
             ))}
           </div>
@@ -185,6 +193,12 @@ export default function OrderConfirmation() {
             <span>Total:</span>
             <span>{formatarMoeda(order.total)}</span>
           </div>
+          {order.itens.some((item) => item.precoBase != null && item.precoBase > item.preco) && (
+            <div className="flex justify-between text-sm text-green-600 font-semibold mt-1">
+              <span>Economia:</span>
+              <span>{formatarMoeda(order.itens.reduce((sum, item) => sum + ((item.precoBase ?? item.preco) - item.preco), 0))}</span>
+            </div>
+          )}
 
           {order.endereco && (
             <div className="mt-6 pt-4 border-t border-border">
@@ -329,7 +343,15 @@ export default function OrderConfirmation() {
                   ✦ Personalizado: {item.nomePersonalizado} #{item.numeroPersonalizado}
                 </div>
               )}
-              <div className="font-bold text-accent mt-1">{formatarMoeda(item.preco)}</div>
+              {item.precoBase != null && item.precoBase > item.preco ? (
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-text-muted text-sm line-through">{formatarMoeda(item.precoBase)}</span>
+                  <span className="font-bold text-accent">{formatarMoeda(item.preco)}</span>
+                  <span className="text-xs font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">{Math.round(((item.precoBase - item.preco) / item.precoBase) * 100)}% OFF</span>
+                </div>
+              ) : (
+                <div className="font-bold text-accent mt-1">{formatarMoeda(item.preco)}</div>
+              )}
             </div>
           ))}
         </div>
@@ -338,6 +360,12 @@ export default function OrderConfirmation() {
           <span>Total:</span>
           <span>{formatarMoeda(order.total)}</span>
         </div>
+        {order.itens.some((item) => item.precoBase != null && item.precoBase > item.preco) && (
+          <div className="flex justify-between text-sm text-green-600 font-semibold mt-1">
+            <span>Economia:</span>
+            <span>{formatarMoeda(order.itens.reduce((sum, item) => sum + ((item.precoBase ?? item.preco) - item.preco), 0))}</span>
+          </div>
+        )}
 
         {order.endereco && (
           <div className="mt-6 pt-4 border-t border-border">

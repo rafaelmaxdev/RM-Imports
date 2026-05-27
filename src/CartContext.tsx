@@ -101,6 +101,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           nomePersonalizado: item.nomePersonalizado,
           numeroPersonalizado: item.numeroPersonalizado,
           preco: item.preco,
+          precoBase: item.precoBase,
           yupooUrl: item.yupooUrl,
           feminino: item.feminino,
         })),

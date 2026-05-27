@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -11,6 +11,70 @@ function ignoreApiDir(): Plugin {
       if (id.startsWith("/api/") || id.startsWith("api/")) {
         return { id, external: true };
       }
+    },
+  };
+}
+
+function orderApiPlugin(): Plugin {
+  return {
+    name: "order-api",
+    configureServer(server) {
+      // Handle /api/order/:id locally in dev — avoids proxying to Vercel
+      // which has a broken catch-all route that can't extract the order ID
+      server.middlewares.use(async (req, res, next) => {
+        const match = req.url?.match(/^\/api\/order\/([^/?#]+)$/);
+        if (!match) return next();
+
+        const id = decodeURIComponent(match[1]);
+
+        // Load env vars via Vite's loadEnv (respects .env files)
+        const env = loadEnv(server.config.mode, process.cwd(), "");
+        const supabaseUrl = env.VITE_SUPABASE_URL;
+        const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_ANON_KEY;
+
+        if (!supabaseUrl || !serviceKey) {
+          res.statusCode = 500;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Missing Supabase env vars" }));
+          return;
+        }
+
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabase = createClient(supabaseUrl, serviceKey);
+
+        try {
+          const { data: order, error } = await supabase
+            .from("pedidos")
+            .select("*")
+            .eq("id", id)
+            .single();
+
+          if (error || !order) {
+            res.statusCode = 404;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Order not found" }));
+            return;
+          }
+
+          const parsed = {
+            ...order,
+            itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens,
+            endereco: order.endereco
+              ? (typeof order.endereco === "string" ? JSON.parse(order.endereco) : order.endereco)
+              : null,
+          };
+
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.end(JSON.stringify(parsed));
+        } catch (err) {
+          console.error("Error fetching order in dev middleware:", err);
+          res.statusCode = 500;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Internal server error" }));
+        }
+      });
     },
   };
 }
@@ -59,7 +123,7 @@ function imageProxyPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), ignoreApiDir(), imageProxyPlugin()],
+  plugins: [react(), tailwindcss(), ignoreApiDir(), orderApiPlugin(), imageProxyPlugin()],
   build: {
     rollupOptions: {
       external: ['mercadopago'],

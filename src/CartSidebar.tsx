@@ -344,7 +344,16 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                       {item.tamanho} • {item.genero}
                       {item.personalizado && ` • ${item.nomePersonalizado} #${item.numeroPersonalizado}`}
                     </div>
-                    <div className="font-bold text-accent text-sm">{formatarMoeda(item.preco)}</div>
+                    <div className="font-bold text-accent text-sm">
+                      {item.precoBase != null && item.precoBase > item.preco ? (
+                        <span className="flex items-baseline gap-1.5">
+                          <span className="text-text-muted text-xs line-through">{formatarMoeda(item.precoBase)}</span>
+                          <span>{formatarMoeda(item.preco)}</span>
+                        </span>
+                      ) : (
+                        <span>{formatarMoeda(item.preco)}</span>
+                      )}
+                    </div>
                   </div>
                   <button
                     className="bg-none border-none text-text-muted cursor-pointer text-lg py-1 hover:text-accent"

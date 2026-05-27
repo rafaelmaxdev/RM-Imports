@@ -159,7 +159,7 @@ export async function setDescontoGlobal(porcentagem: number): Promise<DbProduto[
       promocao_tipo: "porcentagem",
       promocao_valor: porcentagem,
     })
-    .neq("id", "")
+    .not("id", "is", null)
     .select();
 
   if (error) throw error;

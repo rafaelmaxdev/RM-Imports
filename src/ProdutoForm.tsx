@@ -186,6 +186,7 @@ function toDbProduto(p: {
     promocao_tipo: p.promocao_tipo ?? null,
     promocao_valor: p.promocao_valor ?? null,
     peca: p.peca ?? "camisa",
+    ordem_destaque: null,
   };
 }
 

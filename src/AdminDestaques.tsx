@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import type { DbProduto } from "./lib/db";
-import { toggleDestaque } from "./lib/db";
+import { toggleDestaque, reorderDestaques } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
 import { proxyImageUrl } from "./types";
 
@@ -12,24 +12,23 @@ interface AdminDestaquesProps {
 export default function AdminDestaques({ produtos, setProdutos }: AdminDestaquesProps) {
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
-  const [ordenacao, setOrdenacao] = useState<"time" | "temporada-asc" | "temporada-desc">("time");
   const [saving, setSaving] = useState<string | null>(null);
+  const reorderRef = useRef(0);
 
+  // Normalize ordem_destaque: assign sequential values to nulls, sort by ordem
   const destaques = useMemo(() => {
-    const res = produtos.filter((p) => p.destaque);
-    switch (ordenacao) {
-      case "time":
-        res.sort((a, b) => a.time.localeCompare(b.time) || a.nome.localeCompare(b.nome));
-        break;
-      case "temporada-asc":
-        res.sort((a, b) => a.temporada.localeCompare(b.temporada) || a.time.localeCompare(b.time));
-        break;
-      case "temporada-desc":
-        res.sort((a, b) => b.temporada.localeCompare(a.temporada) || a.time.localeCompare(b.time));
-        break;
-    }
-    return res;
-  }, [produtos, ordenacao]);
+    const items = produtos.filter((p) => p.destaque);
+    // Sort by existing ordem_destaque, nulls last; within nulls, preserve array order
+    items.sort((a, b) => {
+      const aOrdem = a.ordem_destaque;
+      const bOrdem = b.ordem_destaque;
+      if (aOrdem === null && bOrdem === null) return 0;
+      if (aOrdem === null) return 1;
+      if (bOrdem === null) return -1;
+      return aOrdem - bOrdem;
+    });
+    return items;
+  }, [produtos]);
 
   const resultados = useMemo(() => {
     const q = busca.toLowerCase().trim();
@@ -48,15 +47,82 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
     setSaving(id);
     try {
       await toggleDestaque(id, destaque);
-      setProdutos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, destaque } : p))
-      );
+      if (destaque) {
+        // Adding: assign next ordem_destaque
+        const maxOrdem = destaques.reduce(
+          (max, p) => Math.max(max, p.ordem_destaque ?? 0),
+          0
+        );
+        const newOrdem = maxOrdem + 1;
+        setProdutos((prev) =>
+          prev.map((p) =>
+            p.id === id ? { ...p, destaque, ordem_destaque: newOrdem } : p
+          )
+        );
+        await reorderDestaques([{ id, ordem_destaque: newOrdem }]);
+      } else {
+        // Removing: re-index remaining items
+        const remaining = destaques.filter((p) => p.id !== id);
+        const updates = remaining.map((p, i) => ({
+          id: p.id,
+          ordem_destaque: i + 1,
+        }));
+        setProdutos((prev) =>
+          prev.map((p) => {
+            if (p.id === id) return { ...p, destaque, ordem_destaque: null };
+            const update = updates.find((u) => u.id === p.id);
+            if (update) return { ...p, ordem_destaque: update.ordem_destaque };
+            return p;
+          })
+        );
+        await reorderDestaques(updates);
+      }
     } catch (err) {
       console.error("Erro ao atualizar destaque:", err);
     } finally {
       setSaving(null);
     }
   }
+
+  const handleMove = useCallback(
+    async (index: number, direction: "up" | "down") => {
+      if (direction === "up" && index === 0) return;
+      if (direction === "down" && index === destaques.length - 1) return;
+
+      const swapIndex = direction === "up" ? index - 1 : index + 1;
+
+      // Build new order: swap the two items, then re-index all
+      const newOrder = [...destaques];
+      [newOrder[index], newOrder[swapIndex]] = [newOrder[swapIndex], newOrder[index]];
+
+      // Assign sequential ordem_destaque to all items
+      const updates = newOrder.map((p, i) => ({
+        id: p.id,
+        ordem_destaque: i + 1,
+      }));
+
+      // Optimistic local update
+      const updateMap = new Map(updates.map((u) => [u.id, u.ordem_destaque]));
+      setProdutos((prev) =>
+        prev.map((p) => {
+          const newOrdem = updateMap.get(p.id);
+          if (newOrdem !== undefined) return { ...p, ordem_destaque: newOrdem };
+          return p;
+        })
+      );
+
+      // Debounce persist: only send the latest reorder
+      const opId = ++reorderRef.current;
+      try {
+        await reorderDestaques(updates);
+      } catch (err) {
+        if (reorderRef.current === opId) {
+          console.error("Erro ao reordenar destaque:", err);
+        }
+      }
+    },
+    [destaques, setProdutos]
+  );
 
   return (
     <div>
@@ -65,29 +131,37 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
       {/* Current destaques */}
       {destaques.length > 0 ? (
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold text-text-muted">
-              Produtos em destaque ({destaques.length})
-            </h4>
-            <select
-              value={ordenacao}
-              onChange={(e) => setOrdenacao(e.target.value as typeof ordenacao)}
-              className="px-2 py-1 border border-border rounded-md bg-card-bg text-xs"
-            >
-              <option value="time">Time / Nome</option>
-              <option value="temporada-asc">Temp. mais antiga</option>
-              <option value="temporada-desc">Temp. mais recente</option>
-            </select>
-          </div>
+          <h4 className="text-sm font-semibold text-text-muted mb-2">
+            Produtos em destaque ({destaques.length})
+          </h4>
           <div className="flex flex-col gap-2">
-            {destaques.map((p) => {
+            {destaques.map((p, index) => {
               const imgs = parseImageUrls(p.imagem_urls);
               const img = imgs.length > 0 ? proxyImageUrl(imgs[0].replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")) : "";
               return (
                 <div
                   key={p.id}
-                  className="flex items-center gap-3 p-2 bg-card-bg rounded-md border border-border"
+                  className="flex items-center gap-2 p-2 bg-card-bg rounded-md border border-border"
                 >
+                  {/* Up/Down arrows */}
+                  <div className="flex flex-col gap-0.5">
+                    <button
+                      className="px-1 py-0.5 text-xs text-text-muted hover:text-text-main cursor-pointer disabled:opacity-30 disabled:cursor-default"
+                      onClick={() => handleMove(index, "up")}
+                      disabled={index === 0 || saving !== null}
+                      title="Mover para cima"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      className="px-1 py-0.5 text-xs text-text-muted hover:text-text-main cursor-pointer disabled:opacity-30 disabled:cursor-default"
+                      onClick={() => handleMove(index, "down")}
+                      disabled={index === destaques.length - 1 || saving !== null}
+                      title="Mover para baixo"
+                    >
+                      ▼
+                    </button>
+                  </div>
                   {img ? (
                     <img src={img} alt={p.nome} className="w-10 h-10 object-cover rounded" />
                   ) : (
@@ -129,7 +203,7 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
             type="text"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por nome, time, liga..."
+            placeholder="Buscar por nome, time..."
             className="flex-1 px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
           />
           <select

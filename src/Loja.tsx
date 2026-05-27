@@ -162,7 +162,14 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   }, [produtosNormalizados, categoriaSelecionada, filtroTime]);
 
   const destaquesEPromos = useMemo(() => {
-    return produtos.filter((p) => p.destaque || (p.promocao && p.promocao_tipo));
+    return produtos
+      .filter((p) => p.destaque || (p.promocao && p.promocao_tipo))
+      .sort((a, b) => {
+        // Destaques first, ordered by ordem_destaque; then promos
+        const aOrdem = a.ordem_destaque ?? 9999;
+        const bOrdem = b.ordem_destaque ?? 9999;
+        return aOrdem - bOrdem;
+      });
   }, [produtos]);
 
   return (

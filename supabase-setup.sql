@@ -446,3 +446,11 @@ ALTER TABLE pacotes ADD CONSTRAINT chk_pacote_status_valid
 
 ALTER TABLE pedidos ADD CONSTRAINT chk_pedido_total_non_negative
   CHECK (total >= 0);
+
+-- ────────────────────────────────────────────────────────────
+-- 10. MIGRAÇÃO: Adicionar coluna ordem_destaque na tabela produtos
+-- Execute no SQL Editor do Supabase:
+-- ────────────────────────────────────────────────────────────
+
+-- ALTER TABLE produtos ADD COLUMN ordem_destaque integer DEFAULT NULL;
+-- COMMENT ON COLUMN produtos.ordem_destaque IS 'Ordem manual dos produtos em destaque. NULL para não-destaques.';

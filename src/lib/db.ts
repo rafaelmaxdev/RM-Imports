@@ -12,6 +12,7 @@ export interface DbProduto {
   imagem_urls: string[];
   yupoo_url: string;
   destaque: boolean;
+  ordem_destaque: number | null;
   preco_customizado: number | null;
   promocao: boolean;
   promocao_tipo: string | null;   // 'porcentagem' | 'novo_preco' | 'leve_pague' | 'leve_3_pague_2' | null
@@ -31,7 +32,7 @@ export function parseImageUrls(value: string[] | string | null | undefined): str
 export async function getProdutos(): Promise<DbProduto[]> {
   const { data, error } = await supabase
     .from("produtos")
-    .select("id,nome,liga,time,tipo,temporada,imagem_urls,yupoo_url,destaque,preco_customizado,promocao,promocao_tipo,promocao_valor,feminino,peca,created_at")
+    .select("id,nome,liga,time,tipo,temporada,imagem_urls,yupoo_url,destaque,ordem_destaque,preco_customizado,promocao,promocao_tipo,promocao_valor,feminino,peca,created_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -50,7 +51,7 @@ export async function getProdutos(): Promise<DbProduto[]> {
  */
 const PRODUTOS_COLUMNS = new Set([
   "id", "nome", "liga", "time", "tipo", "temporada",
-  "imagem_urls", "yupoo_url", "destaque", "created_at",
+  "imagem_urls", "yupoo_url", "destaque", "ordem_destaque", "created_at",
   "preco_customizado", "promocao", "promocao_tipo", "promocao_valor", "peca",
   "feminino", // ← adicione esta coluna no banco: ALTER TABLE produtos ADD COLUMN feminino boolean DEFAULT false NOT NULL;
 ]);
@@ -140,6 +141,18 @@ export async function toggleDestaque(id: string, destaque: boolean): Promise<voi
     .eq("id", id);
 
   if (error) throw error;
+}
+
+export async function reorderDestaques(items: { id: string; ordem_destaque: number }[]): Promise<void> {
+  // Update each item's ordem_destaque individually
+  for (const item of items) {
+    const { error } = await supabase
+      .from("produtos")
+      .update({ ordem_destaque: item.ordem_destaque })
+      .eq("id", item.id);
+
+    if (error) throw error;
+  }
 }
 
 export async function setPromocaoCategoria(tipo: string, ativa: boolean): Promise<void> {

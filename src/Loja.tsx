@@ -96,7 +96,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     if (filtroBusca) {
       const q = normalizarBusca(filtroBusca);
       res = res.filter((p) => {
-        const campos = normalizarBusca([p.nome, p.time, p.liga, p.tipo, p.temporada].join(" "));
+        const campos = normalizarBusca([p.nome, p.time, p.tipo, p.temporada].join(" "));
         return campos.includes(q);
       });
     }
@@ -244,7 +244,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
               type="text"
               value={filtroBusca}
               onChange={(e) => setFiltroBusca(e.target.value)}
-              placeholder="Nome, time, liga..."
+              placeholder="Nome, time..."
               className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
             />
           </label>

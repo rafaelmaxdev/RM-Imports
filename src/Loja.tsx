@@ -45,6 +45,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("Todas");
   const [filtroTime, setFiltroTime] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
+  const [filtroBusca, setFiltroBusca] = useState("");
   const [ordenacao, setOrdenacao] = useState<Ordenacao>("time");
   const [produtoSelecionado, setProdutoSelecionado] = useState<DbProduto | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
@@ -54,7 +55,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
   useEffect(() => {
     setVisibleCount(24);
-  }, [categoriaSelecionada, filtroTime, filtroTipo]);
+  }, [categoriaSelecionada, filtroTime, filtroTipo, filtroBusca]);
 
   useEffect(() => {
     if (toastVisible) {
@@ -72,6 +73,11 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     }));
   }, [produtos]);
 
+  /** Remove /, (, ) so searches like "2025 2026" match "2025/2026" and "Casa" matches "(Casa)" */
+  function normalizarBusca(s: string): string {
+    return s.toLowerCase().replace(/[\/()]/g, " ").replace(/\s+/g, " ").trim();
+  }
+
   const produtosFiltrados = useMemo(() => {
     let res = [...produtosNormalizados];
     if (categoriaSelecionada !== "Todas") {
@@ -86,6 +92,13 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       } else {
         res = res.filter((p) => p.tipo === filtroTipo);
       }
+    }
+    if (filtroBusca) {
+      const q = normalizarBusca(filtroBusca);
+      res = res.filter((p) => {
+        const campos = normalizarBusca([p.nome, p.time, p.liga, p.tipo, p.temporada].join(" "));
+        return campos.includes(q);
+      });
     }
 
     // Sort
@@ -125,7 +138,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     }
 
     return res;
-  }, [produtosNormalizados, categoriaSelecionada, filtroTime, filtroTipo, ordenacao, config]);
+  }, [produtosNormalizados, categoriaSelecionada, filtroTime, filtroTipo, filtroBusca, ordenacao, config]);
 
   const timesDisponiveis = useMemo(() => {
     let res = [...produtosNormalizados];
@@ -177,6 +190,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
               setCategoriaSelecionada(cat);
               setFiltroTime("");
               setFiltroTipo("");
+              setFiltroBusca("");
             }}
           >
             {cat}
@@ -224,8 +238,18 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           </label>
         )}
 
-        <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] sm:text-xs text-text-muted font-medium pl-1">Ordenar por</span>
+<label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
+            <span className="text-[10px] sm:text-xs text-text-muted font-medium pl-1">Buscar</span>
+            <input
+              type="text"
+              value={filtroBusca}
+              onChange={(e) => setFiltroBusca(e.target.value)}
+              placeholder="Nome, time, liga..."
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
+            />
+          </label>
+
+          <label className="flex flex-col gap-0.5">
           <select
             value={ordenacao}
             onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
@@ -241,10 +265,10 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           </select>
         </label>
 
-        {(filtroTime || filtroTipo) && (
+        {(filtroTime || filtroTipo || filtroBusca) && (
           <button
             className="px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-text-muted text-white rounded-md cursor-pointer hover:opacity-90 whitespace-nowrap"
-            onClick={() => { setFiltroTime(""); setFiltroTipo(""); }}
+            onClick={() => { setFiltroTime(""); setFiltroTipo(""); setFiltroBusca(""); }}
             aria-label="Limpar filtros"
           >
             Limpar filtros

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { proxyImageUrl } from "./types";
+import { yupooThumbnailUrl } from "./types";
 
 interface ImageLightboxProps {
   images: string[];
@@ -62,13 +62,13 @@ export default function ImageLightbox({ images, alt, initialIndex, onClose }: Im
         className="max-w-[90vw] max-h-[85vh] flex items-center justify-center"
         onClick={(e) => e.stopPropagation()}
       >
-        <img
-          src={proxyImageUrl(validImages[current])}
-          alt={`${alt} ${current + 1}`}
-          className="max-w-full max-h-[85vh] object-contain select-none rounded-sm"
-          decoding="async"
-          draggable={false}
-        />
+<img
+            src={yupooThumbnailUrl(validImages[current], "medium")}
+            alt={`${alt} ${current + 1}`}
+            className="max-w-full max-h-[85vh] object-contain select-none rounded-sm"
+            decoding="async"
+            draggable={false}
+          />
       </div>
 
       {/* Navigation arrows */}

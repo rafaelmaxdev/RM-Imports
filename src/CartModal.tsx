@@ -81,7 +81,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
     const item: CartItem = {
       productId: produto.id,
       nome: produto.nome,
-      imagemUrl: allImages[0] || "",
+      imagemUrl: allImages[0] ? allImages[0].replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg") : "",
       yupooUrl: produto.yupoo_url,
       tipo: produto.tipo,
       temporada: produto.temporada,
@@ -179,13 +179,13 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
                     url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/medium.jpg")
                   )}
                   alt={produto.nome}
-                  onImageClick={(i) => setLightbox({
-                    images: allImages.map((url) =>
-                      url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/large.jpg")
-                    ),
-                    alt: produto.nome,
-                    index: i,
-                  })}
+onImageClick={(i) => setLightbox({
+                     images: allImages.map((url) =>
+                       url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/medium.jpg")
+                     ),
+                     alt: produto.nome,
+                     index: i,
+                   })}
                 />
               </div>
 

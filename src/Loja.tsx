@@ -50,11 +50,11 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   const [produtoSelecionado, setProdutoSelecionado] = useState<DbProduto | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduto, setToastProduto] = useState("");
-  const [visibleCount, setVisibleCount] = useState(24);
+  const [visibleCount, setVisibleCount] = useState(12);
   const [lightbox, setLightbox] = useState<{ images: string[]; alt: string; index: number } | null>(null);
 
   useEffect(() => {
-    setVisibleCount(24);
+    setVisibleCount(12);
   }, [categoriaSelecionada, filtroTime, filtroTipo, filtroBusca]);
 
   useEffect(() => {
@@ -326,7 +326,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                     alt={p.nome}
                     onImageClick={(i) => setLightbox({
                       images: parseImageUrls(p.imagem_urls).map((url) =>
-                        url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/large.jpg")
+                        url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/medium.jpg")
                       ),
                       alt: p.nome,
                       index: i,
@@ -383,7 +383,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
         <div className="text-center mt-8">
           <button
             className="px-8 py-3 text-sm font-semibold bg-primary text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"
-            onClick={() => setVisibleCount((prev) => prev + 24)}
+            onClick={() => setVisibleCount((prev) => prev + 12)}
           >
             Mostrar mais ({produtosFiltrados.length - visibleCount} restantes)
           </button>

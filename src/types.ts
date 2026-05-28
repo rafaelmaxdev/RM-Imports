@@ -401,10 +401,16 @@ export function montarMensagemPacote(orders: Order[]): string {
   return lines.join("\n").trimEnd();
 }
 
-export function proxyImageUrl(url: string): string {
+/**
+ * Proxies an image URL through the API.
+ * Uses redirect mode by default (zero Origin Transfer on Vercel).
+ * Falls back to proxy mode when direct access fails (CORS/403).
+ */
+export function proxyImageUrl(url: string, mode: "redirect" | "proxy" = "redirect"): string {
   if (!url) return "";
   if (url.startsWith("data:")) return url;
-  return `/api/image?url=${encodeURIComponent(url)}`;
+  const redirectParam = mode === "redirect" ? "" : "&redirect=0";
+  return `/api/image?url=${encodeURIComponent(url)}${redirectParam}`;
 }
 
 /**
@@ -415,8 +421,7 @@ export function proxyImageUrl(url: string): string {
 export function yupooThumbnailUrl(url: string, size: "small" | "medium" | "large" = "small"): string {
   if (!url) return "";
   if (url.startsWith("data:")) return url;
-  // Substitui o tamanho na URL do Yupoo
-  // Ex: https://photo.yupoo.com/minkang/fc499d7c97/medium.jpg → .../small.jpg
   const replaced = url.replace(/\/(small|medium|large)\.jpg$/i, `/${size}.jpg`);
+  // Uses redirect mode by default (zero Origin Transfer on Vercel)
   return `/api/image?url=${encodeURIComponent(replaced)}`;
 }

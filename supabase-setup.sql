@@ -454,3 +454,45 @@ ALTER TABLE pedidos ADD CONSTRAINT chk_pedido_total_non_negative
 
 -- ALTER TABLE produtos ADD COLUMN ordem_destaque integer DEFAULT NULL;
 -- COMMENT ON COLUMN produtos.ordem_destaque IS 'Ordem manual dos produtos em destaque. NULL para não-destaques.';
+
+-- ────────────────────────────────────────────────────────────
+-- 11. IMAGE CACHE + STORAGE BUCKET
+-- Cache de imagens no Supabase Storage para reduzir Origin Transfer
+-- da Vercel. Execute CADA COMANDO SEPARADAMENTE no SQL Editor.
+-- ────────────────────────────────────────────────────────────
+
+-- Tabela de metadados do cache de imagens
+CREATE TABLE IF NOT EXISTS image_cache (
+  url_hash TEXT PRIMARY KEY,
+  storage_key TEXT NOT NULL,
+  content_type TEXT NOT NULL DEFAULT 'image/jpeg',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE image_cache ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Service role full acesso image_cache"
+  ON image_cache FOR ALL
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
+
+-- Bucket público para imagens (criar via Dashboard → Storage → New Bucket)
+-- Nome: images
+-- Public: YES
+--
+-- OU execute via SQL (pode falhar se já existir):
+-- INSERT INTO storage.buckets (id, name, public) VALUES ('images', 'images', true) ON CONFLICT DO NOTHING;
+
+-- Policy: leitura pública (qualquer um pode ler imagens do bucket)
+CREATE POLICY "Public read images"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'images');
+
+-- Policy: service role pode inserir/atualizar
+CREATE POLICY "Service role upload images"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'images' AND auth.role() = 'service_role');
+
+CREATE POLICY "Service role update images"
+  ON storage.objects FOR UPDATE
+  USING (bucket_id = 'images' AND auth.role() = 'service_role');

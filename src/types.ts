@@ -401,10 +401,12 @@ export function montarMensagemPacote(orders: Order[]): string {
   return lines.join("\n").trimEnd();
 }
 
+const IMAGE_CACHE_V = "v2";
+
 export function proxyImageUrl(url: string): string {
   if (!url) return "";
   if (url.startsWith("data:")) return url;
-  return `/api/image?url=${encodeURIComponent(url)}`;
+  return `/api/image?url=${encodeURIComponent(url)}&${IMAGE_CACHE_V}`;
 }
 
 /**
@@ -416,5 +418,5 @@ export function yupooThumbnailUrl(url: string, size: "small" | "medium" | "large
   if (!url) return "";
   if (url.startsWith("data:")) return url;
   const replaced = url.replace(/\/(small|medium|large)\.jpg$/i, `/${size}.jpg`);
-  return `/api/image?url=${encodeURIComponent(replaced)}`;
+  return `/api/image?url=${encodeURIComponent(replaced)}&${IMAGE_CACHE_V}`;
 }

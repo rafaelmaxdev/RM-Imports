@@ -11,7 +11,7 @@ interface CartContextType {
   clearCart: () => void;
   total: number;
   createOrder: (endereco: OrderAddress, paymentMethod: PaymentMethod) => Promise<Order | null>;
-  createMPPreference: (orderId: string) => Promise<{ preferenceId: string; initPoint: string } | null>;
+  createMPPreference: (orderId: string, paymentMethod?: string) => Promise<{ preferenceId: string; initPoint: string } | null>;
 }
 
 const CartContext = createContext<CartContextType | null>(null);
@@ -56,7 +56,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
           orderId,
           paymentMethod,
         };
-        console.log("Creating MP preference:", JSON.stringify(payload, null, 2));
 
         const res = await fetch("/api/create-preference", {
           method: "POST",

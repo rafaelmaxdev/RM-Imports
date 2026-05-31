@@ -1,15 +1,22 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { createClient } from "@supabase/supabase-js";
+import { createHmac, timingSafeEqual } from "crypto";
 
 const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN!,
   options: { timeout: 5000 },
 });
 
+// Warn if service role key is missing
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!serviceRoleKey) {
+  console.warn("[mp-webhook] SUPABASE_SERVICE_ROLE_KEY not set — order updates may fail due to RLS");
+}
+
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
+  serviceRoleKey || process.env.VITE_SUPABASE_ANON_KEY!
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -21,37 +28,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Verify MP webhook signature
     const webhookSecret = process.env.MP_WEBHOOK_SECRET;
     const xSignature = req.headers["x-signature"] as string | undefined;
-    const xRequestId = req.headers["x-request-id"] as string | undefined;
 
-    if (webhookSecret && xSignature) {
-      const parts = xSignature.split(",");
-      let ts = "";
-      let hash = "";
-      for (const part of parts) {
-        const [key, value] = part.split("=");
-        if (key?.trim() === "ts") ts = value?.trim() ?? "";
-        if (key?.trim() === "v1") hash = value?.trim() ?? "";
-      }
-      
-      const manifest = ts + "." + (typeof req.body === "string" ? req.body : JSON.stringify(req.body));
-      const crypto = await import("crypto");
-      const expectedHash = crypto.createHmac("sha256", webhookSecret).update(manifest).digest("hex");
-      
-      if (hash !== expectedHash) {
-        console.error("Webhook signature verification failed");
-        return res.status(401).send("Unauthorized");
-      }
-    } else if (webhookSecret) {
+    if (!webhookSecret) {
+      // FAIL CLOSED: reject webhooks if secret isn't configured in production
+      console.error("MP_WEBHOOK_SECRET not configured — rejecting webhook");
+      return res.status(500).send("Webhook secret not configured");
+    }
+
+    if (!xSignature) {
       console.error("Missing x-signature header");
       return res.status(401).send("Unauthorized");
     }
-    // If MP_WEBHOOK_SECRET is not set, skip verification (for development)
 
+    // Parse x-signature header: "ts=...,v1=..."
+    const parts = xSignature.split(",");
+    let ts = "";
+    let hash = "";
+    for (const part of parts) {
+      const [key, value] = part.split("=");
+      if (key?.trim() === "ts") ts = value?.trim() ?? "";
+      if (key?.trim() === "v1") hash = value?.trim() ?? "";
+    }
+
+    if (!ts || !hash) {
+      console.error("Malformed x-signature header");
+      return res.status(401).send("Unauthorized");
+    }
+
+    // Build manifest per MP spec: "id:{data.id};request-id:{x-request-id};ts:{ts};"
     const body = req.body as {
       type?: string;
       action?: string;
       data?: { id: string };
     };
+    const xRequestId = req.headers["x-request-id"] as string | undefined;
+    const dataId = body?.data?.id ?? "";
+    const manifest = `id:${dataId};request-id:${xRequestId ?? ""};ts:${ts};`;
+    const expectedHash = createHmac("sha256", webhookSecret).update(manifest).digest("hex");
+
+    // Constant-time comparison to prevent timing attacks
+    try {
+      const hashBuf = Buffer.from(hash, 'hex');
+      const expectedBuf = Buffer.from(expectedHash, 'hex');
+      if (hashBuf.length !== expectedBuf.length || !timingSafeEqual(hashBuf, expectedBuf)) {
+        console.error("Webhook signature verification failed");
+        return res.status(401).send("Unauthorized");
+      }
+    } catch {
+      console.error("Webhook signature comparison error");
+      return res.status(401).send("Unauthorized");
+    }
 
     console.log("Webhook received:", JSON.stringify(body));
 

@@ -423,7 +423,7 @@ export default function ProdutoForm({
     });
     return mapa;
   }, []);
-  const loadingTimes = false;
+
 
   const [liga, setLiga] = useState("");
   const [time, setTime] = useState("");
@@ -653,7 +653,7 @@ export default function ProdutoForm({
     return Array.from(set).sort();
   }, [produtos]);
 
-  if (loadingTimes) return <div className="text-center py-16 text-text-muted text-lg">Carregando times...</div>;
+
 
   const formFields = (
     <div className="flex flex-col gap-4">

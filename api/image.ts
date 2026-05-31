@@ -10,9 +10,15 @@ const ALLOWED_DOMAINS = [
 
 const BUCKET = 'images';
 
+// Fail loudly if service role key is missing
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!serviceRoleKey) {
+  console.warn("[api/image] SUPABASE_SERVICE_ROLE_KEY not set — image cache will not work correctly");
+}
+
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
+  serviceRoleKey || process.env.VITE_SUPABASE_ANON_KEY!
 );
 
 function urlToKey(url: string): string {
@@ -21,13 +27,54 @@ function urlToKey(url: string): string {
   return `${hash}.${ext}`;
 }
 
-function isAllowedUrl(url: string): boolean {
+/** Strip Yupoo size suffix to get a base URL for comparison.
+ *  e.g. ".../small.jpg" and ".../medium.jpg" both normalize to ".../_base.jpg" */
+function normalizeYupooUrl(url: string): string {
+  return url.replace(/\/(small|medium|large)\.jpg$/i, '/_base.jpg');
+}
+
+/** Domain whitelist check as secondary validation */
+function isAllowedDomain(url: string): boolean {
   try {
     const urlObj = new URL(url);
     return ALLOWED_DOMAINS.some(d => urlObj.hostname === d || urlObj.hostname.endsWith("." + d));
   } catch {
     return false;
   }
+}
+
+let allowedUrlsCache: { urls: Set<string>; timestamp: number } | null = null;
+const CACHE_TTL = 60_000;
+
+async function isAllowedImage(url: string): Promise<boolean> {
+  // First check: domain whitelist (fast, no DB call)
+  if (!isAllowedDomain(url)) {
+    return false;
+  }
+
+  // Second check: URL must belong to a product in our catalog
+  if (!allowedUrlsCache || Date.now() - allowedUrlsCache.timestamp > CACHE_TTL) {
+    const { data } = await supabase
+      .from('produtos')
+      .select('imagem_urls')
+      .limit(500);
+
+    const urls = new Set<string>();
+    if (data) {
+      for (const row of data) {
+        const arr = row.imagem_urls;
+        if (Array.isArray(arr)) {
+          for (const u of arr) {
+            // Store normalized URLs so size variants (small/medium/large) all match
+            if (typeof u === 'string' && u) urls.add(normalizeYupooUrl(u));
+          }
+        }
+      }
+    }
+    allowedUrlsCache = { urls, timestamp: Date.now() };
+  }
+
+  return allowedUrlsCache.urls.has(normalizeYupooUrl(url));
 }
 
 export const config = {
@@ -42,8 +89,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  if (!isAllowedUrl(url)) {
-    return res.status(403).json({ error: "Domain not allowed" });
+  // Validate URL belongs to a product in our database
+  if (!(await isAllowedImage(url))) {
+    return res.status(403).json({ error: 'URL not from catalog' });
   }
 
   const storageKey = urlToKey(url);
@@ -58,15 +106,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (data && !error) {
       const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(data.storage_key);
-      // Redirect to cached image in Supabase Storage CDN
-      // This response is tiny (~500 bytes) and gets cached at Vercel's edge
       res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
       res.setHeader('CDN-Cache-Control', 'public, max-age=86400');
       res.redirect(302, publicUrlData.publicUrl);
       return;
     }
   } catch {
-    // Cache miss or DB error — fall through to fetch
+    // Cache miss or table doesn't exist yet — fall through to fetch
   }
 
   // 2. Fetch from Yupoo
@@ -86,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const buffer = await response.arrayBuffer();
     const contentType = response.headers.get('content-type') || 'image/jpeg';
 
-    // 3. Cache in Supabase Storage (fire-and-forget, don't block response)
+    // 3. Cache in Supabase Storage (fire-and-forget)
     const uploadPromise = supabase.storage
       .from(BUCKET)
       .upload(storageKey, Buffer.from(buffer), {
@@ -103,15 +149,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       .catch(() => {});
 
-    // Return image directly this time (first request only)
-    // Shorter CDN cache since next request should hit the 302 redirect
+    // Return image (first request only — next request hits the 302 redirect)
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('CDN-Cache-Control', 'public, max-age=3600');
+    res.setHeader('CDN-Cache-Control', 'public, max-age=2592000');
     res.send(Buffer.from(buffer));
 
-    // Ensure upload completes before Lambda terminates
     await uploadPromise;
   } catch {
     res.status(500).json({ error: 'Proxy error' });

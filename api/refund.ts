@@ -7,9 +7,14 @@ const mpClient = new MercadoPagoConfig({
   options: { timeout: 5000 },
 });
 
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!serviceRoleKey) {
+  console.warn("[refund] SUPABASE_SERVICE_ROLE_KEY not set — refund operations may fail");
+}
+
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
+  serviceRoleKey || process.env.VITE_SUPABASE_ANON_KEY!
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -97,15 +102,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       refundId: refundResult.id,
       message: "Reembolso processado com sucesso",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Refund error:", error);
-
-    // Extract meaningful error message from MP SDK error
-    const mpMessage = error?.cause?.error || error?.message || String(error);
-
     return res.status(500).json({
       error: "Erro ao processar reembolso",
-      details: mpMessage,
     });
   }
 }

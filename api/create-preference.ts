@@ -7,9 +7,14 @@ const client = new MercadoPagoConfig({
   options: { timeout: 5000 },
 });
 
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!serviceRoleKey) {
+  console.warn("[create-preference] SUPABASE_SERVICE_ROLE_KEY not set — order validation may fail");
+}
+
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
+  serviceRoleKey || process.env.VITE_SUPABASE_ANON_KEY!
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -26,7 +31,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       paymentMethod?: string;
     };
 
-    console.log("create-preference request:", { orderId, itemsCount: items?.length, items: JSON.stringify(items) });
 
     if (!items || !orderId) {
       console.error("Missing items or orderId:", { items: !!items, orderId: !!orderId });
@@ -63,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log("Total check:", { itemsTotal, orderTotal: order.total, diff: Math.abs(itemsTotal - order.total) });
     if (Math.abs(itemsTotal - order.total) > 1) {
       console.error("Total mismatch:", { itemsTotal, orderTotal: order.total });
-      return res.status(400).json({ error: `Total mismatch: items R$${itemsTotal.toFixed(2)} vs order R$${order.total.toFixed(2)}` });
+      return res.status(400).json({ error: "Total mismatch" });
     }
 
     const preference = new Preference(client);
@@ -128,11 +132,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       preferenceId: result.id,
       initPoint: result.init_point,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating preference:", error);
     return res.status(500).json({
       error: "Failed to create preference",
-      details: error.message || String(error),
     });
   }
 }

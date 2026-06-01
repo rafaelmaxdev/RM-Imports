@@ -96,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Fetch all products that need caching (no cached_image_urls or incomplete)
+  // Fetch all products that need caching
   const { data: produtos, error: fetchError } = await supabase
     .from('produtos')
     .select('id, imagem_urls, cached_image_urls')

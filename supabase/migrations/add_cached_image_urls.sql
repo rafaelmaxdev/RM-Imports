@@ -8,11 +8,11 @@
 --   { "small": "...", "medium": "...", "large": "..." }
 -- ]
 --
--- To populate existing products, call the /api/precache endpoint for each product:
+-- To populate existing products, use the admin "Pre-cache" button or call:
 --   POST /api/precache { "produtoId": "<uuid>" }
+--   POST /api/precache-batch  (caches all products at once)
 
 ALTER TABLE produtos
 ADD COLUMN IF NOT EXISTS cached_image_urls JSONB;
 
--- Optional: Add comment for documentation
 COMMENT ON COLUMN produtos.cached_image_urls IS 'Pre-cached Supabase Storage URLs per image per size variant. Array of {small?, medium?, large?} objects, same order as imagem_urls.';

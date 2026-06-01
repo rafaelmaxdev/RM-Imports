@@ -95,7 +95,7 @@ async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl:
 }
 
 export const config = {
-  maxDuration: 60, // Allow up to 60s for batch caching
+  maxDuration: 60,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -171,7 +171,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (updateError) {
     console.error('[api/precache] Update error:', updateError.message);
-    // Still return the cached URLs even if update fails
   }
 
   res.json({ cached_image_urls: cachedImageUrls });

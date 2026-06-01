@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
+import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
-import type { LojaConfig, PromocaoTipo } from "./types";
+import type { LojaConfig, PromocaoTipo, CachedImageMap } from "./types";
 import { PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto, TIPOS_SEM_PERSONALIZACAO, tamanhosDisponiveis } from "./types";
 import ImageCarousel from "./ImageCarousel";
 import ImageLightbox from "./ImageLightbox";
@@ -20,6 +21,7 @@ interface CartModalProps {
     preco_customizado?: number | null;
     promocao_tipo?: string | null;
     promocao_valor?: number | null;
+    cached_image_urls?: import("./types").CachedImageMap | null;
   };
   config: LojaConfig;
   onClose: () => void;
@@ -34,21 +36,17 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
   const [nomePersonalizado, setNomePersonalizado] = useState("");
   const [numeroPersonalizado, setNumeroPersonalizado] = useState("");
   const [erro, setErro] = useState("");
-  const [lightbox, setLightbox] = useState<{ images: string[]; alt: string; index: number } | null>(null);
+  const [lightbox, setLightbox] = useState<{ images: string[]; alt: string; index: number; cachedImageUrls?: CachedImageMap | null } | null>(null);
   const [showSizeChart, setShowSizeChart] = useState(false);
 
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
+  useBodyScrollLock(true);
 
+  useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = "";
-      document.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
   const temFeminino = produto.feminino === true;
@@ -175,17 +173,15 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
 
               <div className="mb-4 -mx-6 -mt-2">
                 <ImageCarousel
-                  images={allImages.map((url) =>
-                    url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/medium.jpg")
-                  )}
+                  images={allImages}
                   alt={produto.nome}
-onImageClick={(i) => setLightbox({
-                     images: allImages.map((url) =>
-                       url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/medium.jpg")
-                     ),
-                     alt: produto.nome,
-                     index: i,
-                   })}
+                  cachedImageUrls={produto.cached_image_urls}
+                  onImageClick={(i) => setLightbox({
+                    images: allImages,
+                    alt: produto.nome,
+                    index: i,
+                    cachedImageUrls: produto.cached_image_urls,
+                  })}
                 />
               </div>
 
@@ -381,6 +377,7 @@ onImageClick={(i) => setLightbox({
           images={lightbox.images}
           alt={lightbox.alt}
           initialIndex={lightbox.index}
+          cachedImageUrls={lightbox.cachedImageUrls}
           onClose={() => setLightbox(null)}
         />
       )}

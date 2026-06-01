@@ -161,6 +161,29 @@ function AdminPanel({
   setConfig: React.Dispatch<React.SetStateAction<LojaConfig>>;
 }) {
   const [tab, setTab] = useState<AdminTab>("produtos");
+  const [precacheStatus, setPrecacheStatus] = useState<string | null>(null);
+  const [precacheLoading, setPrecacheLoading] = useState(false);
+
+  async function handlePrecacheAll() {
+    if (precacheLoading) return;
+    setPrecacheLoading(true);
+    setPrecacheStatus("Cacheando imagens... Isso pode levar alguns minutos.");
+    try {
+      const res = await fetch("/api/precache-batch", { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setPrecacheStatus(`✅ ${data.totalCached} imagens cacheadas de ${data.totalProducts} produtos.`);
+
+      // Refresh products to get updated cached_image_urls
+      const updated = await getProdutos();
+      setProdutos(updated);
+    } catch (err) {
+      console.error("Pre-cache error:", err);
+      setPrecacheStatus("❌ Erro ao cachear imagens. Tente novamente.");
+    } finally {
+      setPrecacheLoading(false);
+    }
+  }
 
   const tabs: { key: AdminTab; label: string }[] = [
     { key: "produtos", label: "Produtos" },
@@ -193,6 +216,22 @@ function AdminPanel({
         >
           ← Voltar à Loja
         </Link>
+      </div>
+
+      {precacheStatus && (
+        <div className="mb-4 p-3 bg-card-bg rounded-md border border-border text-sm text-text-main">
+          {precacheStatus}
+        </div>
+      )}
+
+      <div className="mb-4">
+        <button
+          onClick={handlePrecacheAll}
+          disabled={precacheLoading}
+          className="px-4 py-2 bg-accent text-white rounded-md text-sm font-semibold hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        >
+          {precacheLoading ? "⏳ Cacheando..." : "🖼️ Pre-cache Todas as Imagens"}
+        </button>
       </div>
 
       <Suspense fallback={<div className="text-center py-8 text-text-muted">Carregando...</div>}>

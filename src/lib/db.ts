@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { LojaConfig, OrderItem, OrderAddress } from "../types";
+import type { LojaConfig, OrderItem, OrderAddress, CachedImageMap } from "../types";
 import { DEFAULT_CONFIG } from "../types";
 
 export interface DbProduto {
@@ -19,6 +19,7 @@ export interface DbProduto {
   promocao_valor: number | null;  // percentage for 'porcentagem', null for others
   feminino: boolean;
   peca: string | null;            // 'camisa' | 'regata' — null means 'camisa' (default)
+  cached_image_urls?: CachedImageMap | null; // Pre-cached Supabase Storage URLs per image per size
   created_at: string;
 }
 
@@ -32,7 +33,7 @@ export function parseImageUrls(value: string[] | string | null | undefined): str
 export async function getProdutos(): Promise<DbProduto[]> {
   const { data, error } = await supabase
     .from("produtos")
-    .select("id,nome,liga,time,tipo,temporada,imagem_urls,yupoo_url,destaque,ordem_destaque,preco_customizado,promocao,promocao_tipo,promocao_valor,feminino,peca,created_at")
+    .select("id,nome,liga,time,tipo,temporada,imagem_urls,yupoo_url,destaque,ordem_destaque,preco_customizado,promocao,promocao_tipo,promocao_valor,feminino,peca,cached_image_urls,created_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -53,7 +54,7 @@ const PRODUTOS_COLUMNS = new Set([
   "id", "nome", "liga", "time", "tipo", "temporada",
   "imagem_urls", "yupoo_url", "destaque", "ordem_destaque", "created_at",
   "preco_customizado", "promocao", "promocao_tipo", "promocao_valor", "peca",
-  "feminino", // ← adicione esta coluna no banco: ALTER TABLE produtos ADD COLUMN feminino boolean DEFAULT false NOT NULL;
+  "feminino", "cached_image_urls",
 ]);
 
 function stripMissingColumns<T extends Record<string, unknown>>(obj: T): Partial<T> {
@@ -164,6 +165,48 @@ export async function setPromocaoCategoria(tipo: string, ativa: boolean): Promis
   if (error) throw error;
 }
 
+/** Apply promotion to all products of a specific team */
+export async function setPromocaoTime(
+  time: string,
+  promocaoTipo: string,
+  promocaoValor: number | null,
+  precoCustomizado: number | null,
+): Promise<DbProduto[]> {
+  const updateData: Record<string, unknown> = {
+    promocao: true,
+    promocao_tipo: promocaoTipo,
+    promocao_valor: promocaoValor,
+    preco_customizado: precoCustomizado,
+  };
+
+  const { data, error } = await supabase
+    .from("produtos")
+    .update(updateData)
+    .eq("time", time)
+    .select();
+
+  if (error) throw error;
+  return data as DbProduto[];
+}
+
+/** Remove promotion from all products of a specific team */
+export async function removePromocaoTime(time: string): Promise<DbProduto[]> {
+  const { data, error } = await supabase
+    .from("produtos")
+    .update({
+      promocao: false,
+      promocao_tipo: null,
+      promocao_valor: null,
+      preco_customizado: null,
+    })
+    .eq("time", time)
+    .select();
+
+  if (error) throw error;
+  return data as DbProduto[];
+}
+
+/** Apply percentage discount to ALL products (site-wide) — overrides existing individual promos */
 export async function setDescontoGlobal(porcentagem: number): Promise<DbProduto[]> {
   const { data, error } = await supabase
     .from("produtos")
@@ -179,6 +222,7 @@ export async function setDescontoGlobal(porcentagem: number): Promise<DbProduto[
   return data as DbProduto[];
 }
 
+/** Remove all percentage-based promotions (site-wide cleanup) */
 export async function removeDescontoGlobal(): Promise<DbProduto[]> {
   const { data, error } = await supabase
     .from("produtos")
@@ -331,6 +375,25 @@ export async function deletePedido(id: string): Promise<void> {
     }
     throw error;
   }
+}
+
+/** Auto-cancel pending orders older than `hours` (default 24h).
+ *  Returns the number of orders cancelled. */
+export async function autoCancelExpiredOrders(hours = 24): Promise<number> {
+  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from("pedidos")
+    .update({ status: "cancelado" })
+    .eq("status", "pendente")
+    .lt("created_at", cutoff)
+    .select("id");
+
+  if (error) {
+    console.error("Erro ao auto-cancelar pedidos expirados:", error);
+    return 0;
+  }
+  return data?.length ?? 0;
 }
 
 // ── Pacotes ──

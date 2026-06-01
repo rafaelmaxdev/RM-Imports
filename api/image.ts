@@ -44,7 +44,7 @@ function isAllowedDomain(url: string): boolean {
 }
 
 let allowedUrlsCache: { urls: Set<string>; timestamp: number } | null = null;
-const CACHE_TTL = 60_000;
+const CACHE_TTL = 300_000; // 5 minutes
 
 async function isAllowedImage(url: string): Promise<boolean> {
   // First check: domain whitelist (fast, no DB call)

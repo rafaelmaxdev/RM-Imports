@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, memo } from "react";
-import { proxyImageUrl } from "./types";
+import { type CachedImageMap, getCachedImageUrl } from "./types";
 
 interface ImageCarouselProps {
   images: string[];
@@ -8,6 +8,8 @@ interface ImageCarouselProps {
   className?: string;
   /** Called when user clicks an image; receives current image index */
   onImageClick?: (index: number) => void;
+  /** Pre-cached image URLs for the product images */
+  cachedImageUrls?: CachedImageMap | null;
 }
 
 const PLACEHOLDER =
@@ -22,11 +24,13 @@ function ImageWithLoader({
   alt,
   className,
   loading,
+  fetchPriority,
 }: {
   src: string;
   alt: string;
   className?: string;
   loading?: "lazy" | "eager";
+  fetchPriority?: "high" | "low" | "auto";
 }) {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
@@ -55,6 +59,7 @@ function ImageWithLoader({
         loading={loading}
         decoding="async"
         draggable={false}
+        fetchPriority={fetchPriority}
         onLoad={() => setLoaded(true)}
         onError={() => setErrored(true)}
 />
@@ -67,6 +72,7 @@ export default memo(function ImageCarousel({
   alt,
   className = "",
   onImageClick,
+  cachedImageUrls,
 }: ImageCarouselProps) {
   const [current, setCurrent] = useState(0);
   const touchStartX = useRef<number | null>(null);
@@ -91,10 +97,11 @@ export default memo(function ImageCarousel({
         onClick={() => onImageClick?.(0)}
       >
         <ImageWithLoader
-          src={proxyImageUrl(validImages[0])}
+          src={getCachedImageUrl(validImages[0], cachedImageUrls, 0, "medium")}
           alt={alt}
           className="w-full h-full object-cover"
-          loading="lazy"
+          loading="eager"
+          fetchPriority="high"
         />
       </div>
     );
@@ -155,10 +162,11 @@ export default memo(function ImageCarousel({
           <div key={i} className="w-full h-full flex-shrink-0 relative">
             {shouldLoad(i) ? (
               <ImageWithLoader
-                src={proxyImageUrl(url)}
+                src={getCachedImageUrl(url, cachedImageUrls, i, "medium")}
                 alt={`${alt} ${i + 1}`}
                 className="w-full h-full object-cover select-none"
                 loading={i === current ? "eager" : "lazy"}
+                fetchPriority={i === current ? "high" : "auto"}
               />
             ) : (
               <div className="w-full h-full bg-gray-100" />

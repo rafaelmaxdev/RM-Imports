@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import type { DbProduto } from "./lib/db";
-import { setPromocaoCategoria, updateProduto, parseImageUrls } from "./lib/db";
+import { setPromocaoCategoria, updateProduto, parseImageUrls, setPromocaoTime, removePromocaoTime, setDescontoGlobal, removeDescontoGlobal } from "./lib/db";
 import type { LojaConfig, PromocaoTipo } from "./types";
-import { TIPOS_CATEGORIA, DEFAULT_CONFIG, formatarMoeda, proxyImageUrl } from "./types";
+import { TIPOS_CATEGORIA, DEFAULT_CONFIG, formatarMoeda, getCachedImageUrl } from "./types";
 import { normalizarBusca } from "./lib/utils";
 import { updateLojaConfig } from "./lib/db";
 
@@ -32,6 +32,20 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
 
   // Filter state
   const [promoFilter, setPromoFilter] = useState<"ativas" | "todas" | "inativas">("ativas");
+
+  // Team promo state
+  const [teamSearch, setTeamSearch] = useState("");
+  const [selectedTeam, setSelectedTeam] = useState("");
+  const [teamPromoTipo, setTeamPromoTipo] = useState("");
+  const [teamPromoValor, setTeamPromoValor] = useState("");
+  const [teamPromoPreco, setTeamPromoPreco] = useState("");
+  const [savingTeam, setSavingTeam] = useState(false);
+  const [teamListSearch, setTeamListSearch] = useState("");
+  const [teamListLimit, setTeamListLimit] = useState(6);
+
+  // Site-wide promo state
+  const [sitewidePct, setSitewidePct] = useState("");
+  const [savingSitewide, setSavingSitewide] = useState(false);
 
   useEffect(() => {
     const pb: Record<string, string> = {};
@@ -238,13 +252,13 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
   const promosAtivasProduto = produtosComPromocao.filter((p) => p.promocao).length;
 
   const resultadosBusca = useMemo(() => {
-    const q = normalizarBusca(busca);
+    const words = normalizarBusca(busca).split(" ").filter(Boolean);
     return produtos.filter((p) => {
       if (p.promocao_tipo) return false;
       if (filtroTipo && p.tipo !== filtroTipo) return false;
-      if (q) {
+      if (words.length > 0) {
         const campos = normalizarBusca([p.nome, p.time, p.tipo, p.temporada].join(" "));
-        if (!campos.includes(q)) return false;
+        if (!words.every((w) => campos.includes(w))) return false;
       }
       return true;
     }).slice(0, 20);
@@ -408,6 +422,314 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
         </button>
       </div>
 
+      {/* ── Site-wide promotion ── */}
+      <div className="border-t border-border pt-6 mb-8">
+        <h4 className="text-lg font-bold text-primary mb-2">🌐 Promoção Site-wide</h4>
+        <p className="text-sm text-text-muted mb-4">
+          Aplica um desconto percentual em <strong>todos</strong> os produtos. Sobrescreve promoções individuais existentes.
+        </p>
+        <div className="flex gap-2 items-end">
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-text-muted mb-1">Desconto (%)</label>
+            <input
+              type="number"
+              min="1"
+              max="99"
+              value={sitewidePct}
+              onChange={(e) => setSitewidePct(e.target.value)}
+              placeholder="Ex: 15"
+              className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+            />
+          </div>
+          <button
+            className="px-4 py-2 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+            disabled={savingSitewide || !sitewidePct}
+            onClick={async () => {
+              setSavingSitewide(true);
+              try {
+                const pct = parseFloat(sitewidePct);
+                if (pct < 1 || pct > 99) { setMessage("Desconto deve ser entre 1% e 99%."); return; }
+                const updated = await setDescontoGlobal(pct);
+                setProdutos(prev => prev.map(p => updated.find(u => u.id === p.id) || p));
+                setMessage(`Desconto de ${pct}% aplicado a todos os ${updated.length} produtos!`);
+                setSitewidePct("");
+              } catch (err) {
+                console.error("Erro ao aplicar desconto site-wide:", err);
+                setMessage("Erro ao aplicar desconto.");
+              } finally {
+                setSavingSitewide(false);
+                setTimeout(() => setMessage(""), 4000);
+              }
+            }}
+          >
+            {savingSitewide ? "Aplicando..." : "Aplicar a Todos"}
+          </button>
+          <button
+            className="px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+            disabled={savingSitewide}
+            onClick={async () => {
+              setSavingSitewide(true);
+              try {
+                const updated = await removeDescontoGlobal();
+                setProdutos(prev => prev.map(p => updated.find(u => u.id === p.id) || p));
+                setMessage(`Promoção removida de ${updated.length} produtos.`);
+              } catch (err) {
+                console.error("Erro ao remover desconto site-wide:", err);
+                setMessage("Erro ao remover desconto.");
+              } finally {
+                setSavingSitewide(false);
+                setTimeout(() => setMessage(""), 4000);
+              }
+            }}
+          >
+            Remover Todas
+          </button>
+        </div>
+      </div>
+
+      {/* ── Team promotion ── */}
+      <div className="border-t border-border pt-6 mb-8">
+        <h4 className="text-lg font-bold text-primary mb-2">⚽ Promoção por Time</h4>
+        <p className="text-sm text-text-muted mb-4">
+          Aplica ou remove promoção de todos os produtos de um time. Também funciona para remover promoções aplicadas site-wide de um time específico.
+        </p>
+
+        {/* Active team promos list */}
+        {(() => {
+          const teamPromos = new Map<string, { count: number; label: string }>();
+          for (const p of produtos) {
+            if (p.promocao && p.promocao_tipo) {
+              const existing = teamPromos.get(p.time);
+              const label = p.promocao_tipo === "porcentagem" ? `${p.promocao_valor}% OFF`
+                : p.promocao_tipo === "novo_preco" ? `R$ ${p.preco_customizado}`
+                : p.promocao_tipo;
+              if (existing) {
+                existing.count++;
+              } else {
+                teamPromos.set(p.time, { count: 1, label });
+              }
+            }
+          }
+          let entries = [...teamPromos.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+          const totalTeams = entries.length;
+
+          // Filter by search
+          if (teamListSearch) {
+            const words = normalizarBusca(teamListSearch).split(" ").filter(Boolean);
+            entries = entries.filter(([time]) => {
+              const normalized = normalizarBusca(time);
+              return words.every(w => normalized.includes(w));
+            });
+          }
+
+          const filteredCount = entries.length;
+          const visible = entries.slice(0, teamListLimit);
+          const hasMore = filteredCount > teamListLimit;
+
+          return totalTeams > 0 ? (
+            <div className="mb-4">
+              <h5 className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">Times com promoção ativa ({totalTeams})</h5>
+              {totalTeams > 6 && (
+                <input
+                  type="text"
+                  value={teamListSearch}
+                  onChange={(e) => { setTeamListSearch(e.target.value); setTeamListLimit(6); }}
+                  placeholder="Filtrar times..."
+                  className="w-full px-3 py-1.5 mb-2 text-sm border border-border rounded-md bg-card-bg"
+                />
+              )}
+              <div className="flex flex-col gap-1">
+                {visible.map(([time, info]) => (
+                  <div key={time} className="flex items-center justify-between px-3 py-2 bg-accent/5 border border-accent/20 rounded-md">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium truncate">{time}</span>
+                      <span className="text-xs text-accent ml-2 font-semibold">{info.label}</span>
+                      <span className="text-xs text-text-muted ml-1">({info.count})</span>
+                    </div>
+                    <button
+                      className="px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 flex-shrink-0"
+                      disabled={savingTeam}
+                      onClick={async () => {
+                        setSavingTeam(true);
+                        try {
+                          const updated = await removePromocaoTime(time);
+                          setProdutos(prev => prev.map(p => updated.find(u => u.id === p.id) || p));
+                          setMessage(`Promoção removida de ${updated.length} produtos de ${time}.`);
+                        } catch (err) {
+                          console.error("Erro ao remover promoção:", err);
+                          setMessage("Erro ao remover promoção.");
+                        } finally {
+                          setSavingTeam(false);
+                          setTimeout(() => setMessage(""), 4000);
+                        }
+                      }}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {hasMore && (
+                <button
+                  className="w-full mt-2 py-2 text-xs font-semibold text-accent bg-accent/5 border border-accent/20 rounded-md cursor-pointer hover:bg-accent/10 transition-colors"
+                  onClick={() => setTeamListLimit(prev => prev + 12)}
+                >
+                  Mostrar mais ({filteredCount - teamListLimit} restantes)
+                </button>
+              )}
+            </div>
+          ) : null;
+        })()}
+
+        {/* Apply new team promo */}
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-text-muted mb-1">Buscar time para aplicar/remover promoção</label>
+            <input
+              type="text"
+              value={teamSearch}
+              onChange={(e) => { setTeamSearch(e.target.value); setSelectedTeam(""); }}
+              placeholder="Buscar time..."
+              className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+            />
+            {teamSearch && !selectedTeam && (() => {
+              const words = normalizarBusca(teamSearch).split(" ").filter(Boolean);
+              const teams = [...new Set(produtos.map(p => p.time))]
+                .filter(t => {
+                  const normalized = normalizarBusca(t);
+                  return words.every(w => normalized.includes(w));
+                })
+                .sort()
+                .slice(0, 10);
+              return teams.length > 0 ? (
+                <div className="mt-1 border border-border rounded-md bg-card-bg max-h-40 overflow-y-auto">
+                  {teams.map(t => {
+                    const teamProducts = produtos.filter(p => p.time === t);
+                    const promoCount = teamProducts.filter(p => p.promocao).length;
+                    return (
+                      <button
+                        key={t}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent/10 cursor-pointer transition-colors border-none bg-transparent"
+                        onClick={() => { setSelectedTeam(t); setTeamSearch(t); }}
+                      >
+                        {t} <span className="text-text-muted">({teamProducts.length} produtos{promoCount > 0 ? `, ${promoCount} em promo` : ""})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null;
+            })()}
+          </div>
+
+          {selectedTeam && (() => {
+            const teamProducts = produtos.filter(p => p.time === selectedTeam);
+            const promoProducts = teamProducts.filter(p => p.promocao);
+            return (
+              <>
+                <div className="p-3 bg-bg-base rounded-md border border-border">
+                  <div className="text-sm font-medium text-primary">
+                    {selectedTeam} — {teamProducts.length} produtos
+                    {promoProducts.length > 0 && (
+                      <span className="text-accent ml-2">({promoProducts.length} em promoção)</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Remove button — always visible when team has active promos */}
+                {promoProducts.length > 0 && (
+                  <button
+                    className="w-full py-2.5 text-sm font-semibold bg-red-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+                    disabled={savingTeam}
+                    onClick={async () => {
+                      setSavingTeam(true);
+                      try {
+                        const updated = await removePromocaoTime(selectedTeam);
+                        setProdutos(prev => prev.map(p => updated.find(u => u.id === p.id) || p));
+                        setMessage(`Promoção removida de ${updated.length} produtos de ${selectedTeam}.`);
+                      } catch (err) {
+                        console.error("Erro ao remover promoção por time:", err);
+                        setMessage("Erro ao remover promoção.");
+                      } finally {
+                        setSavingTeam(false);
+                        setTimeout(() => setMessage(""), 4000);
+                      }
+                    }}
+                  >
+                    {savingTeam ? "Removendo..." : `Remover promoção de ${selectedTeam}`}
+                  </button>
+                )}
+
+                {/* Apply section */}
+                <div className="border-t border-border pt-3">
+                  <div className="text-xs font-semibold text-text-muted mb-2">Aplicar nova promoção</div>
+                  <select
+                    value={teamPromoTipo}
+                    onChange={(e) => { setTeamPromoTipo(e.target.value); setTeamPromoValor(""); setTeamPromoPreco(""); }}
+                    className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                  >
+                    <option value="">Tipo de promoção</option>
+                    <option value="porcentagem">Desconto por %</option>
+                    <option value="novo_preco">Novo preço fixo</option>
+                  </select>
+
+                  {teamPromoTipo === "porcentagem" && (
+                    <input
+                      type="number"
+                      min="1"
+                      max="99"
+                      value={teamPromoValor}
+                      onChange={(e) => setTeamPromoValor(e.target.value)}
+                      placeholder="Desconto em % (ex: 20)"
+                      className="w-full mt-2 px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                    />
+                  )}
+
+                  {teamPromoTipo === "novo_preco" && (
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={teamPromoPreco}
+                      onChange={(e) => setTeamPromoPreco(e.target.value)}
+                      placeholder="Novo preço (ex: 99.90)"
+                      className="w-full mt-2 px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                    />
+                  )}
+
+                  {teamPromoTipo && (
+                    <button
+                      className="w-full mt-2 py-2 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+                      disabled={savingTeam || (teamPromoTipo === "porcentagem" && !teamPromoValor) || (teamPromoTipo === "novo_preco" && !teamPromoPreco)}
+                      onClick={async () => {
+                        setSavingTeam(true);
+                        try {
+                          const valor = teamPromoTipo === "porcentagem" ? parseFloat(teamPromoValor) : null;
+                          const preco = teamPromoTipo === "novo_preco" ? parseFloat(teamPromoPreco) : null;
+                          const updated = await setPromocaoTime(selectedTeam, teamPromoTipo, valor, preco);
+                          setProdutos(prev => prev.map(p => updated.find(u => u.id === p.id) || p));
+                          const label = teamPromoTipo === "porcentagem" ? `${teamPromoValor}% OFF` : `R$ ${teamPromoPreco}`;
+                          setMessage(`Promoção ${label} aplicada a ${updated.length} produtos de ${selectedTeam}!`);
+                          setTeamPromoTipo("");
+                          setTeamPromoValor("");
+                          setTeamPromoPreco("");
+                        } catch (err) {
+                          console.error("Erro ao aplicar promoção por time:", err);
+                          setMessage("Erro ao aplicar promoção.");
+                        } finally {
+                          setSavingTeam(false);
+                          setTimeout(() => setMessage(""), 4000);
+                        }
+                      }}
+                    >
+                      {savingTeam ? "Aplicando..." : "Aplicar ao Time"}
+                    </button>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      </div>
+
       {/* ── Product-specific promotions ── */}
       <div className="border-t border-border pt-6">
         <h4 className="text-lg font-bold text-primary mb-2">Promoção por Produto</h4>
@@ -447,7 +769,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
               ) : (
                 produtosFiltrados.map((p) => {
                   const imgs = parseImageUrls(p.imagem_urls);
-                  const img = imgs.length > 0 ? proxyImageUrl(imgs[0].replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")) : "";
+const img = imgs.length > 0 ? getCachedImageUrl(imgs[0], p.cached_image_urls, 0, "small") : "";
                   const isEditing = editingId === p.id;
 
                   return (
@@ -663,7 +985,7 @@ function ProductPromoRow({
 
   const basePrice = config.precos_base[produto.tipo] ?? 89.90;
   const imgs = parseImageUrls(produto.imagem_urls);
-  const img = imgs.length > 0 ? proxyImageUrl(imgs[0].replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")) : "";
+  const img = imgs.length > 0 ? getCachedImageUrl(imgs[0], produto.cached_image_urls, 0, "small") : "";
 
   function handleApply() {
     const promocaoTipo = (tipo || null) as PromocaoTipo;

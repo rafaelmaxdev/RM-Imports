@@ -5,7 +5,7 @@ import CartModal from "./CartModal";
 import ImageCarousel from "./ImageCarousel";
 import ImageLightbox from "./ImageLightbox";
 import DestaqueCarousel from "./DestaqueCarousel";
-import type { LojaConfig, PromocaoTipo } from "./types";
+import type { LojaConfig, PromocaoTipo, CachedImageMap } from "./types";
 import { formatarMoeda, getPrecoProduto } from "./types";
 import { normalizeNome, normalizarBusca } from "./lib/utils";
 
@@ -51,7 +51,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduto, setToastProduto] = useState("");
   const [visibleCount, setVisibleCount] = useState(12);
-  const [lightbox, setLightbox] = useState<{ images: string[]; alt: string; index: number } | null>(null);
+  const [lightbox, setLightbox] = useState<{ images: string[]; alt: string; index: number; cachedImageUrls?: CachedImageMap | null } | null>(null);
 
   useEffect(() => {
     setVisibleCount(12);
@@ -89,10 +89,10 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       }
     }
     if (filtroBusca) {
-      const q = normalizarBusca(filtroBusca);
+      const words = normalizarBusca(filtroBusca).split(" ").filter(Boolean);
       res = res.filter((p) => {
         const campos = normalizarBusca([p.nome, p.time, p.tipo, p.temporada].join(" "));
-        return campos.includes(q);
+        return words.every((w) => campos.includes(w));
       });
     }
 
@@ -320,16 +320,14 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
                 <div className="aspect-square bg-gray-100 overflow-hidden relative group/img">
                   <ImageCarousel
-                    images={parseImageUrls(p.imagem_urls).map((url) =>
-                      url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")
-                    )}
+                    images={parseImageUrls(p.imagem_urls)}
                     alt={p.nome}
+                    cachedImageUrls={p.cached_image_urls}
                     onImageClick={(i) => setLightbox({
-                      images: parseImageUrls(p.imagem_urls).map((url) =>
-                        url.startsWith("data:") ? url : url.replace(/\/(small|medium|large)\.jpg$/i, "/medium.jpg")
-                      ),
+                      images: parseImageUrls(p.imagem_urls),
                       alt: p.nome,
                       index: i,
+                      cachedImageUrls: p.cached_image_urls,
                     })}
                   />
                   <div className="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover/img:opacity-100 transition-opacity pointer-events-none flex items-center gap-0.5">
@@ -407,6 +405,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           images={lightbox.images}
           alt={lightbox.alt}
           initialIndex={lightbox.index}
+          cachedImageUrls={lightbox.cachedImageUrls}
           onClose={() => setLightbox(null)}
         />
       )}

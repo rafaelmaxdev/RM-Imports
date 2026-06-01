@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef } from "react";
 import type { DbProduto } from "./lib/db";
 import { toggleDestaque, reorderDestaques } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
-import { proxyImageUrl } from "./types";
+import { getCachedImageUrl } from "./types";
 import { normalizarBusca } from "./lib/utils";
 
 interface AdminDestaquesProps {
@@ -208,7 +208,7 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
           <div className="flex flex-col gap-2">
             {destaques.map((p, index) => {
               const imgs = parseImageUrls(p.imagem_urls);
-              const img = imgs.length > 0 ? proxyImageUrl(imgs[0].replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")) : "";
+              const img = imgs.length > 0 ? getCachedImageUrl(imgs[0], p.cached_image_urls, 0, "small") : "";
               const isDragging = dragIndex === index;
               const isDropTarget = dropIndex === index && dragIndex !== index;
               return (
@@ -323,7 +323,7 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
             ) : (
               resultados.map((p) => {
                 const imgs = parseImageUrls(p.imagem_urls);
-                const img = imgs.length > 0 ? proxyImageUrl(imgs[0].replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg")) : "";
+const img = imgs.length > 0 ? getCachedImageUrl(imgs[0], p.cached_image_urls, 0, "small") : "";
                 return (
                   <div
                     key={p.id}

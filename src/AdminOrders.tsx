@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder } from "./lib/db";
+import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder, autoCancelExpiredOrders } from "./lib/db";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
@@ -42,6 +42,11 @@ export default function AdminOrders() {
 
   const loadOrders = useCallback(async () => {
     try {
+      // Auto-cancel pending orders older than 24h (PIX expiration)
+      const cancelled = await autoCancelExpiredOrders(24);
+      if (cancelled > 0) {
+        console.log(`Auto-cancelados ${cancelled} pedido(s) expirado(s)`);
+      }
       const all = await getPedidos();
       setOrders(all.filter((o) => !["entregue", "cancelado", "reembolsado"].includes(o.status)));
     } catch (err) {

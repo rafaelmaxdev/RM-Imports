@@ -2,9 +2,22 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "./lib/supabase";
 import { addProduto, updateProduto, deleteProduto, parseImageUrls } from "./lib/db";
 import type { DbProduto } from "./lib/db";
-import { proxyImageUrl } from "./types";
+import { getCachedImageUrl } from "./types";
 import { normalizarBusca } from "./lib/utils";
 import { normalizeNome } from "./lib/utils";
+
+/** Pre-cache product images via the /api/precache endpoint */
+async function precacheProduto(produtoId: string): Promise<void> {
+  try {
+    await fetch("/api/precache", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ produtoId }),
+    });
+  } catch (err) {
+    console.warn("[precache] Failed for", produtoId, err);
+  }
+}
 
 interface Time {
   id: string;
@@ -218,7 +231,7 @@ function AdminProductCard({
   const [activeIdx, setActiveIdx] = useState(0);
   const [lightbox, setLightbox] = useState(false);
 
-  const activeImg = imgs.length > 0 ? proxyImageUrl(imgs[activeIdx]) : PLACEHOLDER_IMG;
+  const activeImg = imgs.length > 0 ? getCachedImageUrl(imgs[activeIdx], p.cached_image_urls, activeIdx, "medium") : PLACEHOLDER_IMG;
 
   const goNext = useCallback(() => {
     if (imgs.length > 1) setActiveIdx((i) => (i < imgs.length - 1 ? i + 1 : 0));
@@ -296,7 +309,7 @@ function AdminProductCard({
               >
                 <img
                   className="w-10 h-10 object-cover"
-                  src={proxyImageUrl(url)}
+                  src={getCachedImageUrl(url, p.cached_image_urls, i, "small")}
                   alt={`${p.nome} ${i + 1}`}
                   onError={(e) => {
                     (e.target as HTMLImageElement).src =
@@ -347,7 +360,7 @@ function AdminProductCard({
             <div className="relative">
               <img
                 className="w-full rounded-md"
-                src={proxyImageUrl(imgs[activeIdx])}
+                src={getCachedImageUrl(imgs[activeIdx], p.cached_image_urls, activeIdx, "medium")}
                 alt={p.nome}
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = ERROR_IMG;
@@ -382,7 +395,7 @@ function AdminProductCard({
                       >
                         <img
                           className="w-full h-full object-cover"
-                          src={proxyImageUrl(url)}
+                          src={getCachedImageUrl(url, p.cached_image_urls, i, "small")}
                           alt={`${p.nome} ${i + 1}`}
                           onError={(e) => {
                             (e.target as HTMLImageElement).src =
@@ -547,6 +560,8 @@ export default function ProdutoForm({
       );
 
       setProdutos((prev) => [novo, ...prev]);
+      // Pre-cache images in the background (don't block UI)
+      precacheProduto(novo.id);
       limparForm();
     } catch (err) {
       console.error("Erro ao adicionar:", err);
@@ -610,6 +625,8 @@ export default function ProdutoForm({
       );
 
       setProdutos((prev) => prev.map((p) => (p.id === editandoId ? atualizado : p)));
+      // Pre-cache images in the background (don't block UI)
+      precacheProduto(editandoId);
       limparForm();
     } catch (err) {
       console.error("Erro ao salvar:", err);

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { DbProduto } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
 import type { LojaConfig, PromocaoTipo } from "./types";
-import { getPrecoProduto, formatarMoeda, proxyImageUrl } from "./types";
+import { getPrecoProduto, formatarMoeda, getCachedImageUrl } from "./types";
 
 interface DestaqueCarouselProps {
   produtos: DbProduto[];
@@ -225,9 +225,9 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
               justifyContent: !needsScroll ? "center" : undefined,
             }}
           >
-            {produtos.map((p) => {
+            {produtos.map((p, index) => {
               const imgs = parseImageUrls(p.imagem_urls);
-              const img = imgs.length > 0 ? proxyImageUrl(imgs[0].replace(/\/(small|medium|large)\.jpg$/i, "/medium.jpg")) : "";
+              const img = imgs.length > 0 ? getCachedImageUrl(imgs[0], p.cached_image_urls, 0, "medium") : "";
               const { base, promo, emPromocao, badge, discountLabel } = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor);
 
               return (
@@ -250,7 +250,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
 
                   <div className="aspect-square bg-gray-100 overflow-hidden">
                     {img ? (
-                      <img src={img} alt={p.nome} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                      <img src={img} alt={p.nome} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading={index === 0 ? "eager" : "lazy"} fetchPriority={index === 0 ? "high" : "auto"} />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-text-muted text-xs">Sem imagem</div>
                     )}

@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
-import { yupooThumbnailUrl } from "./types";
+import { type CachedImageMap, getCachedImageUrl } from "./types";
+import useBodyScrollLock from "./hooks/useBodyScrollLock";
 
 interface ImageLightboxProps {
   images: string[];
   alt: string;
   initialIndex: number;
   onClose: () => void;
+  cachedImageUrls?: CachedImageMap | null;
 }
 
-export default function ImageLightbox({ images, alt, initialIndex, onClose }: ImageLightboxProps) {
+export default function ImageLightbox({ images, alt, initialIndex, onClose, cachedImageUrls }: ImageLightboxProps) {
   const [current, setCurrent] = useState(initialIndex);
   const validImages = images.filter(Boolean);
 
@@ -20,6 +22,8 @@ export default function ImageLightbox({ images, alt, initialIndex, onClose }: Im
     setCurrent((c) => (c > 0 ? c - 1 : validImages.length - 1));
   }, [validImages.length]);
 
+  useBodyScrollLock(true);
+
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -27,11 +31,7 @@ export default function ImageLightbox({ images, alt, initialIndex, onClose }: Im
       if (e.key === "ArrowLeft") goPrev();
     }
     document.addEventListener("keydown", handleKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", handleKey);
-      document.body.style.overflow = "";
-    };
+    return () => document.removeEventListener("keydown", handleKey);
   }, [onClose, goNext, goPrev]);
 
   if (validImages.length === 0) return null;
@@ -63,7 +63,7 @@ export default function ImageLightbox({ images, alt, initialIndex, onClose }: Im
         onClick={(e) => e.stopPropagation()}
       >
 <img
-            src={yupooThumbnailUrl(validImages[current], "medium")}
+            src={getCachedImageUrl(validImages[current], cachedImageUrls, current, "large")}
             alt={`${alt} ${current + 1}`}
             className="max-w-full max-h-[85vh] object-contain select-none rounded-sm"
             decoding="async"

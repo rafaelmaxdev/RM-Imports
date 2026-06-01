@@ -420,3 +420,24 @@ export function yupooThumbnailUrl(url: string, size: "small" | "medium" | "large
   const replaced = url.replace(/\/(small|medium|large)\.jpg$/i, `/${size}.jpg`);
   return `/api/image?url=${encodeURIComponent(replaced)}&${IMAGE_CACHE_V}`;
 }
+
+/** Pre-cached Supabase Storage URLs per image, indexed by size variant */
+export type CachedImageMap = { small?: string; medium?: string; large?: string }[];
+
+/**
+ * Returns the best available URL for a product image.
+ * Uses pre-cached Supabase Storage URL if available (no proxy needed),
+ * otherwise falls back to the Yupoo proxy with the requested size.
+ */
+export function getCachedImageUrl(
+  imageUrl: string,
+  cachedUrls: CachedImageMap | undefined | null,
+  index: number,
+  size: "small" | "medium" | "large" = "medium",
+): string {
+  if (!imageUrl) return "";
+  if (imageUrl.startsWith("data:")) return imageUrl;
+  const cached = cachedUrls?.[index]?.[size];
+  if (cached) return cached;
+  return yupooThumbnailUrl(imageUrl, size);
+}

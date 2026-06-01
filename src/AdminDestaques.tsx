@@ -259,16 +259,16 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
                     </button>
                   </div>
                   {img ? (
-                    <img src={img} alt={p.nome} className="w-10 h-10 object-cover rounded" />
-                  ) : (
-                    <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-text-muted text-xs">
-                      —
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">{p.nome}</div>
-                    <div className="text-xs text-text-muted">
-                      {p.tipo} • {p.temporada}
+                      <img src={img} alt={p.nome} width={40} height={40} className="w-10 h-10 object-cover rounded" />
+                    ) : (
+                      <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-text-muted text-xs">
+                        —
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{p.nome}</div>
+                      <div className="text-xs text-text-muted">
+                        {p.tipo} • {p.temporada}
                     </div>
                   </div>
                   <button
@@ -330,7 +330,7 @@ const img = imgs.length > 0 ? getCachedImageUrl(imgs[0], p.cached_image_urls, 0,
                     className="flex items-center gap-3 p-2 bg-card-bg rounded-md border border-border"
                   >
                     {img ? (
-                      <img src={img} alt={p.nome} className="w-10 h-10 object-cover rounded" />
+                    <img src={img} alt={p.nome} width={40} height={40} className="w-10 h-10 object-cover rounded" />
                     ) : (
                       <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-text-muted text-xs">
                         —

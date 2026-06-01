@@ -325,7 +325,7 @@ export default function AdminPacotes() {
                       <div key={i} className="p-3 bg-bg-base rounded-md">
                         <div className="flex gap-3">
                           {img && (
-                            <img src={img} alt={item.nome} className="w-16 h-16 object-cover rounded flex-shrink-0" />
+                            <img src={img} alt={item.nome} width={64} height={64} className="w-16 h-16 object-cover rounded flex-shrink-0" />
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
@@ -630,7 +630,7 @@ export default function AdminPacotes() {
                                     return (
 <div key={i} className="flex items-center gap-2 bg-white px-2 py-1 rounded border border-border">
                                           {img && (
-                                            <img src={img} alt={item.nome} className="w-8 h-8 object-cover rounded flex-shrink-0" />
+                                            <img src={img} alt={item.nome} width={32} height={32} className="w-8 h-8 object-cover rounded flex-shrink-0" />
                                           )}
                                           <span className="text-xs">{item.nome} ({item.tamanho})</span>
                                           <button
@@ -731,7 +731,7 @@ export default function AdminPacotes() {
               {/* Item card */}
               <div className="flex gap-3 mb-4">
                 {img && (
-                  <img src={img} alt={item.nome} className="w-20 h-20 object-cover rounded flex-shrink-0" />
+                  <img src={img} alt={item.nome} width={80} height={80} className="w-20 h-20 object-cover rounded flex-shrink-0" />
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-sm mb-1">{item.nome}</p>

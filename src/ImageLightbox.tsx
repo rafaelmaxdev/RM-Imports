@@ -62,9 +62,11 @@ export default function ImageLightbox({ images, alt, initialIndex, onClose, cach
         className="max-w-[90vw] max-h-[85vh] flex items-center justify-center"
         onClick={(e) => e.stopPropagation()}
       >
-<img
+          <img
             src={getCachedImageUrl(validImages[current], cachedImageUrls, current, "large")}
             alt={`${alt} ${current + 1}`}
+            width={800}
+            height={800}
             className="max-w-full max-h-[85vh] object-contain select-none rounded-sm"
             decoding="async"
             draggable={false}

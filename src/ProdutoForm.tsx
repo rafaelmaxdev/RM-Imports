@@ -253,6 +253,8 @@ function AdminProductCard({
             className="w-full h-full object-cover"
             src={activeImg}
             alt={p.nome}
+            width={400}
+            height={400}
             onError={(e) => {
               (e.target as HTMLImageElement).src = ERROR_IMG;
             }}
@@ -311,6 +313,8 @@ function AdminProductCard({
                   className="w-10 h-10 object-cover"
                   src={getCachedImageUrl(url, p.cached_image_urls, i, "small")}
                   alt={`${p.nome} ${i + 1}`}
+                  width={40}
+                  height={40}
                   onError={(e) => {
                     (e.target as HTMLImageElement).src =
                       "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%23eee'/%3E%3C/svg%3E";
@@ -362,6 +366,8 @@ function AdminProductCard({
                 className="w-full rounded-md"
                 src={getCachedImageUrl(imgs[activeIdx], p.cached_image_urls, activeIdx, "medium")}
                 alt={p.nome}
+                width={600}
+                height={600}
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = ERROR_IMG;
                 }}
@@ -397,6 +403,8 @@ function AdminProductCard({
                           className="w-full h-full object-cover"
                           src={getCachedImageUrl(url, p.cached_image_urls, i, "small")}
                           alt={`${p.nome} ${i + 1}`}
+                          width={56}
+                          height={56}
                           onError={(e) => {
                             (e.target as HTMLImageElement).src =
                               "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Crect width='56' height='56' fill='%23eee'/%3E%3C/svg%3E";

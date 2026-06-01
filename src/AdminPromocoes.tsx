@@ -784,7 +784,7 @@ const img = imgs.length > 0 ? getCachedImageUrl(imgs[0], p.cached_image_urls, 0,
                       {/* Card header */}
                       <div className="flex items-center gap-3">
                         {img ? (
-                          <img src={img} alt={p.nome} className="w-10 h-10 object-cover rounded" />
+                          <img src={img} alt={p.nome} width={40} height={40} className="w-10 h-10 object-cover rounded" />
                         ) : (
                           <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-text-muted text-xs">—</div>
                         )}
@@ -1005,7 +1005,7 @@ function ProductPromoRow({
     <div className="p-3 bg-card-bg rounded-md border border-border">
       <div className="flex items-center gap-3 mb-3">
         {img ? (
-          <img src={img} alt={produto.nome} className="w-10 h-10 object-cover rounded" />
+          <img src={img} alt={produto.nome} width={40} height={40} className="w-10 h-10 object-cover rounded" />
         ) : (
           <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-text-muted text-xs">—</div>
         )}

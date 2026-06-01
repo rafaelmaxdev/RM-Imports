@@ -48,11 +48,13 @@
 
 .animate-marquee-left {
   will-change: transform;
+  contain: layout style paint;
   animation: marquee-left 50s linear infinite;
 }
 
 .animate-marquee-right {
   will-change: transform;
+  contain: layout style paint;
   animation: marquee-right 50s linear infinite;
 }
 
@@ -64,6 +66,7 @@
 
 .animate-promo-pulse {
   will-change: transform, opacity;
+  contain: layout style paint;
   animation: promo-pulse 2s ease-in-out infinite;
 }
 
@@ -141,6 +144,7 @@ body {
 .animate-menu-panel {
   animation: menu-slide-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: transform;
+  contain: layout style paint;
 }
 
 .animate-menu-item {
@@ -153,3 +157,9 @@ body {
 .animate-menu-item:nth-child(3) { animation-delay: 0.14s; }
 .animate-menu-item:nth-child(4) { animation-delay: 0.18s; }
 .animate-menu-item:nth-child(5) { animation-delay: 0.22s; }
+
+/* Contain layout for product cards with hover transforms to reduce CLS */
+.product-card-hover {
+  will-change: transform;
+  contain: layout style paint;
+}

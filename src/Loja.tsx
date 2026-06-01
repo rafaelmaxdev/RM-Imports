@@ -304,7 +304,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
             return (
               <div
                 key={p.id}
-                className="bg-card-bg rounded-lg overflow-hidden shadow-card border border-border hover:-translate-y-1 hover:shadow-card-hover hover:border-accent/20 transition-all duration-300 ease-out cursor-default flex flex-col h-full relative"
+                className="product-card-hover bg-card-bg rounded-lg overflow-hidden shadow-card border border-border hover:-translate-y-1 hover:shadow-card-hover hover:border-accent/20 transition-all duration-300 ease-out cursor-default flex flex-col h-full relative"
               >
                 {/* Promo/destaque tags */}
                 {emPromocao && (

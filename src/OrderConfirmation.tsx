@@ -100,8 +100,18 @@ export default function OrderConfirmation() {
 
   if (loading) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-8 text-center">
-        <div className="text-text-muted text-lg">Carregando pedido...</div>
+      <div className="max-w-lg mx-auto px-4 py-8">
+        <div className="animate-pulse space-y-6">
+          <div className="w-15 h-15 bg-gray-200 rounded-full mx-auto" />
+          <div className="h-6 bg-gray-200 rounded w-2/3 mx-auto" />
+          <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto" />
+          <div className="bg-gray-200 rounded-md p-6 space-y-4">
+            <div className="h-4 bg-gray-300 rounded w-1/3" />
+            <div className="h-4 bg-gray-300 rounded w-2/3" />
+            <div className="h-4 bg-gray-300 rounded w-1/2" />
+          </div>
+          <div className="h-12 bg-gray-200 rounded-md" />
+        </div>
       </div>
     );
   }
@@ -295,7 +305,7 @@ export default function OrderConfirmation() {
 
   // ── Pending payment ──
   return (
-    <div className="max-w-lg mx-auto px-4 py-8 text-center">
+    <div className="max-w-lg mx-auto px-4 py-8 text-center min-h-[600px]">
       <div className="mb-8">
         <div className="w-15 h-15 bg-yellow-500 text-white rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
           ⏳
@@ -434,9 +444,9 @@ export default function OrderConfirmation() {
                 </button>
               </div>
             ) : (
-              <div className="flex justify-center">
+              <div className="flex justify-center min-h-[48px]">
                 {!walletReady && (
-                  <div className="text-sm text-text-muted animate-pulse">Carregando pagamento...</div>
+                  <div className="h-12 w-48 bg-gray-200 animate-pulse rounded-lg" />
                 )}
                 <Wallet
                   initialization={walletInitialization}

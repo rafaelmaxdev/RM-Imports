@@ -233,7 +233,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
               return (
                 <div
                   key={p.id}
-                  className="flex-shrink-0 bg-white rounded-lg overflow-hidden shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer relative group flex flex-col"
+                  className="product-card-hover flex-shrink-0 bg-white rounded-lg overflow-hidden shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer relative group flex flex-col"
                   style={{ width: `${cardWidth}px` }}
                   onClick={() => onSelect(p)}
                 >
@@ -250,7 +250,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
 
                   <div className="aspect-square bg-gray-100 overflow-hidden">
                     {img ? (
-                      <img src={img} alt={p.nome} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading={index === 0 ? "eager" : "lazy"} fetchPriority={index === 0 ? "high" : "auto"} />
+                      <img src={img} alt={p.nome} width={220} height={220} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading={index === 0 ? "eager" : "lazy"} fetchPriority={index === 0 ? "high" : "auto"} />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-text-muted text-xs">Sem imagem</div>
                     )}

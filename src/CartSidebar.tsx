@@ -338,6 +338,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                       "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Crect width='50' height='50' fill='%23eee'/%3E%3C/svg%3E"
                     }
                     alt={item.nome}
+                    width={50}
+                    height={50}
                     className="w-12.5 h-12.5 object-cover rounded-md"
                     loading="lazy"
                   />

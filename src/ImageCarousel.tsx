@@ -40,6 +40,8 @@ function ImageWithLoader({
       <img
         src={ERROR_IMG}
         alt={alt}
+        width={200}
+        height={200}
         className={className}
         draggable={false}
       />
@@ -55,6 +57,8 @@ function ImageWithLoader({
       <img
         src={src}
         alt={alt}
+        width={400}
+        height={400}
         className={`${className} transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
         loading={loading}
         decoding="async"
@@ -62,7 +66,7 @@ function ImageWithLoader({
         fetchPriority={fetchPriority}
         onLoad={() => setLoaded(true)}
         onError={() => setErrored(true)}
-/>
+      />
     </>
   );
 }
@@ -84,7 +88,7 @@ export default memo(function ImageCarousel({
   if (validImages.length === 0) {
     return (
       <div className={`aspect-square bg-gray-100 overflow-hidden ${className}`}>
-        <img src={PLACEHOLDER} alt={alt} className="w-full h-full object-cover" />
+        <img src={PLACEHOLDER} alt={alt} width={200} height={200} className="w-full h-full object-cover" />
       </div>
     );
   }

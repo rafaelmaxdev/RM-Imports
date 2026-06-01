@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useCart } from "./CartContext";
+import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import type { OrderAddress, PaymentMethod } from "./types";
 import { formatarMoeda, yupooThumbnailUrl } from "./types";
 
@@ -275,18 +276,18 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
     { value: "debit_card", label: "Cartão de Débito", icon: "🏦", desc: "Débito à vista" },
   ];
 
-  // Close on Escape key + lock body scroll
+  // Close on Escape key
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
     };
   }, [onClose]);
+
+  useBodyScrollLock(true);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[1000] transition-colors duration-300" onClick={onClose}>

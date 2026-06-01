@@ -4,6 +4,7 @@ import Loja from "./Loja";
 import Footer from "./Footer";
 import WhatsAppButton from "./WhatsAppButton";
 import { CartProvider, useCart } from "./CartContext";
+import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import { getProdutos, getLojaConfig } from "./lib/db";
 import type { DbProduto } from "./lib/db";
 import type { OrderAddress, LojaConfig, PaymentMethod } from "./types";
@@ -31,15 +32,7 @@ function AppContent() {
   const navigate = useNavigate();
   const { cart, createOrder } = useCart();
 
-  // Lock body scroll when menu or cart is open
-  useEffect(() => {
-    if (showMenu || showCart) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => { document.body.style.overflow = ""; };
-  }, [showMenu, showCart]);
+  useBodyScrollLock(showMenu || showCart);
 
   useEffect(() => {
     Promise.all([

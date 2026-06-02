@@ -478,52 +478,39 @@ export default function OrderConfirmation() {
           </p>
 
           {showWallet ? (
-            <>
-              {/* Wallet brick (works in normal browsers) */}
-              {!walletError ? (
-                <div className="flex justify-center min-h-[48px]">
-                  {!walletReady && (
-                    <div className="h-12 w-48 bg-gray-200 animate-pulse rounded-lg" />
-                  )}
-                  <Wallet
-                    initialization={walletInitialization}
-                    onReady={handleWalletReady}
-                    onError={handleWalletError}
-                  />
-                </div>
-              ) : (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-md text-center">
-                  <p className="text-sm text-red-800 font-semibold">Não foi possível carregar o botão de pagamento</p>
-                  <p className="text-xs text-red-700 mt-1">{walletError}</p>
-                  <p className="text-xs text-red-600 mt-2">
-                    Use o link direto abaixo ou tente novamente.
-                  </p>
-                  <button
-                    className="mt-3 px-4 py-2 text-sm font-semibold bg-border text-text-main rounded-md cursor-pointer transition-opacity hover:opacity-90"
-                    onClick={() => { setWalletError(null); setWalletReady(false); }}
-                  >
-                    Tentar novamente
-                  </button>
-                </div>
-              )}
-
-              {/* Direct payment link — always available as alternative/fallback */}
-              {mpInitPoint && (
-                <div className="mt-4 text-center">
-                  <p className="text-xs text-text-muted mb-2">
-                    Ou pague diretamente no site do Mercado Pago:
-                  </p>
+            !walletError ? (
+              <div className="flex justify-center min-h-[48px]">
+                {!walletReady && (
+                  <div className="h-12 w-48 bg-gray-200 animate-pulse rounded-lg" />
+                )}
+                <Wallet
+                  initialization={walletInitialization}
+                  onReady={handleWalletReady}
+                  onError={handleWalletError}
+                />
+              </div>
+            ) : (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-md text-center">
+                <p className="text-sm text-red-800 font-semibold">Não foi possível carregar o botão de pagamento</p>
+                <p className="text-xs text-red-700 mt-1">{walletError}</p>
+                {mpInitPoint && (
                   <a
                     href={mpInitPoint}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-block px-6 py-3 text-base font-semibold bg-[#009EE3] text-white rounded-md transition-opacity hover:opacity-90 no-underline"
+                    className="inline-block mt-3 px-6 py-3 text-base font-semibold bg-[#009EE3] text-white rounded-md transition-opacity hover:opacity-90 no-underline"
                   >
                     Pagar com {paymentLabel}
                   </a>
-                </div>
-              )}
-            </>
+                )}
+                <button
+                  className="mt-3 px-4 py-2 text-sm font-semibold bg-border text-text-main rounded-md cursor-pointer transition-opacity hover:opacity-90 ml-2"
+                  onClick={() => { setWalletError(null); setWalletReady(false); }}
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            )
           ) : (
             /* No preference ID yet — try to create one on demand */
             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md text-center">

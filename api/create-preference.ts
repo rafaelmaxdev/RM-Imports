@@ -131,6 +131,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } as any,
     });
 
+    // Persist preference ID to the order (idempotent — only sets if not already set)
+    const { error: updateError } = await supabase
+      .from("pedidos")
+      .update({ mp_preference_id: result.id })
+      .eq("id", orderId)
+      .is("mp_preference_id", null); // only update if not already set
+
+    if (updateError) {
+      console.warn("Failed to update order with preference ID (non-fatal):", updateError.message);
+    }
+
     return res.status(200).json({
       preferenceId: result.id,
       initPoint: result.init_point,

@@ -12,11 +12,6 @@
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://rm-imports.vercel.app/" />
 
-    <!-- Prevent Instagram/Facebook in-app browser from caching aggressively -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
-
     <!-- Open Graph -->
     <meta property="og:title" content="RM Imports - Camisas de Futebol Premium" />
     <meta property="og:description" content="Camisas de futebol premium com os melhores preços. Entrega em Bezerros-PE e retirada em Caruaru." />
@@ -60,26 +55,6 @@
       Pular para o conteúdo
     </a>
     <div id="root"></div>
-    <!-- Redirect Instagram/Facebook in-app browser to external browser for payment compatibility -->
-    <script>
-      (function() {
-        var ua = navigator.userAgent || navigator.vendor || window.opera;
-        var isInstagram = ua.indexOf('Instagram') > -1;
-        var isFacebook = ua.indexOf('FBAN') > -1 || ua.indexOf('FBAV') > -1;
-        if (isInstagram || isFacebook) {
-          var url = window.location.href;
-          // Try to open in external browser
-          // On iOS: try opening in Safari
-          if (/iPad|iPhone|iPod/.test(ua)) {
-            // Replace https:// with safari-https:// to open in Safari (iOS 9+)
-            // Fallback: just let the user know
-          }
-          // Show a banner asking user to open in external browser
-          // We set a flag so React can also detect and show a persistent banner
-          window.__inAppBrowser = true;
-        }
-      })();
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

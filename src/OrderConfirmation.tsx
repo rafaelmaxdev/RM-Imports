@@ -6,6 +6,13 @@ import { formatarMoeda } from "./types";
 import { Wallet } from "@mercadopago/sdk-react";
 import { STATUS_CONFIG, PAYMENT_LABELS } from "./lib/status";
 
+/** Detect Instagram/Facebook in-app browser */
+function isInAppBrowser(): boolean {
+  if (typeof window !== "undefined" && (window as any).__inAppBrowser) return true;
+  const ua = navigator.userAgent || "";
+  return /Instagram/i.test(ua) || /FBAN|FBAV/i.test(ua);
+}
+
 export default function OrderConfirmation() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -15,6 +22,7 @@ export default function OrderConfirmation() {
   const [confirmed, setConfirmed] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [walletReady, setWalletReady] = useState(false);
+  const [inAppBrowser] = useState(isInAppBrowser);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Check if redirected from MP with success status
@@ -25,6 +33,11 @@ export default function OrderConfirmation() {
 
   // Only show Wallet if we actually have a preference ID
   const showWallet = needsPayment && !!order?.mp_preference_id;
+
+  // Construct direct payment URL from preference ID (avoids storing redundant data in DB)
+  const mpInitPoint = order?.mp_preference_id
+    ? `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=${order.mp_preference_id}`
+    : null;
 
   // Check if order is expired (pending for more than 24 hours)
   const isExpired = useMemo(() => {
@@ -76,9 +89,9 @@ export default function OrderConfirmation() {
   useEffect(() => {
     if (!id || confirmed || walletReady) return;
 
-    pollingRef.current = setInterval(async () => {
-      try {
-        const o = await getPedidoById(id);
+pollingRef.current = setInterval(async () => {
+        try {
+          const o = await getPedidoById(id);
         if (o) {
           setOrder(o);
           if (["pago", "enviado_fornecedor", "em_producao", "a_caminho", "em_estoque", "em_entrega", "entregue"].includes(o.status)) {
@@ -428,7 +441,39 @@ export default function OrderConfirmation() {
             Clique no botão abaixo para finalizar o pagamento via Mercado Pago.
             A confirmação é automática após o pagamento.
           </p>
-          {showWallet ? (
+
+          {/* In-app browser warning */}
+          {inAppBrowser && (
+            <div className="p-3 bg-orange-50 border border-orange-200 rounded-md mb-4 text-left">
+              <p className="text-sm text-orange-800 font-semibold">⚠️ Navegador interno detectado</p>
+              <p className="text-xs text-orange-700 mt-1">
+                Para garantir que o pagamento funcione corretamente, abra esta página no navegador do seu celular (Chrome, Safari, etc).
+              </p>
+              <button
+                className="mt-2 px-4 py-2 text-sm font-semibold bg-orange-600 text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"
+                onClick={() => {
+                  const url = window.location.href;
+                  // iOS: try opening in Safari
+                  if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                    window.location.href = url.replace(/^https?:\/\//, "x-safari-");
+                  }
+                  // Android: try opening in Chrome
+                  else if (/Android/.test(navigator.userAgent)) {
+                    window.location.href = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`;
+                  }
+                  // Fallback: copy link instruction
+                  else {
+                    navigator.clipboard?.writeText(url);
+                    alert("Copie o link e abra no navegador do seu celular:\n\n" + url);
+                  }
+                }}
+              >
+                Abrir no navegador
+              </button>
+            </div>
+          )}
+
+          {showWallet && !inAppBrowser ? (
             walletError ? (
               <div className="p-4 bg-red-50 border border-red-200 rounded-md text-center">
                 <p className="text-sm text-red-800 font-semibold">Não foi possível carregar o botão de pagamento</p>
@@ -436,8 +481,19 @@ export default function OrderConfirmation() {
                 <p className="text-xs text-red-600 mt-2">
                   Desative extensões de bloqueio (ad blockers) e recarregue a página.
                 </p>
+                {/* Fallback: direct payment link */}
+                {mpInitPoint && (
+                  <a
+                    href={mpInitPoint}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-3 px-6 py-3 text-base font-semibold bg-accent text-white rounded-md transition-opacity hover:opacity-90 no-underline"
+                  >
+                    Pagar via Mercado Pago
+                  </a>
+                )}
                 <button
-                  className="mt-3 px-4 py-2 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"
+                  className="mt-3 px-4 py-2 text-sm font-semibold bg-border text-text-main rounded-md cursor-pointer transition-opacity hover:opacity-90 ml-2"
                   onClick={() => { setWalletError(null); setWalletReady(false); }}
                 >
                   Tentar novamente
@@ -455,6 +511,28 @@ export default function OrderConfirmation() {
                 />
               </div>
             )
+          ) : showWallet && inAppBrowser ? (
+            /* In-app browser: show direct payment link instead of Wallet brick */
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-md text-center">
+              <p className="text-sm text-blue-800 font-semibold mb-2">Finalize o pagamento no Mercado Pago</p>
+              <p className="text-xs text-blue-700 mb-3">
+                Clique no botão abaixo para ser redirecionado ao pagamento.
+              </p>
+              {mpInitPoint ? (
+                <a
+                  href={mpInitPoint}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block px-6 py-3 text-base font-semibold bg-[#009EE3] text-white rounded-md transition-opacity hover:opacity-90 no-underline"
+                >
+                  Pagar com {paymentLabel}
+                </a>
+              ) : (
+                <p className="text-xs text-yellow-700">
+                  O link de pagamento ainda está sendo gerado. Aguarde um momento e recarregue a página.
+                </p>
+              )}
+            </div>
           ) : (
             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md text-center">
               <p className="text-sm text-yellow-800 font-semibold">Pagamento pendente</p>

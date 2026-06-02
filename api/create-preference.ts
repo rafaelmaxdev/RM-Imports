@@ -98,6 +98,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ];
     }
 
+    const baseUrl = process.env.VITE_APP_URL || "https://rm-imports.vercel.app";
+    const orderUrl = `${baseUrl}/pedido/${orderId}`;
+
     const result = await preference.create({
       body: {
         items: items.map((item, index) => ({
@@ -116,12 +119,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           : undefined,
         back_urls: {
-          success: `${process.env.VITE_APP_URL || "https://rm-imports.vercel.app"}/pedido/${orderId}`,
-          failure: `${process.env.VITE_APP_URL || "https://rm-imports.vercel.app"}/pedido/${orderId}`,
-          pending: `${process.env.VITE_APP_URL || "https://rm-imports.vercel.app"}/pedido/${orderId}`,
+          success: orderUrl,
+          failure: orderUrl,
+          pending: orderUrl,
         },
         auto_return: "approved",
-        notification_url: `${process.env.VITE_APP_URL || "https://rm-imports.vercel.app"}/api/mp-webhook`,
+        notification_url: `${baseUrl}/api/mp-webhook`,
         payment_methods: paymentMethods,
         expires: true,
         date_of_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),

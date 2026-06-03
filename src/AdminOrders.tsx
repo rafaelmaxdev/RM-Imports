@@ -36,11 +36,13 @@ function montarMensagemCliente(order: Order): string {
 export default function AdminOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
     try {
       // Auto-cancel pending orders older than 24h (PIX expiration)
       const cancelled = await autoCancelExpiredOrders(24);
@@ -53,6 +55,7 @@ export default function AdminOrders() {
       console.error("Erro ao carregar pedidos:", err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -161,10 +164,21 @@ export default function AdminOrders() {
         <h2 className="text-xl text-primary m-0">Pedidos ({filteredOrders.length})</h2>
         <div className="flex gap-2 items-center w-full sm:w-auto">
           <button
-            className="px-3 py-2 text-sm font-semibold bg-accent/10 text-accent rounded-md cursor-pointer hover:bg-accent/20 transition-colors whitespace-nowrap"
-            onClick={loadOrders}
+            className={`px-3 py-2 text-sm font-semibold rounded-md cursor-pointer transition-all whitespace-nowrap ${
+              refreshing
+                ? "bg-accent/20 text-accent/60"
+                : "bg-accent/10 text-accent hover:bg-accent/20"
+            }`}
+            onClick={() => loadOrders(true)}
+            disabled={refreshing}
           >
-            ↻ Atualizar
+            {refreshing ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block animate-spin">↻</span> Atualizando…
+              </span>
+            ) : (
+              "↻ Atualizar"
+            )}
           </button>
           <select
             className="px-3 py-2 border border-border rounded-md text-sm bg-card-bg"

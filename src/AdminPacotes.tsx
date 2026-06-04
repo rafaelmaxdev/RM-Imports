@@ -88,10 +88,16 @@ export default function AdminPacotes() {
   }
 
   // Find product image by matching order item's yupooUrl to product's yupoo_url
-  function getProductImage(yupooUrl: string): string {
+  // If feminino is true, use feminine images if available
+  function getProductImage(yupooUrl: string, feminino?: boolean): string {
     if (!yupooUrl) return "";
     const prod = produtos.find((p) => p.yupoo_url === yupooUrl);
-    if (prod && prod.imagem_urls?.length > 0) {
+    if (!prod) return "";
+    // Use feminine images when the item is feminine and they exist
+    if (feminino && prod.imagem_urls_feminina && prod.imagem_urls_feminina.length > 0) {
+      return yupooThumbnailUrl(prod.imagem_urls_feminina[0], "medium");
+    }
+    if (prod.imagem_urls?.length > 0) {
       return yupooThumbnailUrl(prod.imagem_urls[0], "medium");
     }
     return "";
@@ -100,9 +106,10 @@ export default function AdminPacotes() {
   // Share single item via Web Share API (mobile) or clipboard (desktop)
   async function shareItem(item: OrderItem) {
     const msg = montarMensagemItem(item);
-    const img = getProductImage(item.yupooUrl);
+    const img = getProductImage(item.yupooUrl, item.feminino && item.genero === "Feminino");
     const imageUrls = img ? [img] : [];
 
+    // Try Web Share API with files first (image + text)
     if (imageUrls.length > 0 && navigator.share && navigator.canShare) {
       try {
         const blobs = await Promise.all(
@@ -119,9 +126,22 @@ export default function AdminPacotes() {
         }
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
+        // Fall through to text-only share
       }
     }
 
+    // Try text-only Web Share API (works even without images)
+    if (navigator.share) {
+      try {
+        await navigator.share({ text: msg });
+        return;
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        // Fall through to clipboard
+      }
+    }
+
+    // Fallback: copy to clipboard
     await navigator.clipboard.writeText(msg);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -320,7 +340,7 @@ export default function AdminPacotes() {
                   {order.itens.map((item, i) => {
                     const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
                     const version = item.feminino && item.genero === "Feminino" ? `${tipoEn} WOMENS` : `${tipoEn}`;
-                    const img = getProductImage(item.yupooUrl);
+                    const img = getProductImage(item.yupooUrl, item.feminino && item.genero === "Feminino");
                     return (
                       <div key={i} className="p-3 bg-bg-base rounded-md">
                         <div className="flex gap-3">
@@ -626,7 +646,7 @@ export default function AdminPacotes() {
                                 </div>
                                 <div className="flex flex-wrap gap-2 mt-2">
                                   {order.itens.map((item, i) => {
-                                    const img = getProductImage(item.yupooUrl);
+                                    const img = getProductImage(item.yupooUrl, item.feminino && item.genero === "Feminino");
                                     return (
 <div key={i} className="flex items-center gap-2 bg-white px-2 py-1 rounded border border-border">
                                           {img && (
@@ -710,7 +730,7 @@ export default function AdminPacotes() {
         const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
         const version = item.feminino && item.genero === "Feminino" ? `${tipoEn} WOMENS` : `${tipoEn}`;
         const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
-        const img = getProductImage(item.yupooUrl);
+        const img = getProductImage(item.yupooUrl, item.feminino && item.genero === "Feminino");
         return (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSharing(null)}>
             <div className="bg-card-bg rounded-xl shadow-2xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>

@@ -14,6 +14,7 @@ interface CartModalProps {
     id: string;
     nome: string;
     imagem_urls: string[];
+    imagem_urls_feminina?: string[];
     yupoo_url: string;
     tipo: string;
     temporada: string;
@@ -31,7 +32,7 @@ interface CartModalProps {
 export default function CartModal({ produto, config, onClose, onAdded }: CartModalProps) {
   const { addToCart } = useCart();
   const [tamanho, setTamanho] = useState("");
-  const [genero, setGenero] = useState("Masculino");
+  const [genero, setGenero] = useState(produto.feminino ? "Feminino" : "Masculino");
   const [personalizado, setPersonalizado] = useState(false);
   const [nomePersonalizado, setNomePersonalizado] = useState("");
   const [numeroPersonalizado, setNumeroPersonalizado] = useState("");
@@ -49,9 +50,14 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const temFeminino = produto.feminino === true;
   const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo);
   const tamanhosTipo = tamanhosDisponiveis(produto.tipo, genero === "Feminino");
+
+  // Use feminine images when Feminino is selected, fall back to masculine images
+  const femininoImages = parseImageUrls(produto.imagem_urls_feminina);
+  const allImages = genero === "Feminino" && femininoImages.length > 0
+    ? femininoImages
+    : parseImageUrls(produto.imagem_urls);
 
   const { base: precoBase, promo: precoPromo, emPromocao, discountLabel } = getPrecoProduto(
     produto.tipo,
@@ -63,8 +69,6 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
   const adicionalTam = ADICIONAL_TAMANHO[tamanho] || 0;
   const adicionalPers = personalizado ? PRECO_PERSONALIZACAO : 0;
   const precoFinal = (precoPromo ?? precoBase) + adicionalTam + adicionalPers;
-
-  const allImages = parseImageUrls(produto.imagem_urls);
 
   function handleConfirm() {
     if (!tamanho) {
@@ -260,7 +264,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
               <div className="mb-4">
                 <label className="block text-sm font-semibold text-text-muted mb-2">Modelo</label>
                 <div className="flex gap-2">
-                  {["Masculino", ...(temFeminino ? ["Feminino"] as const : [])].map((g) => (
+                  {["Masculino", ...(produto.feminino ? ["Feminino"] as const : [])].map((g) => (
                     <button
                       key={g}
                       className={`px-4 py-2 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors ${

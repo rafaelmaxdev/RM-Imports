@@ -201,6 +201,17 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       </nav>
 
       <div className="grid grid-cols-2 sm:flex gap-1 sm:gap-2 my-4">
+        <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
+            <span className="text-[10px] sm:text-xs text-text-muted font-medium pl-1">Buscar</span>
+            <input
+              type="text"
+              value={filtroBusca}
+              onChange={(e) => setFiltroBusca(e.target.value)}
+              placeholder="Nome, time..."
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
+            />
+          </label>
+
         {timesDisponiveis.length > 0 && (
           <label className="flex flex-col gap-0.5">
             <span className="text-[10px] sm:text-xs text-text-muted font-medium pl-1">Time</span>
@@ -235,21 +246,10 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                   {t}
                 </option>
               ))}
-              <option value="__feminino__">Tem versão feminina</option>
+              <option value="__feminino__">Versão feminina</option>
             </select>
           </label>
         )}
-
-<label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
-            <span className="text-[10px] sm:text-xs text-text-muted font-medium pl-1">Buscar</span>
-            <input
-              type="text"
-              value={filtroBusca}
-              onChange={(e) => setFiltroBusca(e.target.value)}
-              placeholder="Nome, time..."
-              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 border border-border rounded-md bg-card-bg text-xs sm:text-sm"
-            />
-          </label>
 
           <label className="flex flex-col gap-0.5">
             <span className="text-[10px] sm:text-xs text-text-muted font-medium pl-1">Ordenar</span>

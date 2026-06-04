@@ -11,6 +11,7 @@ export interface DbProduto {
   tipo: string;
   temporada: string;
   imagem_urls: string[];
+  imagem_urls_feminina?: string[];
   yupoo_url: string;
   destaque: boolean;
   ordem_destaque: number | null;
@@ -53,7 +54,7 @@ export async function getProdutos(): Promise<DbProduto[]> {
 async function fetchProdutosFromDb(): Promise<DbProduto[]> {
   const { data, error } = await supabase
     .from("produtos")
-    .select("id,nome,liga,time,tipo,temporada,imagem_urls,yupoo_url,destaque,ordem_destaque,preco_customizado,promocao,promocao_tipo,promocao_valor,feminino,peca,cached_image_urls,created_at")
+    .select("id,nome,liga,time,tipo,temporada,imagem_urls,imagem_urls_feminina,yupoo_url,destaque,ordem_destaque,preco_customizado,promocao,promocao_tipo,promocao_valor,feminino,peca,cached_image_urls,created_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -64,7 +65,11 @@ async function fetchProdutosFromDb(): Promise<DbProduto[]> {
     if (seen.has(p.id)) return false;
     seen.add(p.id);
     return true;
-  });
+  }).map((p) => ({
+    ...p,
+    imagem_urls: parseImageUrls(p.imagem_urls),
+    imagem_urls_feminina: parseImageUrls(p.imagem_urls_feminina),
+  }));
 }
 
 /** Columns that actually exist in the Supabase 'produtos' table.
@@ -72,7 +77,7 @@ async function fetchProdutosFromDb(): Promise<DbProduto[]> {
  */
 const PRODUTOS_COLUMNS = new Set([
   "id", "nome", "liga", "time", "tipo", "temporada",
-  "imagem_urls", "yupoo_url", "destaque", "ordem_destaque", "created_at",
+  "imagem_urls", "imagem_urls_feminina", "yupoo_url", "destaque", "ordem_destaque", "created_at",
   "preco_customizado", "promocao", "promocao_tipo", "promocao_valor", "peca",
   "feminino", "cached_image_urls",
 ]);

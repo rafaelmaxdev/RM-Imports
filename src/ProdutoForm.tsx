@@ -114,6 +114,8 @@ const ligas: Liga[] = [
 
 const RETRO_ANO_SELECAO = 2022;
 
+const TIPOS_COM_FEMININO = ["Torcedor", "Jogador", "Goleiro"];
+
 function getValorAtual(isAno: boolean): string {
   if (isAno) {
     return String(new Date().getFullYear());
@@ -176,6 +178,7 @@ function toDbProduto(p: {
   tipo: string;
   temporada: string;
   imagemUrls: string[];
+  imagemUrlsFeminina?: string[];
   yupooUrl: string;
   destaque?: boolean;
   feminino?: boolean;
@@ -192,6 +195,7 @@ function toDbProduto(p: {
     tipo: p.tipo,
     temporada: p.temporada,
     imagem_urls: p.imagemUrls.filter(Boolean),
+    imagem_urls_feminina: (p.imagemUrlsFeminina ?? []).filter(Boolean),
     yupoo_url: p.yupooUrl,
     destaque: p.destaque ?? false,
     feminino: p.feminino ?? false,
@@ -208,6 +212,7 @@ function fromDbProduto(p: DbProduto) {
   return {
     ...p,
     imagemUrls: parseImageUrls(p.imagem_urls),
+    imagemUrlsFeminina: parseImageUrls(p.imagem_urls_feminina),
     yupooUrl: p.yupoo_url,
   };
 }
@@ -461,6 +466,7 @@ export default function ProdutoForm({
   const [precoCustomizado, setPrecoCustomizado] = useState("");
   const [feminino, setFeminino] = useState(false);
   const [peca, setPeca] = useState("camisa");
+  const [imagemUrlsFeminina, setImagemUrlsFeminina] = useState<string[]>([""]);
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
@@ -518,7 +524,7 @@ export default function ProdutoForm({
   }, [retro, isNBA]);
 
   useEffect(() => {
-    if (tipo !== "Torcedor" && tipo !== "Manga Longa Torcedor") setFeminino(false);
+    if (!TIPOS_COM_FEMININO.includes(tipo)) setFeminino(false);
   }, [tipo]);
 
   const nomeFinal = montarNome(time, tipo, periodo, nomeCustom, localizacao, peca);
@@ -531,6 +537,7 @@ export default function ProdutoForm({
     setLocalizacao("");
     setNomeCustom("");
     setImagemUrls([""]);
+    setImagemUrlsFeminina([""]);
     setYupooUrl("");
     setDestaque(false);
     setFeminino(false);
@@ -556,6 +563,7 @@ export default function ProdutoForm({
           tipo,
           temporada: periodo,
           imagemUrls,
+          imagemUrlsFeminina: feminino ? imagemUrlsFeminina : [],
           yupooUrl,
           destaque,
           feminino,
@@ -568,7 +576,6 @@ export default function ProdutoForm({
       );
 
       setProdutos((prev) => [novo, ...prev]);
-      // Pre-cache images in the background (don't block UI)
       precacheProduto(novo.id);
       limparForm();
     } catch (err) {
@@ -588,6 +595,7 @@ export default function ProdutoForm({
     setPeriodo(fp.temporada);
     setTipo(fp.tipo);
     setImagemUrls(fp.imagemUrls.length > 0 ? [...fp.imagemUrls] : [""]);
+    setImagemUrlsFeminina(parseImageUrls(p.imagem_urls_feminina).length > 0 ? [...parseImageUrls(p.imagem_urls_feminina)] : [""]);
     setYupooUrl(fp.yupooUrl);
     setDestaque(p.destaque);
     setFeminino(p.feminino);
@@ -621,6 +629,7 @@ export default function ProdutoForm({
           tipo,
           temporada: periodo,
           imagemUrls,
+          imagemUrlsFeminina: feminino ? imagemUrlsFeminina : [],
           yupooUrl,
           destaque,
           feminino,
@@ -828,13 +837,52 @@ export default function ProdutoForm({
           type="checkbox"
           checked={feminino}
           onChange={(e) => setFeminino(e.target.checked)}
-          disabled={tipo !== "Torcedor"}
+          disabled={!TIPOS_COM_FEMININO.includes(tipo)}
           className="w-4 h-4 accent-primary cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
         />
-        <label htmlFor="feminino-check" className={`text-sm select-none ${tipo !== "Torcedor" ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}>
-          Tem versão feminina
+        <label htmlFor="feminino-check" className={`text-sm select-none ${!TIPOS_COM_FEMININO.includes(tipo) ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}>
+          Versão feminina
         </label>
       </div>
+
+      {feminino && (
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-pink-600">Links das imagens (versão feminina)</label>
+          <p className="text-xs text-text-muted -mt-1">Se não adicionar imagens, as imagens da versão masculina serão usadas.</p>
+          {imagemUrlsFeminina.map((url, i) => (
+            <div key={i} className="flex gap-2">
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => {
+                  const newUrls = [...imagemUrlsFeminina];
+                  newUrls[i] = e.target.value;
+                  setImagemUrlsFeminina(newUrls);
+                }}
+                placeholder="https://..."
+                className="flex-1 px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
+              />
+              {imagemUrlsFeminina.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setImagemUrlsFeminina(imagemUrlsFeminina.filter((_, j) => j !== i))}
+                  className="px-2.5 text-red-500 hover:bg-red-50 rounded-md border border-red-200 text-sm cursor-pointer transition-colors"
+                  aria-label="Remover imagem"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setImagemUrlsFeminina([...imagemUrlsFeminina, ""])}
+            className="text-sm text-pink-600 hover:underline cursor-pointer self-start"
+          >
+            + Adicionar imagem (feminina)
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-semibold text-text-muted">Peça</label>
@@ -860,7 +908,7 @@ export default function ProdutoForm({
         />
       </div>
 
-      <div className="px-3 py-3 bg-blue-50 rounded-md font-medium text-primary">
+<div className="px-3 py-3 bg-blue-50 rounded-md font-medium text-primary">
         {nomeFinal || "Preencha os campos acima"}
       </div>
 

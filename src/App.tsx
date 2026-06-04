@@ -20,6 +20,8 @@ const AdminHistory = lazy(() => import("./AdminHistory"));
 const AdminPacotes = lazy(() => import("./AdminPacotes"));
 const AdminDestaques = lazy(() => import("./AdminDestaques"));
 const AdminPromocoes = lazy(() => import("./AdminPromocoes"));
+const AdminEstoque = lazy(() => import("./AdminEstoque"));
+const ProntaEntrega = lazy(() => import("./ProntaEntrega"));
 const NotFound = lazy(() => import("./NotFound"));
 const SizeChart = lazy(() => import("./SizeChart"));
 
@@ -135,12 +137,13 @@ function AppContent() {
             <Link to="/tamanhos" className="px-5 py-3 text-white no-underline hover:bg-white/10 transition-colors animate-menu-item" onClick={() => setShowMenu(false)}>
               📏 Guia de Tamanhos
             </Link>
-            <button
-              className="px-5 py-3 text-left text-white hover:bg-white/10 transition-colors cursor-pointer border-none bg-transparent w-full text-base animate-menu-item"
-              onClick={() => { setShowMenu(false); }}
+            <Link
+              to="/pronta-entrega"
+              className="px-5 py-3 text-white no-underline hover:bg-white/10 transition-colors animate-menu-item"
+              onClick={() => setShowMenu(false)}
             >
-              📦 Pronta Entrega <span className="text-xs bg-accent/80 text-white px-1.5 py-0.5 rounded ml-1">Em breve</span>
-            </button>
+              📦 Pronta Entrega
+            </Link>
           </div>
         </div>
       )}
@@ -162,6 +165,7 @@ function AppContent() {
             />
             <Route path="/pedido/:id" element={<OrderConfirmation />} />
             <Route path="/tamanhos" element={<SizeChart />} />
+            <Route path="/pronta-entrega" element={<ProntaEntrega />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
@@ -179,7 +183,7 @@ function AppContent() {
   );
 }
 
-type AdminTab = "produtos" | "destaques" | "promocoes" | "pedidos" | "pacotes" | "historico";
+type AdminTab = "produtos" | "destaques" | "promocoes" | "pedidos" | "pacotes" | "estoque" | "historico";
 
 function AdminPanel({
   produtos,
@@ -223,6 +227,7 @@ function AdminPanel({
     { key: "promocoes", label: "Promoções" },
     { key: "pedidos", label: "Pedidos" },
     { key: "pacotes", label: "Pacotes" },
+    { key: "estoque", label: "Estoque" },
     { key: "historico", label: "Histórico" },
   ];
 
@@ -277,6 +282,8 @@ function AdminPanel({
           <AdminOrders />
         ) : tab === "pacotes" ? (
           <AdminPacotes />
+        ) : tab === "estoque" ? (
+          <AdminEstoque produtos={produtos} />
         ) : (
           <AdminHistory />
         )}

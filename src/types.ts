@@ -57,7 +57,23 @@ export interface Order {
   mp_preference_id?: string;
   mp_payment_id?: string;
   admin_order?: boolean;
+  pronta_entrega?: boolean;
   credit_release_period?: "immediate" | "14_days" | "30_days";
+}
+
+export interface EstoqueItem {
+  id: string;
+  produto_id: string;
+  tamanho: string;
+  quantidade: number;
+  created_at: string;
+  // Joined from produtos
+  produto_nome?: string;
+  produto_imagem?: string;
+  produto_tipo?: string;
+  produto_time?: string;
+  produto_liga?: string;
+  produto_temporada?: string;
 }
 
 export const PRECOS_BASE: Record<string, number> = {

@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { LojaConfig, OrderItem, OrderAddress, CachedImageMap } from "../types";
+import type { LojaConfig, OrderItem, OrderAddress, CachedImageMap, EstoqueItem } from "../types";
 import { DEFAULT_CONFIG } from "../types";
 
 export interface DbProduto {
@@ -261,6 +261,7 @@ export interface DbPedido {
   mp_preference_id: string | null;
   mp_payment_id: string | null;
   admin_order: boolean | null;
+  pronta_entrega: boolean | null;
   credit_release_period?: "immediate" | "14_days" | "30_days" | null;
   created_at: string;
 }
@@ -280,6 +281,7 @@ function dbPedidoToOrder(db: DbPedido): import("../types").Order {
     mp_preference_id: db.mp_preference_id || undefined,
     mp_payment_id: db.mp_payment_id || undefined,
     admin_order: db.admin_order ?? false,
+    pronta_entrega: db.pronta_entrega ?? false,
   };
 }
 
@@ -296,6 +298,7 @@ const row = {
     mp_preference_id: order.mp_preference_id || null,
     mp_payment_id: order.mp_payment_id || null,
     admin_order: order.admin_order || null,
+    pronta_entrega: order.pronta_entrega || null,
   };
 
   const { data, error } = await supabase
@@ -358,6 +361,15 @@ export async function updatePedidoAdminOrder(id: string, isAdmin: boolean): Prom
   const { error } = await supabase
     .from("pedidos")
     .update({ admin_order: isAdmin })
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function updatePedidoProntaEntrega(id: string, isProntaEntrega: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("pedidos")
+    .update({ pronta_entrega: isProntaEntrega })
     .eq("id", id);
 
   if (error) throw error;
@@ -532,5 +544,121 @@ export async function deletePacote(id: string): Promise<void> {
       throw new Error("Não é possível excluir um pacote já entregue.");
     }
     throw error;
+  }
+}
+
+// ── Estoque Pronta Entrega ──
+
+export interface DbEstoqueItem {
+  id: string;
+  produto_id: string;
+  tamanho: string;
+  quantidade: number;
+  created_at: string;
+}
+
+function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; imagem_urls: string[] | string; tipo: string; time: string; liga: string; temporada: string } | null }): EstoqueItem {
+  const produto = db.produtos;
+  return {
+    id: db.id,
+    produto_id: db.produto_id,
+    tamanho: db.tamanho,
+    quantidade: db.quantidade,
+    created_at: db.created_at,
+    produto_nome: produto?.nome ?? undefined,
+    produto_imagem: produto ? parseImageUrls(produto.imagem_urls as string[] | string)[0] : undefined,
+    produto_tipo: produto?.tipo ?? undefined,
+    produto_time: produto?.time ?? undefined,
+    produto_liga: produto?.liga ?? undefined,
+    produto_temporada: produto?.temporada ?? undefined,
+  };
+}
+
+export async function getEstoque(): Promise<EstoqueItem[]> {
+  const { data, error } = await supabase
+    .from("estoque_pronta_entrega")
+    .select("id, produto_id, tamanho, quantidade, created_at, produtos(nome, imagem_urls, tipo, time, liga, temporada)")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  if (!data) return [];
+  return (data as unknown as (DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; tipo: string; time: string; liga: string; temporada: string } | null })[]).map(dbEstoqueToEstoque);
+}
+
+export async function getEstoquePublico(): Promise<EstoqueItem[]> {
+  const { data, error } = await supabase
+    .from("estoque_pronta_entrega")
+    .select("id, produto_id, tamanho, quantidade, created_at, produtos(nome, imagem_urls, tipo, time, liga, temporada)")
+    .gt("quantidade", 0)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  if (!data) return [];
+  return (data as unknown as (DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; tipo: string; time: string; liga: string; temporada: string } | null })[]).map(dbEstoqueToEstoque);
+}
+
+export async function addEstoqueItem(produtoId: string, tamanho: string, quantidade: number): Promise<EstoqueItem> {
+  const { data, error } = await supabase
+    .from("estoque_pronta_entrega")
+    .upsert(
+      { produto_id: produtoId, tamanho, quantidade },
+      { onConflict: "produto_id,tamanho" }
+    )
+    .select("id, produto_id, tamanho, quantidade, created_at, produtos(nome, imagem_urls, tipo, time, liga, temporada)")
+    .single();
+
+  if (error) throw error;
+  return dbEstoqueToEstoque(data as unknown as DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; tipo: string; time: string; liga: string; temporada: string } });
+}
+
+export async function updateEstoqueItem(id: string, quantidade: number): Promise<void> {
+  const { error } = await supabase
+    .from("estoque_pronta_entrega")
+    .update({ quantidade })
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function deleteEstoqueItem(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("estoque_pronta_entrega")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+/** Add items from a delivered order to estoque (for pronta_entrega orders) */
+export async function addOrderItemsToEstoque(order: import("../types").Order): Promise<void> {
+  for (const item of order.itens) {
+    // Find the product by name to get the produto_id
+    const { data: produtos } = await supabase
+      .from("produtos")
+      .select("id")
+      .eq("nome", item.nome)
+      .limit(1);
+
+    if (produtos && produtos.length > 0) {
+      const produtoId = produtos[0].id;
+      // Upsert: add quantidade to existing entry or create new
+      const { data: existing } = await supabase
+        .from("estoque_pronta_entrega")
+        .select("id, quantidade")
+        .eq("produto_id", produtoId)
+        .eq("tamanho", item.tamanho)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("estoque_pronta_entrega")
+          .update({ quantidade: existing.quantidade + 1 })
+          .eq("id", existing.id);
+      } else {
+        await supabase
+          .from("estoque_pronta_entrega")
+          .insert({ produto_id: produtoId, tamanho: item.tamanho, quantidade: 1 });
+      }
+    }
   }
 }

@@ -448,7 +448,40 @@ ALTER TABLE pedidos ADD CONSTRAINT chk_pedido_total_non_negative
   CHECK (total >= 0);
 
 -- ────────────────────────────────────────────────────────────
--- 10. MIGRAÇÃO: Adicionar coluna ordem_destaque na tabela produtos
+-- 10. MIGRAÇÃO: Adicionar coluna pronta_entrega na tabela pedidos
+-- Marca pedidos que, ao serem entregues, terão seus itens adicionados
+-- ao estoque de pronta entrega.
+-- ────────────────────────────────────────────────────────────
+
+-- ALTER TABLE pedidos ADD COLUMN pronta_entrega boolean DEFAULT false;
+
+-- ────────────────────────────────────────────────────────────
+-- 11. Tabela de estoque de pronta entrega
+-- Registra camisas disponíveis para entrega imediata.
+-- ────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS estoque_pronta_entrega (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  produto_id uuid NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+  tamanho text NOT NULL,
+  quantidade integer NOT NULL DEFAULT 1 CHECK (quantidade >= 0),
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(produto_id, tamanho)
+);
+
+ALTER TABLE estoque_pronta_entrega ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Qualquer um pode ler estoque"
+  ON estoque_pronta_entrega FOR SELECT
+  USING (true);
+
+CREATE POLICY "Apenas autenticados podem gerenciar estoque"
+  ON estoque_pronta_entrega FOR ALL
+  USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+-- ────────────────────────────────────────────────────────────
+-- 12. MIGRAÇÃO: Adicionar coluna ordem_destaque na tabela produtos
 -- Execute no SQL Editor do Supabase:
 -- ────────────────────────────────────────────────────────────
 

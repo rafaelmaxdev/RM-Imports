@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder, autoCancelExpiredOrders } from "./lib/db";
+import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder, updatePedidoProntaEntrega, addOrderItemsToEstoque, autoCancelExpiredOrders } from "./lib/db";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
@@ -132,6 +132,15 @@ export default function AdminOrders() {
     }
 
     if (["entregue", "cancelado", "reembolsado"].includes(newStatus)) {
+      // If order is marked for pronta_entrega and delivered, add items to estoque
+      const currentOrder = orders.find((o) => o.id === id);
+      if (newStatus === "entregue" && currentOrder?.pronta_entrega) {
+        try {
+          await addOrderItemsToEstoque(currentOrder);
+        } catch (err) {
+          console.error("Erro ao adicionar itens ao estoque:", err);
+        }
+      }
       setOrders((prev) => prev.filter((o) => o.id !== id));
     } else {
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: newStatus as Order["status"] } : o)));
@@ -237,6 +246,11 @@ export default function AdminOrders() {
                         {order.admin_order && (
                           <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">
                             👤 Admin
+                          </span>
+                        )}
+                        {order.pronta_entrega && (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-teal-100 text-teal-800">
+                            📦 Estoque
                           </span>
                         )}
                       </div>
@@ -384,6 +398,20 @@ export default function AdminOrders() {
                         }}
                       >
                         {order.admin_order ? "👤 Pedido do Admin" : "👤 Marcar como Admin"}
+                      </button>
+                      <button
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-md border-none cursor-pointer transition-opacity hover:opacity-85 ${
+                          order.pronta_entrega ? "bg-teal-500 text-white" : "bg-gray-200 text-gray-600"
+                        }`}
+                        onClick={() => {
+                          const newVal = !order.pronta_entrega;
+                          if (confirm(newVal ? "Marcar como Pronta Entrega? (Itens irão para o estoque ao ser entregue)" : "Desmarcar Pronta Entrega?")) {
+                            updatePedidoProntaEntrega(order.id, newVal);
+                            setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, pronta_entrega: newVal } : o));
+                          }
+                        }}
+                      >
+                        {order.pronta_entrega ? "📦 Pronta Entrega" : "📦 Marcar p/ Estoque"}
                       </button>
                     </div>
                   </div>

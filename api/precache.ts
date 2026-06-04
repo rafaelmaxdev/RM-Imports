@@ -115,7 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Fetch product image URLs
   const { data: produto, error: fetchError } = await supabase
     .from('produtos')
-    .select('id, imagem_urls, cached_image_urls')
+    .select('id, imagem_urls, imagem_urls_feminina, cached_image_urls')
     .eq('id', produtoId)
     .single();
 
@@ -127,8 +127,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const imagemUrls: string[] = Array.isArray(produto.imagem_urls)
     ? produto.imagem_urls.filter(Boolean)
     : [];
+  const femininaUrls: string[] = Array.isArray(produto.imagem_urls_feminina)
+    ? produto.imagem_urls_feminina.filter(Boolean)
+    : [];
 
-  if (imagemUrls.length === 0) {
+  // Combine both masculine and feminine image URLs for caching
+  const allUrls = [...imagemUrls, ...femininaUrls];
+
+  if (allUrls.length === 0) {
     res.json({ cached_image_urls: [] });
     return;
   }
@@ -138,8 +144,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cachedImageUrls: { small?: string; medium?: string; large?: string }[] = [];
 
   // Process images sequentially to avoid overwhelming Yupoo
-  for (let i = 0; i < imagemUrls.length; i++) {
-    const originalUrl = imagemUrls[i];
+  for (let i = 0; i < allUrls.length; i++) {
+    const originalUrl = allUrls[i];
     const entry: { small?: string; medium?: string; large?: string } = {};
 
     for (const size of sizes) {

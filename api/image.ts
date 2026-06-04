@@ -56,17 +56,19 @@ async function isAllowedImage(url: string): Promise<boolean> {
   if (!allowedUrlsCache || Date.now() - allowedUrlsCache.timestamp > CACHE_TTL) {
     const { data } = await supabase
       .from('produtos')
-      .select('imagem_urls')
+      .select('imagem_urls, imagem_urls_feminina')
       .limit(500);
 
     const urls = new Set<string>();
     if (data) {
       for (const row of data) {
-        const arr = row.imagem_urls;
-        if (Array.isArray(arr)) {
-          for (const u of arr) {
-            // Store normalized URLs so size variants (small/medium/large) all match
-            if (typeof u === 'string' && u) urls.add(normalizeYupooUrl(u));
+        for (const field of [row.imagem_urls, row.imagem_urls_feminina] as (string[] | string | null | undefined)[]) {
+          const arr = field;
+          if (Array.isArray(arr)) {
+            for (const u of arr) {
+              // Store normalized URLs so size variants (small/medium/large) all match
+              if (typeof u === 'string' && u) urls.add(normalizeYupooUrl(u));
+            }
           }
         }
       }

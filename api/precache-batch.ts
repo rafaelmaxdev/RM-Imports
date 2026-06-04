@@ -99,7 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Fetch all products that need caching
   const { data: produtos, error: fetchError } = await supabase
     .from('produtos')
-    .select('id, imagem_urls, cached_image_urls')
+    .select('id, imagem_urls, imagem_urls_feminina, cached_image_urls')
     .limit(500);
 
   if (fetchError || !produtos) {
@@ -116,15 +116,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const imagemUrls: string[] = Array.isArray(produto.imagem_urls)
       ? produto.imagem_urls.filter(Boolean)
       : [];
+    const femininaUrls: string[] = Array.isArray(produto.imagem_urls_feminina)
+      ? produto.imagem_urls_feminina.filter(Boolean)
+      : [];
 
-    if (imagemUrls.length === 0) {
+    // Combine both masculine and feminine image URLs for caching
+    const allUrls = [...imagemUrls, ...femininaUrls];
+
+    if (allUrls.length === 0) {
       results.push({ id: produto.id, status: 'skipped', cached: 0, total: 0 });
       continue;
     }
 
-    // Skip products that already have complete cached URLs
+    // Skip products that already have complete cached URLs for all images
     const existing = produto.cached_image_urls as { small?: string; medium?: string; large?: string }[] | null;
-    if (existing && existing.length === imagemUrls.length && existing.every(e => e.small && e.medium && e.large)) {
+    if (existing && existing.length === allUrls.length && existing.every(e => e.small && e.medium && e.large)) {
       results.push({ id: produto.id, status: 'already_cached', cached: existing.length, total: existing.length });
       continue;
     }
@@ -132,8 +138,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const cachedImageUrls: { small?: string; medium?: string; large?: string }[] = [];
     let productCached = 0;
 
-    for (let i = 0; i < imagemUrls.length; i++) {
-      const originalUrl = imagemUrls[i];
+    for (let i = 0; i < allUrls.length; i++) {
+      const originalUrl = allUrls[i];
       const entry: { small?: string; medium?: string; large?: string } = {};
 
       for (const size of sizes) {
@@ -167,9 +173,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (updateError) {
       console.error('[api/precache-batch] Update error for', produto.id, ':', updateError.message);
-      results.push({ id: produto.id, status: 'partial', cached: productCached, total: imagemUrls.length * 3 });
+      results.push({ id: produto.id, status: 'partial', cached: productCached, total: allUrls.length * 3 });
     } else {
-      results.push({ id: produto.id, status: 'cached', cached: productCached, total: imagemUrls.length * 3 });
+      results.push({ id: produto.id, status: 'cached', cached: productCached, total: allUrls.length * 3 });
     }
   }
 

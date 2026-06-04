@@ -44,7 +44,7 @@ function isAllowedDomain(url: string): boolean {
 }
 
 let allowedUrlsCache: { urls: Set<string>; timestamp: number } | null = null;
-const CACHE_TTL = 300_000; // 5 minutes
+const CACHE_TTL = 1_800_000; // 30 minutes (increased from 5min to reduce DB queries)
 
 async function isAllowedImage(url: string): Promise<boolean> {
   // First check: domain whitelist (fast, no DB call)
@@ -96,20 +96,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const storageKey = urlToKey(url);
 
+  // Aggressive CDN caching headers — Vercel CDN will cache the response for 30 days.
+  // After the first request at each edge location, no Supabase bandwidth or Vercel
+  // origin transfer is used for this image.
+  const CDN_HEADERS = {
+    'Cache-Control': 'public, max-age=2592000, stale-while-revalidate=86400',
+    'CDN-Cache-Control': 'public, max-age=2592000',
+    'Access-Control-Allow-Origin': '*',
+  };
+
   // 1. Check if image is already cached in Supabase Storage
   try {
     const { data, error } = await supabase
       .from('image_cache')
-      .select('storage_key')
+      .select('storage_key, content_type')
       .eq('url_hash', storageKey)
       .single();
 
     if (data && !error) {
+      // Serve the image directly from Supabase Storage (NOT a redirect).
+      // This allows Vercel's CDN to cache the actual image bytes,
+      // eliminating Supabase bandwidth on subsequent requests.
       const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(data.storage_key);
-      res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
-      res.setHeader('CDN-Cache-Control', 'public, max-age=86400');
-      res.redirect(302, publicUrlData.publicUrl);
-      return;
+      const publicUrl = publicUrlData.publicUrl;
+
+      try {
+        const imgResponse = await fetch(publicUrl);
+        if (imgResponse.ok) {
+          const buffer = await imgResponse.arrayBuffer();
+          const contentType = data.content_type || imgResponse.headers.get('content-type') || 'image/jpeg';
+
+          res.setHeader('Content-Type', contentType);
+          for (const [key, value] of Object.entries(CDN_HEADERS)) {
+            res.setHeader(key, value);
+          }
+          res.send(Buffer.from(buffer));
+          return;
+        }
+      } catch {
+        // If fetching from storage fails, fall through to fetch from Yupoo
+      }
     }
   } catch {
     // Cache miss or table doesn't exist yet — fall through to fetch
@@ -149,11 +175,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       .catch(() => {});
 
-    // Return image (first request only — next request hits the 302 redirect)
+    // Return image with aggressive CDN caching — Vercel CDN caches for 30 days
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('CDN-Cache-Control', 'public, max-age=2592000');
+    for (const [key, value] of Object.entries(CDN_HEADERS)) {
+      res.setHeader(key, value);
+    }
     res.send(Buffer.from(buffer));
 
     await uploadPromise;

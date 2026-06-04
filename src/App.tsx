@@ -9,6 +9,7 @@ import { getProdutos, getLojaConfig } from "./lib/db";
 import type { DbProduto } from "./lib/db";
 import type { OrderAddress, LojaConfig, PaymentMethod } from "./types";
 import { DEFAULT_CONFIG } from "./types";
+import { clearCache } from "./lib/cache";
 import "./index.css";
 
 const OrderConfirmation = lazy(() => import("./OrderConfirmation"));
@@ -211,6 +212,7 @@ function AdminPanel({
       setPrecacheStatus(`✅ ${data.totalCached} imagens cacheadas de ${data.totalProducts} produtos.`);
 
       // Refresh products to get updated cached_image_urls
+      clearCache("produtos"); // Invalidate cache before refetch
       const updated = await getProdutos();
       setProdutos(updated);
     } catch (err) {

@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import type { LojaConfig, OrderItem, OrderAddress, CachedImageMap, EstoqueItem } from "../types";
 import { DEFAULT_CONFIG } from "../types";
+import { getCached, setCache, isCacheStale } from "./cache";
 
 export interface DbProduto {
   id: string;
@@ -31,6 +32,25 @@ export function parseImageUrls(value: string[] | string | null | undefined): str
 }
 
 export async function getProdutos(): Promise<DbProduto[]> {
+  const CACHE_KEY = "produtos";
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  const cached = getCached<DbProduto[]>(CACHE_KEY);
+  if (cached) {
+    // Stale-while-revalidate: serve cached data immediately, refresh in background if stale
+    if (isCacheStale(CACHE_KEY, CACHE_TTL)) {
+      fetchProdutosFromDb().then((data) => setCache(CACHE_KEY, data)).catch(() => {});
+    }
+    return cached;
+  }
+
+  // No cache — fetch from Supabase
+  const data = await fetchProdutosFromDb();
+  setCache(CACHE_KEY, data);
+  return data;
+}
+
+async function fetchProdutosFromDb(): Promise<DbProduto[]> {
   const { data, error } = await supabase
     .from("produtos")
     .select("id,nome,liga,time,tipo,temporada,imagem_urls,yupoo_url,destaque,ordem_destaque,preco_customizado,promocao,promocao_tipo,promocao_valor,feminino,peca,cached_image_urls,created_at")
@@ -104,6 +124,24 @@ export async function deleteProduto(id: string): Promise<void> {
 // ── Loja Config ──
 
 export async function getLojaConfig(): Promise<LojaConfig> {
+  const CACHE_KEY = "loja_config";
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  const cached = getCached<LojaConfig>(CACHE_KEY);
+  if (cached) {
+    // Stale-while-revalidate
+    if (isCacheStale(CACHE_KEY, CACHE_TTL)) {
+      fetchLojaConfigFromDb().then((data) => setCache(CACHE_KEY, data)).catch(() => {});
+    }
+    return cached;
+  }
+
+  const data = await fetchLojaConfigFromDb();
+  setCache(CACHE_KEY, data);
+  return data;
+}
+
+async function fetchLojaConfigFromDb(): Promise<LojaConfig> {
   const { data, error } = await supabase
     .from("loja_config")
     .select("key, value");

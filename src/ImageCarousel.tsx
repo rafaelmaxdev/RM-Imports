@@ -18,7 +18,8 @@ const PLACEHOLDER =
 const ERROR_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='14'%3EErro%3C/text%3E%3C/svg%3E";
 
-/** Skeleton placeholder while image loads */
+/** Skeleton placeholder while image loads.
+ *  Retries once on error (handles transient mobile network failures). */
 function ImageWithLoader({
   src,
   alt,
@@ -34,6 +35,17 @@ function ImageWithLoader({
 }) {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
+  const [retrySrc, setRetrySrc] = useState<string | null>(null);
+
+  const handleError = useCallback(() => {
+    // Retry once with a cache-busting parameter to bypass stale CDN/browser cache
+    if (!retrySrc) {
+      const separator = src.includes("?") ? "&" : "?";
+      setRetrySrc(`${src}${separator}_retry=${Date.now()}`);
+    } else {
+      setErrored(true);
+    }
+  }, [retrySrc, src]);
 
   if (errored) {
     return (
@@ -48,6 +60,8 @@ function ImageWithLoader({
     );
   }
 
+  const imgSrc = retrySrc || src;
+
   return (
     <>
       {/* Skeleton placeholder shown while image loads */}
@@ -55,7 +69,7 @@ function ImageWithLoader({
         <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-sm" />
       )}
       <img
-        src={src}
+        src={imgSrc}
         alt={alt}
         width={400}
         height={400}
@@ -65,7 +79,7 @@ function ImageWithLoader({
         draggable={false}
         fetchPriority={fetchPriority}
         onLoad={() => setLoaded(true)}
-        onError={() => setErrored(true)}
+        onError={handleError}
       />
     </>
   );

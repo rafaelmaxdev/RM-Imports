@@ -12,14 +12,17 @@ interface ImageLightboxProps {
 
 export default function ImageLightbox({ images, alt, initialIndex, onClose, cachedImageUrls }: ImageLightboxProps) {
   const [current, setCurrent] = useState(initialIndex);
+  const [retryKey, setRetryKey] = useState(0);
   const validImages = images.filter(Boolean);
 
   const goNext = useCallback(() => {
     setCurrent((c) => (c < validImages.length - 1 ? c + 1 : 0));
+    setRetryKey(0);
   }, [validImages.length]);
 
   const goPrev = useCallback(() => {
     setCurrent((c) => (c > 0 ? c - 1 : validImages.length - 1));
+    setRetryKey(0);
   }, [validImages.length]);
 
   useBodyScrollLock(true);
@@ -63,13 +66,14 @@ export default function ImageLightbox({ images, alt, initialIndex, onClose, cach
         onClick={(e) => e.stopPropagation()}
       >
           <img
-            src={getCachedImageUrl(validImages[current], cachedImageUrls, current, "large")}
+            src={getCachedImageUrl(validImages[current], cachedImageUrls, current, "large") + (retryKey > 0 ? `&_retry=${retryKey}` : "")}
             alt={`${alt} ${current + 1}`}
             width={800}
             height={800}
             className="max-w-full max-h-[85vh] object-contain select-none rounded-sm"
             decoding="async"
             draggable={false}
+            onError={() => { if (retryKey === 0) setRetryKey(Date.now()); }}
           />
       </div>
 

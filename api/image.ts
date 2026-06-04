@@ -167,10 +167,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (!response.ok) {
-      // Yupoo returned an error — try redirect to original URL as fallback
-      res.setHeader('Cache-Control', 'public, max-age=60');
-      res.setHeader('Location', url);
-      res.status(302).end();
+      // Yupoo returned an error — don't cache this, let browser retry later
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('CDN-Cache-Control', 'no-store');
+      res.status(502).json({ error: 'Upstream image fetch failed' });
       return;
     }
 
@@ -203,9 +203,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await uploadPromise;
   } catch {
-    // Yupoo fetch failed — redirect to original URL as last resort
-    res.setHeader('Cache-Control', 'public, max-age=60');
-    res.setHeader('Location', url);
-    res.status(302).end();
+    // Proxy error — don't cache, let browser retry on next load
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.status(504).json({ error: 'Image proxy timeout' });
   }
 }

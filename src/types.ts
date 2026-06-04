@@ -417,7 +417,7 @@ export function montarMensagemPacote(orders: Order[]): string {
   return lines.join("\n").trimEnd();
 }
 
-const IMAGE_CACHE_V = "v2";
+const IMAGE_CACHE_V = "v3";
 
 export function proxyImageUrl(url: string): string {
   if (!url) return "";

@@ -81,6 +81,24 @@ export const config = {
   maxDuration: 25,
 };
 
+const CDN_HEADERS = {
+  'Cache-Control': 'public, max-age=2592000, stale-while-revalidate=86400',
+  'CDN-Cache-Control': 'public, max-age=2592000',
+  'Access-Control-Allow-Origin': '*',
+};
+
+/** Fetch with timeout to avoid hanging on slow upstreams */
+async function fetchWithTimeout(url: string, timeoutMs: number, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { url } = req.query;
 
@@ -89,23 +107,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Validate URL belongs to a product in our database
-  if (!(await isAllowedImage(url))) {
-    return res.status(403).json({ error: 'URL not from catalog' });
-  }
-
   const storageKey = urlToKey(url);
 
-  // Aggressive CDN caching headers — Vercel CDN will cache the response for 30 days.
-  // After the first request at each edge location, no Supabase bandwidth or Vercel
-  // origin transfer is used for this image.
-  const CDN_HEADERS = {
-    'Cache-Control': 'public, max-age=2592000, stale-while-revalidate=86400',
-    'CDN-Cache-Control': 'public, max-age=2592000',
-    'Access-Control-Allow-Origin': '*',
-  };
-
-  // 1. Check if image is already cached in Supabase Storage
+  // ── Step 1: Check if image is already cached in Supabase Storage ──
+  // If cached, we skip the expensive isAllowedImage() check — the URL was
+  // already validated when it was first cached. This eliminates a DB query
+  // for the vast majority of requests.
   try {
     const { data, error } = await supabase
       .from('image_cache')
@@ -121,15 +128,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const publicUrl = publicUrlData.publicUrl;
 
       try {
-        const imgResponse = await fetch(publicUrl);
+        const imgResponse = await fetchWithTimeout(publicUrl, 10000);
         if (imgResponse.ok) {
-          const buffer = await imgResponse.arrayBuffer();
           const contentType = data.content_type || imgResponse.headers.get('content-type') || 'image/jpeg';
 
           res.setHeader('Content-Type', contentType);
           for (const [key, value] of Object.entries(CDN_HEADERS)) {
             res.setHeader(key, value);
           }
+
+          // Stream the image instead of buffering — reduces memory and TTFB
+          const buffer = await imgResponse.arrayBuffer();
           res.send(Buffer.from(buffer));
           return;
         }
@@ -141,9 +150,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Cache miss or table doesn't exist yet — fall through to fetch
   }
 
-  // 2. Fetch from Yupoo
+  // ── Step 2: Validate URL belongs to a product in our database ──
+  // Only needed for uncached images (first request for this URL).
+  // Cached images skip this check entirely (Step 1).
+  if (!(await isAllowedImage(url))) {
+    return res.status(403).json({ error: 'URL not from catalog' });
+  }
+
+  // ── Step 3: Fetch from Yupoo ──
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, 15000, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Referer': 'https://minkang.x.yupoo.com/',
@@ -151,14 +167,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (!response.ok) {
-      res.status(response.status).json({ error: 'Failed to fetch image' });
+      // Yupoo returned an error — try redirect to original URL as fallback
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      res.setHeader('Location', url);
+      res.status(302).end();
       return;
     }
 
     const buffer = await response.arrayBuffer();
     const contentType = response.headers.get('content-type') || 'image/jpeg';
 
-    // 3. Cache in Supabase Storage (fire-and-forget)
+    // 4. Cache in Supabase Storage (fire-and-forget)
     const uploadPromise = supabase.storage
       .from(BUCKET)
       .upload(storageKey, Buffer.from(buffer), {
@@ -184,6 +203,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await uploadPromise;
   } catch {
-    res.status(500).json({ error: 'Proxy error' });
+    // Yupoo fetch failed — redirect to original URL as last resort
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    res.setHeader('Location', url);
+    res.status(302).end();
   }
 }

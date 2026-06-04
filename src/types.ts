@@ -422,6 +422,7 @@ const IMAGE_CACHE_V = "v3";
 export function proxyImageUrl(url: string): string {
   if (!url) return "";
   if (url.startsWith("data:")) return url;
+  if (url.startsWith("/api/image")) return url; // already proxied
   return `/api/image?url=${encodeURIComponent(url)}&${IMAGE_CACHE_V}`;
 }
 
@@ -433,6 +434,7 @@ export function proxyImageUrl(url: string): string {
 export function yupooThumbnailUrl(url: string, size: "small" | "medium" | "large" = "small"): string {
   if (!url) return "";
   if (url.startsWith("data:")) return url;
+  if (url.startsWith("/api/image")) return url; // already proxied
   const replaced = url.replace(/\/(small|medium|large)\.jpg$/i, `/${size}.jpg`);
   return `/api/image?url=${encodeURIComponent(replaced)}&${IMAGE_CACHE_V}`;
 }

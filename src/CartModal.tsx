@@ -32,7 +32,7 @@ interface CartModalProps {
 export default function CartModal({ produto, config, onClose, onAdded }: CartModalProps) {
   const { addToCart } = useCart();
   const [tamanho, setTamanho] = useState("");
-  const [genero, setGenero] = useState(produto.feminino ? "Feminino" : "Masculino");
+  const [genero, setGenero] = useState("Masculino");
   const [personalizado, setPersonalizado] = useState(false);
   const [nomePersonalizado, setNomePersonalizado] = useState("");
   const [numeroPersonalizado, setNumeroPersonalizado] = useState("");
@@ -83,13 +83,13 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
     const item: CartItem = {
       productId: produto.id,
       nome: produto.nome,
-      imagemUrl: allImages[0] ? allImages[0].replace(/\/(small|medium|large)\.jpg$/i, "/small.jpg") : "",
+      imagemUrl: allImages[0] || "",
       yupooUrl: produto.yupoo_url,
       tipo: produto.tipo,
       temporada: produto.temporada,
       tamanho,
       genero,
-      feminino: produto.feminino,
+      feminino: genero === "Feminino",
       personalizado,
       nomePersonalizado: personalizado ? nomePersonalizado.trim() : undefined,
       numeroPersonalizado: personalizado ? numeroPersonalizado.trim() : undefined,

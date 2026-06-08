@@ -1,8 +1,31 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+const ALLOWED_YUPOO_HOSTS = ['minkang.x.yupoo.com', 'photo.yupoo.com', 'img.yupoo.com'];
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { path } = req.query;
-  const targetUrl = `https://minkang.x.yupoo.com/${Array.isArray(path) ? path.join('/') : path}`;
+  const pathStr = Array.isArray(path) ? path.join('/') : (path as string || '');
+
+  // SSRF protection: reject path traversal and dangerous patterns
+  const decoded = decodeURIComponent(pathStr);
+  if (decoded.includes('..') || decoded.includes('://') || decoded.startsWith('/')) {
+    res.status(400).json({ error: 'Invalid path' });
+    return;
+  }
+
+  const targetUrl = `https://minkang.x.yupoo.com/${decoded}`;
+
+  // Validate the final URL hostname
+  try {
+    const urlObj = new URL(targetUrl);
+    if (!ALLOWED_YUPOO_HOSTS.includes(urlObj.hostname)) {
+      res.status(403).json({ error: 'Domain not allowed' });
+      return;
+    }
+  } catch {
+    res.status(400).json({ error: 'Invalid URL' });
+    return;
+  }
 
   try {
     const response = await fetch(targetUrl, {

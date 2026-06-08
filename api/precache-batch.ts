@@ -119,14 +119,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Fetch all products that need caching
+  // Process a limited number of products per call to avoid timeouts.
+  // Call multiple times to process all products.
+  const limit = typeof req.body?.limit === 'number' ? Math.min(req.body.limit, 20) : 10;
+  const offset = typeof req.body?.offset === 'number' ? req.body.offset : 0;
+
+  // Fetch products that need caching (paginated)
   const { data: produtos, error: fetchError } = await supabase
     .from('produtos')
     .select('id, imagem_urls, imagem_urls_feminina, cached_image_urls')
-    .limit(500);
+    .range(offset, offset + limit - 1);
 
-  if (fetchError || !produtos) {
-    res.status(500).json({ error: 'Failed to fetch products', details: fetchError?.message });
+  if (fetchError || !produtos || produtos.length === 0) {
+    if (fetchError) {
+      res.status(500).json({ error: 'Failed to fetch products', details: fetchError?.message });
+      return;
+    }
+    res.json({ totalProducts: 0, processed: 0, totalCached: 0, totalImages: 0, nextOffset: null, done: true });
     return;
   }
 
@@ -204,8 +213,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   res.json({
     totalProducts: produtos.length,
-    totalImages,
+    processed: produtos.length,
     totalCached,
-    results,
+    totalImages,
+    nextOffset: offset + limit,
+    done: produtos.length < limit,
   });
 }

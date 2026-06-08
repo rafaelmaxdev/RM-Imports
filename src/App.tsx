@@ -206,13 +206,30 @@ function AdminPanel({
     setPrecacheLoading(true);
     setPrecacheStatus("Cacheando imagens... Isso pode levar alguns minutos.");
     try {
-      const res = await fetch("/api/precache-batch", { method: "POST" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setPrecacheStatus(`✅ ${data.totalCached} imagens cacheadas de ${data.totalProducts} produtos.`);
+      let totalCached = 0;
+      let totalProducts = 0;
+      let offset = 0;
+      let done = false;
+
+      while (!done) {
+        setPrecacheStatus(`Cacheando imagens... ${totalCached} cacheadas até agora.`);
+        const res = await fetch("/api/precache-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ limit: 10, offset }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        totalCached += data.totalCached || 0;
+        totalProducts += data.processed || 0;
+        offset = data.nextOffset;
+        done = data.done;
+      }
+
+      setPrecacheStatus(`✅ ${totalCached} imagens cacheadas de ${totalProducts} produtos.`);
 
       // Refresh products to get updated cached_image_urls
-      clearCache("produtos"); // Invalidate cache before refetch
+      clearCache("produtos");
       const updated = await getProdutos();
       setProdutos(updated);
     } catch (err) {

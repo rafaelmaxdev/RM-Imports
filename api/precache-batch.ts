@@ -144,6 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const sizes: ('small' | 'medium' | 'large')[] = ['small', 'medium', 'large'];
   let totalCached = 0;
+  let totalSkipped = 0;
   let totalImages = 0;
   let totalFailed = 0;
   const errors: string[] = [];
@@ -166,11 +167,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Skip products that already have complete cached URLs for all images
     const existing = produto.cached_image_urls as { small?: string; medium?: string; large?: string }[] | null;
     if (existing && existing.length === allUrls.length && existing.every(e => e.small && e.medium && e.large)) {
+      totalSkipped++;
       continue;
     }
 
     const cachedImageUrls: { small?: string; medium?: string; large?: string }[] = [];
-    let productCached = 0;
 
     for (let i = 0; i < allUrls.length; i++) {
       const originalUrl = allUrls[i];
@@ -190,7 +191,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const result = await cacheImage(variantUrl);
         if (result) {
           entry[size] = result.publicUrl;
-          productCached++;
           totalCached++;
         } else {
           totalFailed++;
@@ -215,7 +215,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   res.json({
     totalProducts: produtos.length,
-    processed: produtos.length,
+    processed: produtos.length - totalSkipped,
+    skipped: totalSkipped,
     totalCached,
     totalFailed,
     totalImages,

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
-import { isR2Configured, uploadToR2, getR2PublicUrl } from './lib/r2';
+import { isR2Configured, uploadToR2, getR2PublicUrl } from './lib/r2.js';
 
 const ALLOWED_DOMAINS = [
   "photo.yupoo.com",

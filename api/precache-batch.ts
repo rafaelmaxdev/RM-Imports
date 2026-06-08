@@ -64,7 +64,10 @@ async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl:
       },
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error(`[api/precache-batch] Yupoo fetch failed for ${url}: ${response.status} ${response.statusText}`);
+      return null;
+    }
 
     const buffer = await response.arrayBuffer();
     const contentType = response.headers.get('content-type') || 'image/jpeg';
@@ -140,9 +143,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const sizes: ('small' | 'medium' | 'large')[] = ['small', 'medium', 'large'];
-  const results: { id: string; status: string; cached?: number; total?: number }[] = [];
   let totalCached = 0;
   let totalImages = 0;
+  let totalFailed = 0;
+  const errors: string[] = [];
 
   for (const produto of produtos) {
     const imagemUrls: string[] = Array.isArray(produto.imagem_urls)
@@ -156,14 +160,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const allUrls = [...imagemUrls, ...femininaUrls];
 
     if (allUrls.length === 0) {
-      results.push({ id: produto.id, status: 'skipped', cached: 0, total: 0 });
       continue;
     }
 
     // Skip products that already have complete cached URLs for all images
     const existing = produto.cached_image_urls as { small?: string; medium?: string; large?: string }[] | null;
     if (existing && existing.length === allUrls.length && existing.every(e => e.small && e.medium && e.large)) {
-      results.push({ id: produto.id, status: 'already_cached', cached: existing.length, total: existing.length });
       continue;
     }
 
@@ -190,6 +192,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           entry[size] = result.publicUrl;
           productCached++;
           totalCached++;
+        } else {
+          totalFailed++;
+          if (errors.length < 5) errors.push(`Failed: ${variantUrl}`);
         }
       }
 
@@ -205,9 +210,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (updateError) {
       console.error('[api/precache-batch] Update error for', produto.id, ':', updateError.message);
-      results.push({ id: produto.id, status: 'partial', cached: productCached, total: allUrls.length * 3 });
-    } else {
-      results.push({ id: produto.id, status: 'cached', cached: productCached, total: allUrls.length * 3 });
     }
   }
 
@@ -215,7 +217,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     totalProducts: produtos.length,
     processed: produtos.length,
     totalCached,
+    totalFailed,
     totalImages,
+    errors: errors.length > 0 ? errors : undefined,
     nextOffset: offset + limit,
     done: produtos.length < limit,
   });

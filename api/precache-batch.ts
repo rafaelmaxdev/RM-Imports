@@ -63,7 +63,7 @@ async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl:
 
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
-      .upload(storageKey, Buffer.from(buffer), { contentType, upsert: true });
+      .upload(storageKey, Buffer.from(buffer), { contentType, upsert: true, cacheControl: 'public, max-age=31536000' });
 
     if (uploadError) {
       console.error('[api/precache-batch] Upload error:', uploadError.message);

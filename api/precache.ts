@@ -71,6 +71,7 @@ async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl:
       .upload(storageKey, Buffer.from(buffer), {
         contentType,
         upsert: true,
+        cacheControl: 'public, max-age=31536000',
       });
 
     if (uploadError) {

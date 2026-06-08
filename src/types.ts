@@ -458,18 +458,29 @@ export type CachedImageMap = { small?: string; medium?: string; large?: string }
 
 /**
  * Returns the best available URL for a product image.
- * Always routes through /api/image proxy so Vercel CDN can cache the response,
- * eliminating Supabase Storage bandwidth on subsequent requests.
+ * Uses pre-cached Supabase Storage URLs directly when available,
+ * eliminating the /api/image proxy and reducing Supabase egress.
+ * Falls back to the proxy for uncached images.
  */
 export function getCachedImageUrl(
   imageUrl: string,
-  _cachedUrls: CachedImageMap | undefined | null,
-  _index: number,
+  cachedUrls: CachedImageMap | undefined | null,
+  index: number,
   size: "small" | "medium" | "large" = "medium",
 ): string {
   if (!imageUrl) return "";
   if (imageUrl.startsWith("data:")) return imageUrl;
-  // Always use proxy — Vercel CDN caches the image bytes at the edge,
-  // so after the first request there's zero Supabase bandwidth cost.
+
+  // Use pre-cached Supabase Storage URL directly when available.
+  // This eliminates the /api/image proxy for cached images, reducing
+  // Supabase Storage egress by letting browsers cache the direct URL.
+  if (cachedUrls && Array.isArray(cachedUrls) && index < cachedUrls.length) {
+    const cached = cachedUrls[index];
+    if (cached && cached[size]) {
+      return cached[size]!;
+    }
+  }
+
+  // Fallback to proxy for uncached images
   return yupooThumbnailUrl(imageUrl, size);
 }

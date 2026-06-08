@@ -123,30 +123,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .single();
 
     if (data && !error) {
-      // Serve the image directly from Supabase Storage (NOT a redirect).
-      // This allows Vercel's CDN to cache the actual image bytes,
-      // eliminating Supabase bandwidth on subsequent requests.
+      // Redirect to the Supabase Storage URL instead of proxying the bytes.
+      // This eliminates double bandwidth (API fetching from Storage + sending to client)
+      // and lets the browser cache the direct Storage URL for future requests.
       const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(data.storage_key);
       const publicUrl = publicUrlData.publicUrl;
 
-      try {
-        const imgResponse = await fetchWithTimeout(publicUrl, 10000);
-        if (imgResponse.ok) {
-          const contentType = data.content_type || imgResponse.headers.get('content-type') || 'image/jpeg';
-
-          res.setHeader('Content-Type', contentType);
-          for (const [key, value] of Object.entries(CDN_HEADERS)) {
-            res.setHeader(key, value);
-          }
-
-          // Stream the image instead of buffering — reduces memory and TTFB
-          const buffer = await imgResponse.arrayBuffer();
-          res.send(Buffer.from(buffer));
-          return;
-        }
-      } catch {
-        // If fetching from storage fails, fall through to fetch from Yupoo
-      }
+      res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
+      res.setHeader('CDN-Cache-Control', 'public, max-age=2592000');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.redirect(302, publicUrl);
+      return;
     }
   } catch {
     // Cache miss or table doesn't exist yet — fall through to fetch
@@ -185,6 +172,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .upload(storageKey, Buffer.from(buffer), {
         contentType,
         upsert: true,
+        cacheControl: 'public, max-age=31536000',
       })
       .then(({ error: uploadError }) => {
         if (!uploadError) {

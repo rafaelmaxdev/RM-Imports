@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
+import { isR2Configured, uploadToR2, checkR2Exists, getR2PublicUrl } from './lib/r2';
 
 const ALLOWED_DOMAINS = [
   "photo.yupoo.com",
@@ -111,21 +112,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const storageKey = urlToKey(url);
 
-  // ── Step 1: Check if image is already cached in Supabase Storage ──
-  // If cached, we skip the expensive isAllowedImage() check — the URL was
-  // already validated when it was first cached. This eliminates a DB query
-  // for the vast majority of requests.
+  // ── Step 1: Check if image is already cached ──
+  // Try R2 first (zero egress), then fall back to Supabase Storage.
+  // If cached, redirect to the public URL — no bytes proxied through API.
   try {
     const { data, error } = await supabase
       .from('image_cache')
-      .select('storage_key, content_type')
+      .select('storage_key, content_type, r2_url')
       .eq('url_hash', storageKey)
       .single();
 
     if (data && !error) {
-      // Redirect to the Supabase Storage URL instead of proxying the bytes.
-      // This eliminates double bandwidth (API fetching from Storage + sending to client)
-      // and lets the browser cache the direct Storage URL for future requests.
+      // Prefer R2 URL (zero egress) if available
+      if (data.r2_url) {
+        res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
+        res.setHeader('CDN-Cache-Control', 'public, max-age=2592000');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.redirect(302, data.r2_url);
+        return;
+      }
+
+      // Fall back to Supabase Storage URL
       const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(data.storage_key);
       const publicUrl = publicUrlData.publicUrl;
 
@@ -165,31 +172,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const buffer = await response.arrayBuffer();
     const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const bufferData = Buffer.from(buffer);
 
-    // 4. Cache in Supabase Storage (fire-and-forget)
-    const uploadPromise = supabase.storage
-      .from(BUCKET)
-      .upload(storageKey, Buffer.from(buffer), {
-        contentType,
-        upsert: true,
-        cacheControl: 'public, max-age=31536000',
-      })
-      .then(({ error: uploadError }) => {
-        if (!uploadError) {
-          supabase
-            .from('image_cache')
-            .upsert({ url_hash: storageKey, storage_key: storageKey, content_type: contentType }, { onConflict: 'url_hash' })
-            .then(() => {}, () => {});
+    // 4. Upload to R2 (zero egress) or fall back to Supabase Storage
+    const uploadPromise = (async () => {
+      let r2Url: string | null = null;
+
+      if (isR2Configured()) {
+        try {
+          r2Url = await uploadToR2(storageKey, bufferData, contentType);
+        } catch (err) {
+          console.warn('[api/image] R2 upload failed, falling back to Supabase Storage:', err);
         }
-      })
-      .catch(() => {});
+      }
+
+      if (!r2Url) {
+        // Fallback: upload to Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET)
+          .upload(storageKey, bufferData, {
+            contentType,
+            upsert: true,
+            cacheControl: 'public, max-age=31536000',
+          });
+        if (uploadError) {
+          console.error('[api/image] Supabase Storage upload failed:', uploadError.message);
+          return;
+        }
+      }
+
+      // Record in image_cache table
+      await supabase
+        .from('image_cache')
+        .upsert({
+          url_hash: storageKey,
+          storage_key: storageKey,
+          content_type: contentType,
+          r2_url: r2Url,
+        }, { onConflict: 'url_hash' });
+    })();
 
     // Return image with aggressive CDN caching — Vercel CDN caches for 30 days
     res.setHeader('Content-Type', contentType);
     for (const [key, value] of Object.entries(CDN_HEADERS)) {
       res.setHeader(key, value);
     }
-    res.send(Buffer.from(buffer));
+    res.send(bufferData);
 
     await uploadPromise;
   } catch {

@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
+import { isR2Configured, uploadToR2, getR2PublicUrl } from './lib/r2';
 
 const ALLOWED_DOMAINS = [
   "photo.yupoo.com",
@@ -33,14 +34,20 @@ function toSizeVariant(url: string, size: 'small' | 'medium' | 'large'): string 
 async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl: string } | null> {
   const storageKey = urlToKey(url);
 
+  // Check if already cached in image_cache table
   try {
     const { data, error } = await supabase
       .from('image_cache')
-      .select('storage_key')
+      .select('storage_key, r2_url')
       .eq('url_hash', storageKey)
       .single();
 
     if (data && !error) {
+      // Prefer R2 URL (zero egress)
+      if (data.r2_url) {
+        return { storageKey: data.storage_key, publicUrl: data.r2_url };
+      }
+      // Fall back to Supabase Storage URL
       const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(data.storage_key);
       return { storageKey: data.storage_key, publicUrl: publicUrlData.publicUrl };
     }
@@ -48,6 +55,7 @@ async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl:
     // Cache miss
   }
 
+  // Fetch from Yupoo and cache
   try {
     const response = await fetch(url, {
       headers: {
@@ -60,25 +68,40 @@ async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl:
 
     const buffer = await response.arrayBuffer();
     const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const bufferData = Buffer.from(buffer);
 
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(storageKey, Buffer.from(buffer), { contentType, upsert: true, cacheControl: 'public, max-age=31536000' });
+    let r2Url: string | null = null;
 
-    if (uploadError) {
-      console.error('[api/precache-batch] Upload error:', uploadError.message);
-      return null;
+    // Upload to R2 (zero egress) or fall back to Supabase Storage
+    if (isR2Configured()) {
+      try {
+        r2Url = await uploadToR2(storageKey, bufferData, contentType);
+      } catch (err) {
+        console.warn('[api/precache-batch] R2 upload failed, falling back to Supabase Storage:', err);
+      }
     }
 
+    if (!r2Url) {
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(storageKey, bufferData, { contentType, upsert: true, cacheControl: 'public, max-age=31536000' });
+
+      if (uploadError) {
+        console.error('[api/precache-batch] Upload error:', uploadError.message);
+        return null;
+      }
+    }
+
+    // Record in image_cache table
     await supabase
       .from('image_cache')
       .upsert(
-        { url_hash: storageKey, storage_key: storageKey, content_type: contentType },
+        { url_hash: storageKey, storage_key: storageKey, content_type: contentType, r2_url: r2Url },
         { onConflict: 'url_hash' }
       );
 
-    const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(storageKey);
-    return { storageKey, publicUrl: publicUrlData.publicUrl };
+    const publicUrl = r2Url || supabase.storage.from(BUCKET).getPublicUrl(storageKey).data.publicUrl;
+    return { storageKey, publicUrl };
   } catch (err) {
     console.error('[api/precache-batch] Fetch error:', err);
     return null;

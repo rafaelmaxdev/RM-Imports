@@ -6,16 +6,20 @@ import { getCachedImageUrl } from "./types";
 import { normalizarBusca } from "./lib/utils";
 import { normalizeNome } from "./lib/utils";
 
-/** Pre-cache product images via the /api/precache endpoint */
-async function precacheProduto(produtoId: string): Promise<void> {
+/** Pre-cache product images via the /api/precache endpoint, returns updated cached_image_urls */
+async function precacheProduto(produtoId: string): Promise<{ small?: string; medium?: string; large?: string }[] | null> {
   try {
-    await fetch("/api/precache", {
+    const res = await fetch("/api/precache", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ produtoId }),
     });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.cached_image_urls ?? null;
   } catch (err) {
     console.warn("[precache] Failed for", produtoId, err);
+    return null;
   }
 }
 
@@ -576,7 +580,11 @@ export default function ProdutoForm({
       );
 
       setProdutos((prev) => [novo, ...prev]);
-      precacheProduto(novo.id);
+      precacheProduto(novo.id).then((cachedUrls) => {
+        if (cachedUrls) {
+          setProdutos((prev) => prev.map((p) => (p.id === novo.id ? { ...p, cached_image_urls: cachedUrls } : p)));
+        }
+      });
       limparForm();
     } catch (err) {
       console.error("Erro ao adicionar:", err);
@@ -642,8 +650,13 @@ export default function ProdutoForm({
       );
 
       setProdutos((prev) => prev.map((p) => (p.id === editandoId ? atualizado : p)));
-      // Pre-cache images in the background (don't block UI)
-      precacheProduto(editandoId);
+      // Pre-cache images in the background and update state with cached URLs
+      const editedId = editandoId;
+      precacheProduto(editedId).then((cachedUrls) => {
+        if (cachedUrls) {
+          setProdutos((prev) => prev.map((p) => (p.id === editedId ? { ...p, cached_image_urls: cachedUrls } : p)));
+        }
+      });
       limparForm();
     } catch (err) {
       console.error("Erro ao salvar:", err);

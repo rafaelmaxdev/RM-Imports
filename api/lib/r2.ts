@@ -1,6 +1,9 @@
 /**
  * Cloudflare R2 client — S3-compatible storage with ZERO egress fees.
  *
+ * Uses dynamic imports to avoid bundling the entire AWS SDK on cold start,
+ * which can exceed Vercel serverless function size limits.
+ *
  * Required env vars:
  *   R2_ACCOUNT_ID      – Cloudflare account ID
  *   R2_ACCESS_KEY_ID   – R2 API token (Access Key ID)
@@ -9,33 +12,11 @@
  *   R2_PUBLIC_URL      – Public URL for the bucket (e.g. "https://images.rmimports.com" or "https://pub-xxx.r2.dev")
  */
 
-import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
-
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
 const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || "rm-imports-images";
 const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || "").replace(/\/+$/, "");
-
-let _r2Client: S3Client | null = null;
-
-/** Lazy-initialised R2/S3 client. Returns null if env vars are missing. */
-export function getR2Client(): S3Client | null {
-  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
-    return null;
-  }
-  if (!_r2Client) {
-    _r2Client = new S3Client({
-      region: "auto",
-      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: R2_ACCESS_KEY_ID,
-        secretAccessKey: R2_SECRET_ACCESS_KEY,
-      },
-    });
-  }
-  return _r2Client;
-}
 
 /** Whether R2 is fully configured (all required env vars present). */
 export function isR2Configured(): boolean {
@@ -47,15 +28,46 @@ export function getR2PublicUrl(key: string): string {
   return `${R2_PUBLIC_URL}/${key}`;
 }
 
+// Lazy-loaded S3 client — avoids importing the entire AWS SDK at module level
+import type { S3Client } from "@aws-sdk/client-s3";
+
+let _r2Client: S3Client | null = null;
+let _r2ClientPromise: Promise<S3Client | null> | null = null;
+
+async function getR2Client(): Promise<S3Client | null> {
+  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+    return null;
+  }
+  if (_r2Client) return _r2Client;
+
+  if (_r2ClientPromise) return _r2ClientPromise;
+
+  _r2ClientPromise = (async () => {
+    const { S3Client: S3ClientClass } = await import("@aws-sdk/client-s3");
+    _r2Client = new S3ClientClass({
+      region: "auto",
+      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
+      },
+    });
+    return _r2Client;
+  })();
+
+  return _r2ClientPromise;
+}
+
 /** Upload a buffer to R2. Returns the public URL. Throws on failure. */
 export async function uploadToR2(
   key: string,
   body: Buffer | Uint8Array,
   contentType: string,
 ): Promise<string> {
-  const client = getR2Client();
+  const client = await getR2Client();
   if (!client) throw new Error("R2 not configured");
 
+  const { PutObjectCommand } = await import("@aws-sdk/client-s3");
   await client.send(
     new PutObjectCommand({
       Bucket: R2_BUCKET_NAME,
@@ -71,10 +83,11 @@ export async function uploadToR2(
 
 /** Check if an object exists in R2. Returns the public URL or null. */
 export async function checkR2Exists(key: string): Promise<string | null> {
-  const client = getR2Client();
+  const client = await getR2Client();
   if (!client) return null;
 
   try {
+    const { HeadObjectCommand } = await import("@aws-sdk/client-s3");
     await client.send(
       new HeadObjectCommand({
         Bucket: R2_BUCKET_NAME,

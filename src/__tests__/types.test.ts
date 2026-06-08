@@ -8,7 +8,7 @@ import {
   montarMensagemItem,
   DEFAULT_CONFIG,
   ADICIONAL_TAMANHO,
-  PRECO_PERSONALIZACAO,
+  precoPersonalizacao,
   TAMANHO_FORNECEDOR,
   type LojaConfig,
   type Order,
@@ -211,16 +211,25 @@ describe("calcularPreco", () => {
   });
 
   it("adds personalization cost", () => {
-    expect(calcularPreco("Jogador", "M", true)).toBe(169.90 + PRECO_PERSONALIZACAO);
+    expect(calcularPreco("Jogador", "M", true)).toBe(169.90 + precoPersonalizacao("Jogador"));
+  });
+
+  it("adds personalization cost for Torcedor (R$20)", () => {
+    expect(calcularPreco("Torcedor", "M", true)).toBe(129.90 + precoPersonalizacao("Torcedor"));
+    expect(precoPersonalizacao("Torcedor")).toBe(20.00);
+  });
+
+  it("uses R$25 personalization for Manga Longa Torcedor", () => {
+    expect(precoPersonalizacao("Manga Longa Torcedor")).toBe(25.00);
   });
 
   it("adds both size surcharge and personalization", () => {
-    expect(calcularPreco("Jogador", "G3", true)).toBe(169.90 + ADICIONAL_TAMANHO["G3"] + PRECO_PERSONALIZACAO);
+    expect(calcularPreco("Jogador", "G3", true)).toBe(169.90 + ADICIONAL_TAMANHO["G3"] + precoPersonalizacao("Jogador"));
   });
 
   it("applies porcentagem promo before size/personalization surcharges", () => {
     const precoPromo = Math.round((169.90 - 169.90 * 0.2) * 100) / 100;
-    const expected = precoPromo + ADICIONAL_TAMANHO["G2"] + PRECO_PERSONALIZACAO;
+    const expected = precoPromo + ADICIONAL_TAMANHO["G2"] + precoPersonalizacao("Jogador");
     expect(calcularPreco("Jogador", "G2", true, undefined, null, "porcentagem", 20)).toBe(expected);
   });
 

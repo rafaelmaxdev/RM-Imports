@@ -3,7 +3,7 @@ import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import { useCart } from "./CartContext";
 import type { CartItem } from "./types";
 import type { LojaConfig, PromocaoTipo, CachedImageMap } from "./types";
-import { PRECO_PERSONALIZACAO, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto, TIPOS_SEM_PERSONALIZACAO, tamanhosDisponiveis } from "./types";
+import { precoPersonalizacao, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto, TIPOS_SEM_PERSONALIZACAO, tamanhosDisponiveis } from "./types";
 import ImageCarousel from "./ImageCarousel";
 import ImageLightbox from "./ImageLightbox";
 import { parseImageUrls } from "./lib/db";
@@ -67,7 +67,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
     produto.promocao_valor
   );
   const adicionalTam = ADICIONAL_TAMANHO[tamanho] || 0;
-  const adicionalPers = personalizado ? PRECO_PERSONALIZACAO : 0;
+  const adicionalPers = personalizado ? precoPersonalizacao(produto.tipo) : 0;
   const precoFinal = (precoPromo ?? precoBase) + adicionalTam + adicionalPers;
 
   function handleConfirm() {
@@ -292,7 +292,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
                     className="w-4 h-4 accent-primary cursor-pointer m-0"
                   />
                   <label htmlFor="personalizar-check" className="text-sm font-medium cursor-pointer select-none">
-                    Personalizar (+{formatarMoeda(PRECO_PERSONALIZACAO)})
+                    Personalizar (+{formatarMoeda(precoPersonalizacao(produto.tipo))})
                   </label>
                 </div>
               </div>

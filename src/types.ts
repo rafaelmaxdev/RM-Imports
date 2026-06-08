@@ -254,7 +254,21 @@ export function getPrecoProduto(
   };
 }
 
-export const PRECO_PERSONALIZACAO = 25.00;
+/** Preço da personalização por tipo de produto */
+export const PRECO_PERSONALIZACAO_BASE = 25.00;
+export const PRECO_PERSONALIZACAO_TORCEDOR = 20.00;
+
+/** Tipos de produto com preço de personalização reduzido (apenas Torcedor) */
+const TIPOS_PERSONALIZACAO_REDUZIDA = ["Torcedor"];
+
+/** Retorna o preço da personalização de acordo com o tipo de produto */
+export function precoPersonalizacao(tipo: string): number {
+  if (TIPOS_PERSONALIZACAO_REDUZIDA.includes(tipo)) return PRECO_PERSONALIZACAO_TORCEDOR;
+  return PRECO_PERSONALIZACAO_BASE;
+}
+
+/** @deprecated Use precoPersonalizacao(tipo) instead */
+export const PRECO_PERSONALIZACAO = PRECO_PERSONALIZACAO_BASE;
 
 export const ADICIONAL_TAMANHO: Record<string, number> = {
   "G2": 10.00,
@@ -340,7 +354,7 @@ export function calcularPreco(
   const { promo, base } = getPrecoProduto(tipo, config ?? DEFAULT_CONFIG, precoCustomizado, promocaoTipo, promocaoValor);
   let preco = promo ?? base;
   if (ADICIONAL_TAMANHO[tamanho]) preco += ADICIONAL_TAMANHO[tamanho];
-  if (personalizado) preco += PRECO_PERSONALIZACAO;
+  if (personalizado) preco += precoPersonalizacao(tipo);
   return preco;
 }
 

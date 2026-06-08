@@ -562,7 +562,7 @@ export default function AdminPacotes() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-lg text-primary">Pacote {pacote.id.slice(0, 8)}</span>
                             <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${statusInfo.bg} ${statusInfo.text}`}>
-                              {statusInfo.label}
+                              {pacote.status === "em_estoque" && "📦 "}{statusInfo.label}
                             </span>
                             <span className="text-sm text-text-muted">
                               {pacote.pedido_ids.length} pedido(s) • {totalShirtsPkg} camisas
@@ -610,7 +610,7 @@ export default function AdminPacotes() {
                                   : isDone ? `${sl.bg} ${sl.text}`
                                   : "bg-gray-100 text-gray-400"
                               }`}>
-                                {sl.label}
+                                {s === "em_estoque" && "📦 "}{sl.label}
                               </div>
                             </div>
                           );

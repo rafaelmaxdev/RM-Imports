@@ -17,7 +17,7 @@ export default function SizeChart() {
 
       <p className="text-text-muted text-sm mb-4 leading-relaxed">
         Confira abaixo as medidas de cada versão para encontrar o tamanho ideal. 
-        As medidas estão em centímetros (cm) e o peso em quilogramas (kg).
+        As medidas estão em centímetros (cm).
       </p>
 
       <div className="mb-8 p-4 bg-blue-50 rounded-lg border border-blue-200">

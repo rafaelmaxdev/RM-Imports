@@ -12,7 +12,7 @@ interface SizeTable {
 
 export const tables: SizeTable[] = [
   {
-    title: "Versão Torcedor/Manga Longa/Goleiro",
+    title: "Versão Torcedor",
     headers: ["Tam.", "Comprimento", "Largura", "Altura"],
     rows: [
       { tam: "P", comprimento: "69-71", largura: "53-55", altura: "162-170" },
@@ -48,24 +48,34 @@ export const tables: SizeTable[] = [
     ],
   },
   {
-    title: "Camisa Polo",
-    headers: ["Tam.", "Largura", "Comprimento", "Manga", "Altura"],
+    title: "Versão Jogador (Feminina)",
+    headers: ["Tamanho", "Comprimento", "Largura", "Altura"],
     rows: [
-      { tam: "P", largura: "48", comprimento: "70", manga: "34.5", altura: "160-170" },
-      { tam: "M", largura: "50", comprimento: "72", manga: "36", altura: "165-175" },
-      { tam: "G", largura: "52", comprimento: "74", manga: "37.5", altura: "175-180" },
-      { tam: "GG", largura: "54", comprimento: "76", manga: "39", altura: "180-185" },
+      { tam: "P", comprimento: "59-61", largura: "36-37", altura: "150-158" },
+      { tam: "M", comprimento: "61-64", largura: "37-40", altura: "158-163" },
+      { tam: "G", comprimento: "64-67", largura: "40-44", altura: "163-168" },
+      { tam: "GG", comprimento: "67-69", largura: "44-47", altura: "167-172" },
     ],
   },
   {
-    title: "Camisa Retrô",
-    headers: ["Tamanho", "Largura", "Comprimento", "Altura"],
+    title: "Manga Longa / Retrô / Treinamento / Goleiro",
+    headers: ["Tam.", "Comprimento", "Largura", "Altura"],
     rows: [
-      { tam: "P", largura: "48", comprimento: "67", altura: "160-165" },
-      { tam: "M", largura: "50", comprimento: "70", altura: "165-170" },
-      { tam: "G", largura: "52.5", comprimento: "73.5", altura: "170-175" },
-      { tam: "GG", largura: "55", comprimento: "77", altura: "175-178" },
-      { tam: "G1", largura: "57", comprimento: "80", altura: "179-184" },
+      { tam: "P", comprimento: "69-71", largura: "53-55", altura: "162-170" },
+      { tam: "M", comprimento: "71-73", largura: "55-57", altura: "170-176" },
+      { tam: "G", comprimento: "73-75", largura: "57-58", altura: "176-182" },
+      { tam: "GG", comprimento: "75-78", largura: "58-60", altura: "182-190" },
+      { tam: "G1", comprimento: "78-81", largura: "60-62", altura: "190-195" },
+    ],
+  },
+  {
+    title: "Polo",
+    headers: ["Tam.", "Comprimento", "Largura", "Altura"],
+    rows: [
+      { tam: "P", comprimento: "69-71", largura: "53-55", altura: "162-170" },
+      { tam: "M", comprimento: "71-73", largura: "55-57", altura: "170-176" },
+      { tam: "G", comprimento: "73-75", largura: "57-58", altura: "176-182" },
+      { tam: "GG", comprimento: "75-78", largura: "58-60", altura: "182-190" },
     ],
   },
   {
@@ -78,17 +88,6 @@ export const tables: SizeTable[] = [
       { tam: "GG", numeracao: "52", peito: "126", comprimento: "84" },
       { tam: "G1", numeracao: "54", peito: "130", comprimento: "86" },
       { tam: "G2", numeracao: "56", peito: "134", comprimento: "88" },
-    ],
-  },
-  {
-    title: "Kit Treino — Manga Curta / Comprida",
-    headers: ["Tam.", "Comprimento", "Largura", "Altura"],
-    rows: [
-      { tam: "P", comprimento: "69", largura: "100", altura: "155-170" },
-      { tam: "M", comprimento: "71", largura: "104", altura: "165-175" },
-      { tam: "G", comprimento: "73", largura: "108", altura: "170-185" },
-      { tam: "GG", comprimento: "75", largura: "112", altura: "180-195" },
-      { tam: "G1", comprimento: "77", largura: "116", altura: "195-210" },
     ],
   },
 ];

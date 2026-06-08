@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcularPreco, formatarMoeda, DEFAULT_CONFIG, ADICIONAL_TAMANHO, PRECO_PERSONALIZACAO } from "../types";
+import { calcularPreco, formatarMoeda, DEFAULT_CONFIG, ADICIONAL_TAMANHO, precoPersonalizacao } from "../types";
 import type { LojaConfig } from "../types";
 
 /**
@@ -79,12 +79,28 @@ describe("Cart pricing: size surcharges", () => {
 describe("Cart pricing: personalization", () => {
   it("adds personalization fee to base price", () => {
     const price = calcularPreco("Jogador", "M", true);
-    expect(price).toBe(169.90 + PRECO_PERSONALIZACAO);
+    expect(price).toBe(169.90 + precoPersonalizacao("Jogador"));
   });
 
   it("adds personalization fee on top of size surcharge", () => {
     const price = calcularPreco("Jogador", "G3", true);
-    expect(price).toBe(169.90 + ADICIONAL_TAMANHO["G3"] + PRECO_PERSONALIZACAO);
+    expect(price).toBe(169.90 + ADICIONAL_TAMANHO["G3"] + precoPersonalizacao("Jogador"));
+  });
+
+  it("uses R$20 personalization for Torcedor only", () => {
+    expect(precoPersonalizacao("Torcedor")).toBe(20.00);
+    expect(calcularPreco("Torcedor", "M", true)).toBe(129.90 + 20.00);
+  });
+
+  it("uses R$25 personalization for Manga Longa Torcedor", () => {
+    expect(precoPersonalizacao("Manga Longa Torcedor")).toBe(25.00);
+  });
+
+  it("uses R$25 personalization for other types", () => {
+    expect(precoPersonalizacao("Jogador")).toBe(25.00);
+    expect(precoPersonalizacao("Retrô")).toBe(25.00);
+    expect(precoPersonalizacao("Polo")).toBe(25.00);
+    expect(precoPersonalizacao("NBA")).toBe(25.00);
   });
 });
 
@@ -101,7 +117,7 @@ describe("Cart pricing: individual promos", () => {
   it("porcentagem: 20% off + G2 surcharge + personalization", () => {
     const expectedPromo = Math.round((169.90 - 169.90 * 0.20) * 100) / 100;
     expect(calcularPreco("Jogador", "G2", true, undefined, null, "porcentagem", 20))
-      .toBe(expectedPromo + ADICIONAL_TAMANHO["G2"] + PRECO_PERSONALIZACAO);
+      .toBe(expectedPromo + ADICIONAL_TAMANHO["G2"] + precoPersonalizacao("Jogador"));
   });
 
   it("novo_preco: custom price overrides base (no surcharges)", () => {
@@ -111,7 +127,7 @@ describe("Cart pricing: individual promos", () => {
 
   it("novo_preco: custom price + G3 surcharge + personalization", () => {
     expect(calcularPreco("NBA", "G3", true, undefined, 159.90, "novo_preco"))
-      .toBe(159.90 + ADICIONAL_TAMANHO["G3"] + PRECO_PERSONALIZACAO);
+      .toBe(159.90 + ADICIONAL_TAMANHO["G3"] + precoPersonalizacao("NBA"));
   });
 
   it("leve_pague: uses base price (no discount applied to individual item)", () => {
@@ -155,7 +171,7 @@ describe("Cart pricing: category-level promos", () => {
   it("category promo + personalization", () => {
     const cfg = categoriaEmPromocao("Jogador", true);
     expect(calcularPreco("Jogador", "M", true, cfg))
-      .toBe(139.90 + PRECO_PERSONALIZACAO);
+.toBe(139.90 + precoPersonalizacao("Jogador"));
   });
 
   it("individual porcentagem overrides category promo", () => {
@@ -193,7 +209,7 @@ describe("Cart pricing: multi-item totals", () => {
       { tipo: "Torcedor", tamanho: "G2", personalizado: false },
       { tipo: "Jogador", tamanho: "M", personalizado: true },
     ]);
-    expect(total).toBe((129.90 + ADICIONAL_TAMANHO["G2"]) + (169.90 + PRECO_PERSONALIZACAO));
+    expect(total).toBe((129.90 + ADICIONAL_TAMANHO["G2"]) + (169.90 + precoPersonalizacao("Jogador")));
   });
 
   it("sums items with mixed promos", () => {
@@ -204,7 +220,7 @@ describe("Cart pricing: multi-item totals", () => {
     ]);
     const expectedTorcedorPromo = Math.round((129.90 - 129.90 * 0.10) * 100) / 100;
     const expectedItem1 = 139.90; // Jogador em promoção de categoria
-    const expectedItem2 = expectedTorcedorPromo + ADICIONAL_TAMANHO["G3"] + PRECO_PERSONALIZACAO;
+    const expectedItem2 = expectedTorcedorPromo + ADICIONAL_TAMANHO["G3"] + precoPersonalizacao("Torcedor");
     expect(total).toBe(expectedItem1 + expectedItem2);
   });
 
@@ -235,10 +251,10 @@ describe("Cart pricing: multi-item totals", () => {
       { tipo: "Retrô", tamanho: "GG", personalizado: false },
     ]);
     const item0 = 109.90; // Torcedor category promo
-    const item1 = 169.90 + PRECO_PERSONALIZACAO;
+    const item1 = 169.90 + precoPersonalizacao("Jogador");
     const item2Promo = Math.round((169.90 - 169.90 * 0.15) * 100) / 100;
     const item2 = item2Promo + ADICIONAL_TAMANHO["G2"];
-    const item3 = 179.90 + ADICIONAL_TAMANHO["G3"] + PRECO_PERSONALIZACAO;
+    const item3 = 179.90 + ADICIONAL_TAMANHO["G3"] + precoPersonalizacao("NBA");
     const item4 = 169.90;
     expect(total).toBe(item0 + item1 + item2 + item3 + item4);
   });
@@ -258,6 +274,6 @@ describe("Cart pricing: edge cases", () => {
   });
 
   it("handles personalization only (no size surcharge)", () => {
-    expect(calcularPreco("Polo", "M", true)).toBe(139.90 + PRECO_PERSONALIZACAO);
+    expect(calcularPreco("Polo", "M", true)).toBe(139.90 + precoPersonalizacao("Polo"));
   });
 });

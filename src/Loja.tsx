@@ -8,6 +8,7 @@ import DestaqueCarousel from "./DestaqueCarousel";
 import type { LojaConfig, PromocaoTipo, CachedImageMap } from "./types";
 import { formatarMoeda, getPrecoProduto } from "./types";
 import { normalizeNome, normalizarBusca } from "./lib/utils";
+import { TIPO_SHORT } from "./lib/status";
 
 const CATEGORIAS = [
   "Todas",
@@ -341,11 +342,11 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                     {p.nome}
                   </div>
 
-                  <div className="flex gap-1 sm:gap-2 mb-1.5 sm:mb-2">
-                    <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-primary text-white rounded">
-                      {p.tipo}{p.feminino ? " (F e M)" : ""}
+                  <div className="flex gap-1 sm:gap-2 mb-1.5 sm:mb-2 overflow-hidden">
+                    <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-primary text-white rounded shrink-0" title={p.tipo}>
+                      {TIPO_SHORT[p.tipo] || p.tipo}{p.feminino ? " (F e M)" : ""}
                     </span>
-                    <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-primary text-white rounded">
+                    <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-primary text-white rounded shrink-0" title={p.temporada}>
                       {p.temporada}
                     </span>
                   </div>

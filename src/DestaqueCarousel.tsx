@@ -3,6 +3,7 @@ import type { DbProduto } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { getPrecoProduto, formatarMoeda, getCachedImageUrl } from "./types";
+import { TIPO_SHORT } from "./lib/status";
 
 interface DestaqueCarouselProps {
   produtos: DbProduto[];
@@ -258,9 +259,9 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
 
                   <div className="p-2 sm:p-3 flex flex-col flex-1">
                     <div className="font-semibold text-xs sm:text-sm line-clamp-2 mb-1 sm:mb-1.5">{p.nome}</div>
-                    <div className="flex gap-1 sm:gap-1.5 mb-1 sm:mb-1.5">
-                      <span className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 bg-primary text-white rounded">{p.tipo}</span>
-                      <span className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 bg-primary text-white rounded">{p.temporada}</span>
+                    <div className="flex gap-1 sm:gap-1.5 mb-1 sm:mb-1.5 overflow-hidden">
+                      <span className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 bg-primary text-white rounded shrink-0" title={p.tipo}>{TIPO_SHORT[p.tipo] || p.tipo}</span>
+                      <span className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 bg-primary text-white rounded shrink-0" title={p.temporada}>{p.temporada}</span>
                     </div>
                     <div className="mt-auto">
                       {promo !== null ? (

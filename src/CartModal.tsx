@@ -128,7 +128,10 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
               <div className="space-y-5">
                 {tables.map((table) => (
                   <section key={table.title}>
-                    <h4 className="text-sm font-bold text-primary mb-2">{table.title}</h4>
+                    <h4 className="text-sm font-bold text-primary mb-1">{table.title}</h4>
+                    {table.subtitle && (
+                      <p className="text-[11px] text-text-muted mb-2">{table.subtitle}</p>
+                    )}
                     <div className="overflow-x-auto rounded-md border border-border">
                       <table className="w-full text-xs">
                         <thead>

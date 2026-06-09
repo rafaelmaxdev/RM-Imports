@@ -3,7 +3,7 @@ import { supabase } from "./lib/supabase";
 import { addProduto, updateProduto, deleteProduto, parseImageUrls } from "./lib/db";
 import type { DbProduto } from "./lib/db";
 import { getCachedImageUrl } from "./types";
-import { normalizarBusca } from "./lib/utils";
+import { buscaPorPalavras } from "./lib/utils";
 import { normalizeNome } from "./lib/utils";
 
 /** Pre-cache product images via the /api/precache endpoint, returns updated cached_image_urls */
@@ -682,13 +682,12 @@ export default function ProdutoForm({
   }
 
   const produtosFiltrados = useMemo(() => {
-    const busca = normalizarBusca(filtroBusca);
     return produtos.filter((p) => {
       if (filtroTime && p.time !== filtroTime) return false;
       if (filtroTipo && p.tipo !== filtroTipo) return false;
-      if (busca) {
-        const campos = normalizarBusca([p.nome, p.time, p.tipo, p.temporada].join(" "));
-        if (!campos.includes(busca)) return false;
+      if (filtroBusca.trim()) {
+        const campos = [p.nome, p.time, p.tipo, p.temporada].join(" ");
+        if (!buscaPorPalavras(filtroBusca, campos)) return false;
       }
       return true;
     });

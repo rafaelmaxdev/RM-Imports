@@ -325,6 +325,9 @@ export default function AdminPacotes() {
                   {order.admin_order && (
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">👤 Admin</span>
                   )}
+                  {order.pronta_entrega && (
+                    <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-teal-100 text-teal-800">📦 Estoque</span>
+                  )}
                 </div>
                 {order.endereco && (
                   <div className="text-sm text-text-muted mt-1">
@@ -495,6 +498,9 @@ export default function AdminPacotes() {
                               {paymentLabel && (
                                 <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">{paymentLabel}</span>
                               )}
+                              {order.pronta_entrega && (
+                                <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-teal-100 text-teal-800">📦 Estoque</span>
+                              )}
                             </div>
                             {order.endereco && (
                               <div className="text-sm text-text-muted mt-1">{order.endereco.nome} • {order.endereco.cidade}/{order.endereco.estado}</div>
@@ -637,6 +643,9 @@ export default function AdminPacotes() {
                                     )}
                                     {order.admin_order && (
                                       <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">👤</span>
+                                    )}
+                                    {order.pronta_entrega && (
+                                      <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-teal-100 text-teal-800">📦</span>
                                     )}
                                   </div>
                                   <span className="font-semibold text-sm">{formatarMoeda(order.total)}</span>
@@ -1084,6 +1093,9 @@ function DeliveredPacoteCard({
                     )}
                     {order.admin_order && (
                       <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">👤</span>
+                    )}
+                    {order.pronta_entrega && (
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-teal-100 text-teal-800">📦</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">

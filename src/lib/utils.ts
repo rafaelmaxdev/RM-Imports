@@ -33,3 +33,13 @@ export function normalizarBusca(s: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/** Check if ALL words in the query appear in the text (order-independent).
+ *  e.g. buscaPorPalavras("cruzeiro manga longa", "manga longa cruzeiro 2026") → true
+ */
+export function buscaPorPalavras(query: string, text: string): boolean {
+  const words = normalizarBusca(query).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const normalized = normalizarBusca(text);
+  return words.every((word) => normalized.includes(word));
+}

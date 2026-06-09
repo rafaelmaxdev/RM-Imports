@@ -4,6 +4,7 @@ import type { Order } from "./types";
 import { formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
 import { STATUS_CONFIG_ADMIN, STATUS_FLOW, PAYMENT_LABELS_SHORT } from "./lib/status";
+import { buscaPorPalavras } from "./lib/utils";
 
 function montarMensagemCliente(order: Order): string {
   const isRetirada = order.endereco?.deliveryMethod === "retirada";
@@ -65,14 +66,15 @@ export default function AdminOrders() {
 
   const filteredOrders = orders.filter((order) => {
     if (statusFilter !== "all" && order.status !== statusFilter) return false;
-    const term = search.toLowerCase();
-    if (!term) return true;
-    if (order.id.toLowerCase().includes(term)) return true;
-    if (order.endereco?.nome?.toLowerCase().includes(term)) return true;
-    if (order.endereco?.telefone?.includes(term)) return true;
-    if (order.itens.some((item) => item.nome.toLowerCase().includes(term))) return true;
-    if (order.mp_payment_id?.toLowerCase().includes(term)) return true;
-    return false;
+    if (!search.trim()) return true;
+    const campos = [
+      order.id,
+      order.endereco?.nome,
+      order.endereco?.telefone,
+      order.mp_payment_id,
+      ...order.itens.map((item) => item.nome),
+    ].filter(Boolean).join(" ");
+    return buscaPorPalavras(search, campos);
   });
 
   async function handleStatusChange(id: string, newStatus: string) {

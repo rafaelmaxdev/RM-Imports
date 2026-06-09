@@ -4,7 +4,7 @@ import { getEstoque, addEstoqueItem, updateEstoqueItem, deleteEstoqueItem } from
 import { parseImageUrls } from "./lib/db";
 import { getCachedImageUrl } from "./types";
 import { TAMANHOS_POR_TIPO } from "./types";
-import { normalizarBusca } from "./lib/utils";
+import { buscaPorPalavras } from "./lib/utils";
 import type { EstoqueItem } from "./types";
 
 interface AdminEstoqueProps {
@@ -58,11 +58,10 @@ export default function AdminEstoque({ produtos }: AdminEstoqueProps) {
 
   // Filtered products for the add form search
   const resultados = useMemo(() => {
-    const q = normalizarBusca(busca);
+    if (!busca.trim()) return produtos.slice(0, 30);
     return produtos.filter((p) => {
-      if (!q) return true;
-      const campos = normalizarBusca([p.nome, p.time, p.tipo, p.liga, p.temporada].join(" "));
-      return campos.includes(q);
+      const campos = [p.nome, p.time, p.tipo, p.liga, p.temporada].join(" ");
+      return buscaPorPalavras(busca, campos);
     }).slice(0, 30);
   }, [produtos, busca]);
 

@@ -3,6 +3,7 @@ import { getPedidos, deletePedido, updatePedidoAdminOrder } from "./lib/db";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
 import { STATUS_CONFIG_ADMIN, PAYMENT_LABELS_SHORT } from "./lib/status";
+import { buscaPorPalavras } from "./lib/utils";
 
 export default function AdminHistory() {
   const [history, setHistory] = useState<Order[]>([]);
@@ -36,13 +37,15 @@ export default function AdminHistory() {
     if (filter === "entregue" && order.status !== "entregue") return false;
     if (filter === "cancelado" && order.status !== "cancelado") return false;
     if (filter === "reembolsado" && order.status !== "reembolsado") return false;
-    const term = search.toLowerCase();
-    if (!term) return true;
-    if (order.id.toLowerCase().includes(term)) return true;
-    if (order.endereco?.nome?.toLowerCase().includes(term)) return true;
-    if (order.endereco?.telefone?.includes(term)) return true;
-    if (order.itens.some((item) => item.nome.toLowerCase().includes(term))) return true;
-    if (order.mp_payment_id?.toLowerCase().includes(term)) return true;
+    if (!search.trim()) return true;
+    const campos = [
+      order.id,
+      order.endereco?.nome,
+      order.endereco?.telefone,
+      order.mp_payment_id,
+      ...order.itens.map((item) => item.nome),
+    ].filter(Boolean).join(" ");
+    return buscaPorPalavras(search, campos);
     return false;
   });
 

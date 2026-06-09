@@ -31,9 +31,12 @@ export default function SizeChart() {
       <div className="space-y-10">
         {tables.map((table) => (
           <section key={table.title}>
-            <h2 className="text-lg font-bold text-primary mb-3 pb-2 border-b-2 border-accent/30">
+            <h2 className="text-lg font-bold text-primary mb-1 pb-2 border-b-2 border-accent/30">
               {table.title}
             </h2>
+            {table.subtitle && (
+              <p className="text-xs text-text-muted mb-3 mt-1">{table.subtitle}</p>
+            )}
             <div className="overflow-x-auto rounded-lg border border-border shadow-sm">
               <table className="w-full text-sm">
                 <thead>

@@ -130,6 +130,20 @@ export const TIPO_ENGLISH: Record<string, string> = {
   "NBA": "NBA",
 };
 
+/** Short labels for product types (used in catalog badges). Tooltip shows full name. */
+export const TIPO_SHORT: Record<string, string> = {
+  "Torcedor": "Torcedor",
+  "Jogador": "Jogador",
+  "Retrô": "Retrô",
+  "Manga Longa Torcedor": "ML Torcedor",
+  "Manga Longa Jogador": "ML Jogador",
+  "Manga Longa Retrô": "ML Retrô",
+  "Goleiro": "Goleiro",
+  "Treinamento": "Treinamento",
+  "Polo": "Polo",
+  "NBA": "NBA",
+};
+
 // ── MP fee rates ──
 
 export const MP_FEE_RATES: Record<string, number> = {

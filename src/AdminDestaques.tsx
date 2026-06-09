@@ -3,7 +3,7 @@ import type { DbProduto } from "./lib/db";
 import { toggleDestaque, reorderDestaques } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
 import { getCachedImageUrl } from "./types";
-import { normalizarBusca } from "./lib/utils";
+import { buscaPorPalavras } from "./lib/utils";
 
 interface AdminDestaquesProps {
   produtos: DbProduto[];
@@ -34,13 +34,12 @@ export default function AdminDestaques({ produtos, setProdutos }: AdminDestaques
   }, [produtos]);
 
   const resultados = useMemo(() => {
-    const q = normalizarBusca(busca);
     return produtos.filter((p) => {
       if (p.destaque) return false;
       if (filtroTipo && p.tipo !== filtroTipo) return false;
-      if (q) {
-        const campos = normalizarBusca([p.nome, p.time, p.tipo, p.temporada].join(" "));
-        if (!campos.includes(q)) return false;
+      if (busca.trim()) {
+        const campos = [p.nome, p.time, p.tipo, p.temporada].join(" ");
+        if (!buscaPorPalavras(busca, campos)) return false;
       }
       return true;
     }).slice(0, 20);

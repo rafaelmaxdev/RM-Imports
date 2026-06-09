@@ -3,6 +3,7 @@ import { getEstoquePublico } from "./lib/db";
 import { formatarMoeda, proxyImageUrl, PRECOS_BASE, WHATSAPP_NUMBER } from "./types";
 import type { EstoqueItem } from "./types";
 import { normalizarBusca } from "./lib/utils";
+import { TIPO_SHORT } from "./lib/status";
 
 interface GroupedProduct {
   produto_id: string;
@@ -246,12 +247,12 @@ export default function ProntaEntrega() {
 
                   <div className="flex flex-wrap gap-1 sm:gap-2 mb-1.5 sm:mb-2">
                     {product.tipo && (
-                      <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-gray-200 text-gray-700 rounded">
-                        {product.tipo}
+                      <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-gray-200 text-gray-700 rounded" title={product.tipo}>
+                        {TIPO_SHORT[product.tipo] || product.tipo}
                       </span>
                     )}
                     {product.temporada && (
-                      <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-gray-200 text-gray-700 rounded">
+                      <span className="text-[10px] sm:text-xs px-1 sm:px-2 py-0.5 bg-gray-200 text-gray-700 rounded" title={product.temporada}>
                         {product.temporada}
                       </span>
                     )}

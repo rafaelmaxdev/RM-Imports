@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
 import { isR2Configured, uploadToR2, checkR2Exists, getR2PublicUrl } from './lib/r2.js';
+import { getCorsOrigin } from './lib/cors.js';
 
 const ALLOWED_DOMAINS = [
   "photo.yupoo.com",
@@ -87,7 +88,6 @@ export const config = {
 const CDN_HEADERS = {
   'Cache-Control': 'public, max-age=2592000, stale-while-revalidate=86400',
   'CDN-Cache-Control': 'public, max-age=2592000',
-  'Access-Control-Allow-Origin': '*',
 };
 
 /** Fetch with timeout to avoid hanging on slow upstreams */
@@ -127,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (data.r2_url) {
         res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
         res.setHeader('CDN-Cache-Control', 'public, max-age=2592000');
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Origin', getCorsOrigin(req.headers));
         res.redirect(302, data.r2_url);
         return;
       }
@@ -138,7 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
       res.setHeader('CDN-Cache-Control', 'public, max-age=2592000');
-      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Origin', getCorsOrigin(req.headers));
       res.redirect(302, publicUrl);
       return;
     }
@@ -214,6 +214,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Return image with aggressive CDN caching — Vercel CDN caches for 30 days
     res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', getCorsOrigin(req.headers));
     for (const [key, value] of Object.entries(CDN_HEADERS)) {
       res.setHeader(key, value);
     }

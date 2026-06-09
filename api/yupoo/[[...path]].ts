@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { getCorsOrigin } from '../lib/cors.js';
 
 const ALLOWED_YUPOO_HOSTS = ['minkang.x.yupoo.com', 'photo.yupoo.com', 'img.yupoo.com'];
 
@@ -36,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const contentType = response.headers.get('content-type') || 'application/json';
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Origin', getCorsOrigin(req.headers));
 
     const text = await response.text();
     res.status(response.status).send(text);

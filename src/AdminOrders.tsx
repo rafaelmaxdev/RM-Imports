@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder, updatePedidoProntaEntrega, addOrderItemsToEstoque, autoCancelExpiredOrders } from "./lib/db";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
@@ -64,7 +64,7 @@ export default function AdminOrders() {
     loadOrders();
   }, [loadOrders]);
 
-  const filteredOrders = orders.filter((order) => {
+  const filteredOrders = useMemo(() => orders.filter((order) => {
     if (statusFilter !== "all" && order.status !== statusFilter) return false;
     if (!search.trim()) return true;
     const campos = [
@@ -75,7 +75,7 @@ export default function AdminOrders() {
       ...order.itens.map((item) => item.nome),
     ].filter(Boolean).join(" ");
     return buscaPorPalavras(search, campos);
-  });
+  }), [orders, statusFilter, search]);
 
   async function handleStatusChange(id: string, newStatus: string) {
     const label = STATUS_CONFIG_ADMIN[newStatus]?.label || newStatus;

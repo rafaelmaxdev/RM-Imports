@@ -122,8 +122,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.replace("Bearer ", "");
+  if (token) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+  } else {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
   // Process a limited number of products per call to avoid timeouts.
-  // Call multiple times to process all products.
   const limit = typeof req.body?.limit === 'number' ? Math.min(req.body.limit, 20) : 10;
   const offset = typeof req.body?.offset === 'number' ? req.body.offset : 0;
 

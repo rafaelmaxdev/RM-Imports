@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import type { DbProduto } from "./lib/db";
-import { getEstoque, addEstoqueItem, updateEstoqueItem, deleteEstoqueItem, decrementEstoqueItem, criarVendaDireta } from "./lib/db";
+import { getEstoque, addEstoqueItem, updateEstoqueItem, deleteEstoqueItem, criarVendaDireta } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
-import { getCachedImageUrl, TAMANHOS_POR_TIPO, TIPOS_SEM_PERSONALIZACAO, formatarMoeda, getPrecoProduto, ADICIONAL_TAMANHO } from "./types";
+import { getCachedImageUrl, TAMANHOS_POR_TIPO, TIPOS_SEM_PERSONALIZACAO, getPrecoProduto, ADICIONAL_TAMANHO } from "./types";
 import type { EstoqueItem, LojaConfig } from "./types";
 import { buscaPorPalavras } from "./lib/utils";
+import type { PromocaoTipo } from "./types";
 
 interface AdminEstoqueProps {
   produtos: DbProduto[];
@@ -115,16 +116,16 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
     }
     setSaving(true);
     try {
-      const addedItems: EstoqueItem[] = [];
-      for (const [tamanho, qty] of entriesToAdd) {
-        const added = await addEstoqueItem(
-          selectedProdutoId, tamanho, qty,
-          personalizado,
-          personalizado ? nomePersonalizado : undefined,
-          personalizado ? numeroPersonalizado : undefined,
-        );
-        addedItems.push(added);
-      }
+      const addedItems = await Promise.all(
+        entriesToAdd.map(([tamanho, qty]) =>
+          addEstoqueItem(
+            selectedProdutoId, tamanho, qty,
+            personalizado,
+            personalizado ? nomePersonalizado : undefined,
+            personalizado ? numeroPersonalizado : undefined,
+          )
+        )
+      );
       // Update local state with all added items
       setEstoque((prev) => {
         const next = [...prev];
@@ -196,7 +197,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
         p?.tipo ?? vendaItem.produto_tipo ?? "",
         config,
         p?.preco_customizado ?? null,
-        (p?.promocao_tipo as any) ?? undefined,
+        (p?.promocao_tipo as PromocaoTipo) ?? undefined,
         p?.promocao_valor ?? null,
       );
       const basePrice = priceInfo.promo ?? priceInfo.base;
@@ -631,6 +632,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                     value={nomePersonalizado}
                     onChange={(e) => setNomePersonalizado(e.target.value.toUpperCase())}
                     placeholder="Nome (ex: SILVA)"
+                    maxLength={15}
                     className="flex-1 px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
                   />
                   <input
@@ -638,6 +640,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                     value={numeroPersonalizado}
                     onChange={(e) => setNumeroPersonalizado(e.target.value.replace(/[^0-9]/g, ""))}
                     placeholder="Número (ex: 10)"
+                    maxLength={2}
                     className="w-24 px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
                   />
                 </div>

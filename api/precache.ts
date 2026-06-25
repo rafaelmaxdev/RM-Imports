@@ -125,6 +125,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.replace("Bearer ", "");
+  if (token) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+  } else {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
   const { produtoId } = req.body;
 
   if (!produtoId || typeof produtoId !== 'string') {

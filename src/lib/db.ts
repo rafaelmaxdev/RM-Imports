@@ -792,6 +792,29 @@ export async function addOrderItemsToEstoque(order: import("../types").Order): P
   }
 }
 
+/** Remove items from estoque when a pronta_entrega order is paid.
+ *  Looks up each product by name, then decrements stock by 1 per item. */
+export async function removeOrderItemsFromEstoque(order: import("../types").Order): Promise<void> {
+  for (const item of order.itens) {
+    const { data: produtos } = await supabase
+      .from("produtos")
+      .select("id")
+      .eq("nome", item.nome)
+      .limit(1);
+
+    if (!produtos || produtos.length === 0) continue;
+
+    const produtoId = produtos[0].id;
+    await decrementEstoqueItem(
+      produtoId,
+      item.tamanho,
+      item.personalizado ?? false,
+      item.nomePersonalizado,
+      item.numeroPersonalizado,
+    );
+  }
+}
+
 /** Decrement stock quantity for a pronta entrega item.
  *  Called when a customer buys from pronta entrega.
  *  Returns true if the stock was successfully decremented. */

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import type { CartItem, Order, OrderAddress, PaymentMethod } from "./types";
 import { gerarId } from "./types";
-import { createPedido, decrementEstoqueItem } from "./lib/db";
+import { createPedido } from "./lib/db";
 import { supabase } from "./lib/supabase";
 
 interface CartContextType {
@@ -123,19 +123,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
           order.mp_preference_id = mpResult.preferenceId;
           // Update order with preference ID
           await supabase.from("pedidos").update({ mp_preference_id: mpResult.preferenceId }).eq("id", order.id);
-        }
-
-        // Decrement stock for pronta entrega items
-        for (const cartItem of cart) {
-          if (cartItem.prontaEntrega) {
-            await decrementEstoqueItem(
-              cartItem.productId,
-              cartItem.tamanho,
-              cartItem.personalizado,
-              cartItem.nomePersonalizado,
-              cartItem.numeroPersonalizado,
-            ).catch((err) => console.error("Erro ao decrementar estoque:", err));
-          }
         }
 
         setCart([]);

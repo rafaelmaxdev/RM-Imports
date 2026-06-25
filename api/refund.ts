@@ -97,6 +97,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: "Reembolso processado, mas erro ao atualizar status do pedido" });
     }
 
+    // Restore stock for pronta_entrega orders
+    try {
+      const { data: fullOrder } = await supabase
+        .from("pedidos")
+        .select("itens, pronta_entrega")
+        .eq("id", orderId)
+        .single();
+
+      if (fullOrder?.pronta_entrega && fullOrder.itens) {
+        const itens = typeof fullOrder.itens === "string" ? JSON.parse(fullOrder.itens) : fullOrder.itens;
+
+        for (const item of itens) {
+          const { data: produtos } = await supabase
+            .from("produtos")
+            .select("id")
+            .eq("nome", item.nome)
+            .limit(1);
+
+          if (!produtos || produtos.length === 0) continue;
+
+          const produtoId = produtos[0].id;
+          const isPersonalizado = item.personalizado ?? false;
+          const nomePessoal = isPersonalizado ? (item.nomePersonalizado ?? null) : null;
+          const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
+
+          let query = supabase
+            .from("estoque_pronta_entrega")
+            .select("id, quantidade")
+            .eq("produto_id", produtoId)
+            .eq("tamanho", item.tamanho)
+            .eq("personalizado", isPersonalizado);
+
+          if (nomePessoal) {
+            query = query.eq("nome_personalizado", nomePessoal);
+          } else {
+            query = query.is("nome_personalizado", null);
+          }
+          if (numeroPessoal) {
+            query = query.eq("numero_personalizado", numeroPessoal);
+          } else {
+            query = query.is("numero_personalizado", null);
+          }
+
+          const { data: existing } = await query.maybeSingle();
+
+          if (existing) {
+            await supabase
+              .from("estoque_pronta_entrega")
+              .update({ quantidade: existing.quantidade + 1 })
+              .eq("id", existing.id);
+          } else {
+            await supabase
+              .from("estoque_pronta_entrega")
+              .insert({
+                produto_id: produtoId,
+                tamanho: item.tamanho,
+                quantidade: 1,
+                personalizado: isPersonalizado,
+                nome_personalizado: nomePessoal,
+                numero_personalizado: numeroPessoal,
+              });
+          }
+        }
+      }
+    } catch (stockError) {
+      console.error(`Error restoring stock for order ${orderId}:`, stockError);
+    }
+
     return res.status(200).json({
       success: true,
       refundId: refundResult.id,

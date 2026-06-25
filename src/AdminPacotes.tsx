@@ -168,9 +168,9 @@ export default function AdminPacotes() {
       setStep("select");
       setPacotes((prev) => [novoPacote, ...prev]);
       setTab("pacotes");
-    } catch (err: any) {
-      console.error("Erro ao criar pacote:", err);
-      const msg = err?.message || "Erro ao criar pacote. Verifique manualmente.";
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao criar pacote. Verifique manualmente.";
+      console.error("Erro ao criar pacote:", msg);
       if (msg.includes("8 camisas") || msg.includes("limite")) {
         alert(`Erro: ${msg}`);
       } else {
@@ -204,9 +204,10 @@ export default function AdminPacotes() {
               setPacotes((prev) =>
                 prev.map((p) => p.id === pacote.id ? { ...p, status: nextStatus } : p)
               );
-            } catch (err: any) {
-              console.error("Erro ao atualizar status:", err);
-              alert(err?.message || "Erro ao atualizar status. Verifique manualmente.");
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : "Erro ao atualizar status. Verifique manualmente.";
+              console.error("Erro ao atualizar status:", msg);
+              alert(msg);
             }
             setSharing(null);
           },
@@ -224,9 +225,10 @@ export default function AdminPacotes() {
       setPacotes((prev) =>
         prev.map((p) => p.id === pacote.id ? { ...p, status: nextStatus } : p)
       );
-    } catch (err: any) {
-      console.error("Erro ao atualizar status:", err);
-      alert(err?.message || "Erro ao atualizar status. Verifique manualmente.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao atualizar status. Verifique manualmente.";
+      console.error("Erro ao atualizar status:", msg);
+      alert(msg);
     }
   }
 
@@ -244,9 +246,10 @@ export default function AdminPacotes() {
       setPacotes((prev) =>
         prev.map((p) => p.id === pacote.id ? { ...p, status: prevStatus } : p)
       );
-    } catch (err: any) {
-      console.error("Erro ao voltar status:", err);
-      alert(err?.message || "Erro ao voltar status. Verifique manualmente.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao voltar status. Verifique manualmente.";
+      console.error("Erro ao voltar status:", msg);
+      alert(msg);
     }
   }
 
@@ -270,9 +273,10 @@ export default function AdminPacotes() {
     try {
       const updated = await removePedidoFromPacote(pacoteId, pedidoId);
       setPacotes((prev) => prev.map((p) => p.id === pacoteId ? updated : p));
-    } catch (err: any) {
-      console.error("Erro ao remover pedido do pacote:", err);
-      alert(err.message || "Erro ao remover pedido do pacote.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao remover pedido do pacote.";
+      console.error("Erro ao remover pedido do pacote:", msg);
+      alert(msg);
     }
   }
 
@@ -281,9 +285,10 @@ export default function AdminPacotes() {
     try {
       await deletePacote(pacoteId);
       setPacotes((prev) => prev.filter((p) => p.id !== pacoteId));
-    } catch (err: any) {
-      console.error("Erro ao excluir pacote:", err);
-      alert(err?.message || "Erro ao excluir pacote.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao excluir pacote.";
+      console.error("Erro ao excluir pacote:", msg);
+      alert(msg);
     }
   }
 

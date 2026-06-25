@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import type { DbProduto } from "./lib/db";
 import { getEstoque, addEstoqueItem, updateEstoqueItem, deleteEstoqueItem, criarVendaDireta } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
-import { getCachedImageUrl, TAMANHOS_POR_TIPO, TIPOS_SEM_PERSONALIZACAO, getPrecoProduto, ADICIONAL_TAMANHO } from "./types";
+import { getCachedImageUrl, TAMANHOS_POR_TIPO, TIPOS_SEM_PERSONALIZACAO, getPrecoProduto, ADICIONAL_TAMANHO, PRONTA_ENTREGA_MARKUP } from "./types";
 import type { EstoqueItem, LojaConfig } from "./types";
 import { buscaPorPalavras } from "./lib/utils";
 import type { PromocaoTipo } from "./types";
@@ -202,7 +202,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
       );
       const basePrice = priceInfo.promo ?? priceInfo.base;
       const adicionalTam = ADICIONAL_TAMANHO[vendaItem.tamanho] || 0;
-      const preco = Math.round((basePrice + adicionalTam) * 1.15 * 100) / 100; // 15% markup
+      const preco = Math.round((basePrice + adicionalTam) * PRONTA_ENTREGA_MARKUP * 100) / 100;
 
       await criarVendaDireta(
         [{

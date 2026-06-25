@@ -15,6 +15,65 @@ function ignoreApiDir(): Plugin {
   };
 }
 
+function devApiPlugin(): Plugin {
+  return {
+    name: "dev-api",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const env = loadEnv(server.config.mode, process.cwd(), "");
+        const supabaseUrl = env.VITE_SUPABASE_URL;
+        const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_ANON_KEY;
+
+        if (!supabaseUrl || !serviceKey) return next();
+
+        // /api/check-admin
+        if (req.url === "/api/check-admin" && req.method === "GET") {
+          const authHeader = req.headers.authorization;
+          const token = authHeader?.replace("Bearer ", "");
+          if (!token) {
+            res.statusCode = 401;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ isAdmin: false }));
+            return;
+          }
+
+          const { createClient } = await import("@supabase/supabase-js");
+          const supabase = createClient(supabaseUrl, serviceKey);
+
+          const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+          if (authError || !user) {
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ isAdmin: false }));
+            return;
+          }
+
+          if (user.app_metadata?.role === "admin") {
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ isAdmin: true }));
+            return;
+          }
+
+          let meta: { role?: string } | null = null;
+          try {
+            const { data } = await supabase.rpc("get_user_role", { uid: user.id });
+            meta = data as { role?: string } | null;
+          } catch {}
+          const isAdmin = meta?.role === "admin";
+
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ isAdmin }));
+          return;
+        }
+
+        next();
+      });
+    },
+  };
+}
+
 function orderApiPlugin(): Plugin {
   return {
     name: "order-api",
@@ -123,7 +182,7 @@ function imageProxyPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), ignoreApiDir(), orderApiPlugin(), imageProxyPlugin()],
+  plugins: [react(), tailwindcss(), ignoreApiDir(), orderApiPlugin(), imageProxyPlugin(), devApiPlugin()],
   build: {
     rollupOptions: {
       external: ['mercadopago'],

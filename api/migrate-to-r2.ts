@@ -40,6 +40,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.replace("Bearer ", "");
+  if (token) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user || user.app_metadata?.role !== "admin") {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+  } else {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
   if (!isR2Configured()) {
     res.status(400).json({ error: 'R2 is not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_PUBLIC_URL env vars.' });
     return;

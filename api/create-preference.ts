@@ -23,6 +23,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace("Bearer ", "");
+    if (token) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+    }
+
     const { items, orderId, payerEmail, payerName, paymentMethod } = req.body as {
       items: Array<{ title: string; quantity: number; unit_price: number }>;
       orderId: string;

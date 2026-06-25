@@ -274,6 +274,8 @@ export function precoPersonalizacao(tipo: string): number {
 /** @deprecated Use precoPersonalizacao(tipo) instead */
 export const PRECO_PERSONALIZACAO = PRECO_PERSONALIZACAO_BASE;
 
+export const PRONTA_ENTREGA_MARKUP = 1.15;
+
 export const ADICIONAL_TAMANHO: Record<string, number> = {
   "G2": 10.00,
   "G3": 20.00,

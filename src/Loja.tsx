@@ -104,8 +104,8 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
         break;
       case "preco-asc": {
         res.sort((a, b) => {
-          const priceA = getPrecoProduto(a.tipo, config, a.preco_customizado, (a.promocao_tipo as PromocaoTipo) ?? undefined, a.promocao_valor);
-          const priceB = getPrecoProduto(b.tipo, config, b.preco_customizado, (b.promocao_tipo as PromocaoTipo) ?? undefined, b.promocao_valor);
+          const priceA = getPrecoProduto(a.tipo, config, a.preco_customizado, (a.promocao_tipo as PromocaoTipo) ?? undefined, a.promocao_valor, a.time);
+          const priceB = getPrecoProduto(b.tipo, config, b.preco_customizado, (b.promocao_tipo as PromocaoTipo) ?? undefined, b.promocao_valor, b.time);
           const valA = priceA.promo ?? priceA.base;
           const valB = priceB.promo ?? priceB.base;
           return valA - valB;
@@ -114,8 +114,8 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       }
       case "preco-desc": {
         res.sort((a, b) => {
-          const priceA = getPrecoProduto(a.tipo, config, a.preco_customizado, (a.promocao_tipo as PromocaoTipo) ?? undefined, a.promocao_valor);
-          const priceB = getPrecoProduto(b.tipo, config, b.preco_customizado, (b.promocao_tipo as PromocaoTipo) ?? undefined, b.promocao_valor);
+          const priceA = getPrecoProduto(a.tipo, config, a.preco_customizado, (a.promocao_tipo as PromocaoTipo) ?? undefined, a.promocao_valor, a.time);
+          const priceB = getPrecoProduto(b.tipo, config, b.preco_customizado, (b.promocao_tipo as PromocaoTipo) ?? undefined, b.promocao_valor, b.time);
           const valA = priceA.promo ?? priceA.base;
           const valB = priceB.promo ?? priceB.base;
           return valB - valA;
@@ -157,11 +157,10 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     return Array.from(new Set(tipos)).sort();
   }, [produtosNormalizados, categoriaSelecionada, filtroTime]);
 
-  const destaquesEPromos = useMemo(() => {
+  const destaques = useMemo(() => {
     return produtos
-      .filter((p) => p.destaque || (p.promocao && p.promocao_tipo))
+      .filter((p) => p.destaque)
       .sort((a, b) => {
-        // Destaques first, ordered by ordem_destaque; then promos
         const aOrdem = a.ordem_destaque ?? 9999;
         const bOrdem = b.ordem_destaque ?? 9999;
         return aOrdem - bOrdem;
@@ -170,10 +169,10 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
   return (
     <>
-      {/* Destaques & Promoções carousel — full width */}
-      {destaquesEPromos.length > 0 && (
+      {/* Destaques carousel — full width */}
+      {destaques.length > 0 && (
         <DestaqueCarousel
-          produtos={destaquesEPromos}
+          produtos={destaques}
           config={config}
           onSelect={(p) => setProdutoSelecionado(p)}
         />
@@ -299,7 +298,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 sm:gap-6 items-stretch">
           {produtosFiltrados.slice(0, visibleCount).map((p) => {
-            const priceInfo = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor);
+            const priceInfo = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time);
             const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
 
             return (

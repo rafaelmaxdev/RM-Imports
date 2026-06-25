@@ -23,6 +23,7 @@ interface CartModalProps {
     promocao_tipo?: string | null;
     promocao_valor?: number | null;
     cached_image_urls?: import("./types").CachedImageMap | null;
+    time?: string;
   };
   config: LojaConfig;
   onClose: () => void;
@@ -64,7 +65,8 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
     config,
     produto.preco_customizado,
     (produto.promocao_tipo as PromocaoTipo) ?? undefined,
-    produto.promocao_valor
+    produto.promocao_valor,
+    produto.time
   );
   const adicionalTam = ADICIONAL_TAMANHO[tamanho] || 0;
   const adicionalPers = personalizado ? precoPersonalizacao(produto.tipo) : 0;

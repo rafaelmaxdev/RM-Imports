@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { LojaConfig, OrderItem, OrderAddress, CachedImageMap, EstoqueItem } from "../types";
+import type { LojaConfig, OrderItem, OrderAddress, CachedImageMap, EstoqueItem, Cupom } from "../types";
 import { DEFAULT_CONFIG } from "../types";
 import { getCached, setCache, isCacheStale } from "./cache";
 
@@ -162,14 +162,18 @@ async function fetchLojaConfigFromDb(): Promise<LojaConfig> {
       config.precos_promocao = row.value as Record<string, number>;
     } else if (row.key === "promocao_ativa" && typeof row.value === "object") {
       config.promocao_ativa = row.value as Record<string, boolean>;
+    } else if (row.key === "desconto_global") {
+      config.desconto_global = row.value as number | null;
+    } else if (row.key === "promocoes_time" && typeof row.value === "object") {
+      config.promocoes_time = row.value as Record<string, { tipo: string; valor: number | null; preco: number | null }>;
     }
   }
   return config;
 }
 
 export async function updateLojaConfig(
-  key: "precos_base" | "precos_promocao" | "promocao_ativa",
-  value: Record<string, number> | Record<string, boolean>,
+  key: "precos_base" | "precos_promocao" | "promocao_ativa" | "desconto_global" | "promocoes_time",
+  value: Record<string, number> | Record<string, boolean> | number | null | Record<string, { tipo: string; valor: number | null; preco: number | null }>,
 ): Promise<void> {
   const { error } = await supabase
     .from("loja_config")
@@ -208,77 +212,39 @@ export async function setPromocaoCategoria(tipo: string, ativa: boolean): Promis
   if (error) throw error;
 }
 
-/** Apply promotion to all products of a specific team */
+/** Apply promotion to all products of a specific team — stored in loja_config */
 export async function setPromocaoTime(
   time: string,
   promocaoTipo: string,
   promocaoValor: number | null,
   precoCustomizado: number | null,
-): Promise<DbProduto[]> {
-  const updateData: Record<string, unknown> = {
-    promocao: true,
-    promocao_tipo: promocaoTipo,
-    promocao_valor: promocaoValor,
-    preco_customizado: precoCustomizado,
-  };
-
-  const { data, error } = await supabase
-    .from("produtos")
-    .update(updateData)
-    .eq("time", time)
-    .select();
-
+): Promise<void> {
+  const { data: configData } = await supabase.from("loja_config").select("value").eq("key", "promocoes_time").single();
+  const current = configData?.value as Record<string, { tipo: string; valor: number | null; preco: number | null }> | null ?? {};
+  current[time] = { tipo: promocaoTipo, valor: promocaoValor, preco: precoCustomizado };
+  const { error } = await supabase.from("loja_config").upsert({ key: "promocoes_time", value: current }, { onConflict: "key" });
   if (error) throw error;
-  return data as DbProduto[];
 }
 
 /** Remove promotion from all products of a specific team */
-export async function removePromocaoTime(time: string): Promise<DbProduto[]> {
-  const { data, error } = await supabase
-    .from("produtos")
-    .update({
-      promocao: false,
-      promocao_tipo: null,
-      promocao_valor: null,
-      preco_customizado: null,
-    })
-    .eq("time", time)
-    .select();
-
+export async function removePromocaoTime(time: string): Promise<void> {
+  const { data: configData } = await supabase.from("loja_config").select("value").eq("key", "promocoes_time").single();
+  const current = configData?.value as Record<string, { tipo: string; valor: number | null; preco: number | null }> | null ?? {};
+  delete current[time];
+  const { error } = await supabase.from("loja_config").upsert({ key: "promocoes_time", value: current }, { onConflict: "key" });
   if (error) throw error;
-  return data as DbProduto[];
 }
 
-/** Apply percentage discount to ALL products (site-wide) — overrides existing individual promos */
-export async function setDescontoGlobal(porcentagem: number): Promise<DbProduto[]> {
-  const { data, error } = await supabase
-    .from("produtos")
-    .update({
-      promocao: true,
-      promocao_tipo: "porcentagem",
-      promocao_valor: porcentagem,
-    })
-    .not("id", "is", null)
-    .select();
-
+/** Apply percentage discount to ALL products (site-wide) — stored in loja_config */
+export async function setDescontoGlobal(porcentagem: number): Promise<void> {
+  const { error } = await supabase.from("loja_config").upsert({ key: "desconto_global", value: porcentagem }, { onConflict: "key" });
   if (error) throw error;
-  return data as DbProduto[];
 }
 
-/** Remove all percentage-based promotions (site-wide cleanup) */
-export async function removeDescontoGlobal(): Promise<DbProduto[]> {
-  const { data, error } = await supabase
-    .from("produtos")
-    .update({
-      promocao: false,
-      promocao_tipo: null,
-      promocao_valor: null,
-    })
-    .eq("promocao_tipo", "porcentagem")
-    .select();
-
+/** Remove site-wide discount */
+export async function removeDescontoGlobal(): Promise<void> {
+  const { error } = await supabase.from("loja_config").upsert({ key: "desconto_global", value: null }, { onConflict: "key" });
   if (error) throw error;
-  return data as DbProduto[];
 }
 
 export async function updateProdutoCustomPrice(id: string, preco_customizado: number | null): Promise<void> {
@@ -440,18 +406,65 @@ export async function deletePedido(id: string): Promise<void> {
 export async function autoCancelExpiredOrders(hours = 24): Promise<number> {
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
-  const { data, error } = await supabase
+  const { data: expired, error: fetchError } = await supabase
+    .from("pedidos")
+    .select("id, itens, pronta_entrega")
+    .eq("status", "pendente")
+    .lt("created_at", cutoff);
+
+  if (fetchError) {
+    console.error("Erro ao buscar pedidos expirados:", fetchError);
+    return 0;
+  }
+  if (!expired || expired.length === 0) return 0;
+
+  for (const order of expired) {
+    if (order.pronta_entrega && order.itens) {
+      const itens = typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens;
+      for (const item of itens) {
+        const { data: produtos } = await supabase
+          .from("produtos")
+          .select("id")
+          .eq("nome", item.nome)
+          .limit(1);
+        if (!produtos || produtos.length === 0) continue;
+        const produtoId = produtos[0].id;
+        const isPersonalizado = item.personalizado ?? false;
+        const nomePessoal = isPersonalizado ? (item.nomePersonalizado ?? null) : null;
+        const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
+        const isFeminino = item.feminino ?? false;
+        let query = supabase
+          .from("estoque_pronta_entrega")
+          .select("id, quantidade")
+          .eq("produto_id", produtoId)
+          .eq("tamanho", item.tamanho)
+          .eq("personalizado", isPersonalizado)
+          .eq("feminino", isFeminino);
+        if (nomePessoal) { query = query.eq("nome_personalizado", nomePessoal); }
+        else { query = query.is("nome_personalizado", null); }
+        if (numeroPessoal) { query = query.eq("numero_personalizado", numeroPessoal); }
+        else { query = query.is("numero_personalizado", null); }
+        const { data: existing } = await query.maybeSingle();
+        if (existing) {
+          await supabase.from("estoque_pronta_entrega").update({ quantidade: existing.quantidade + 1 }).eq("id", existing.id);
+        } else {
+          await supabase.from("estoque_pronta_entrega").insert({ produto_id: produtoId, tamanho: item.tamanho, quantidade: 1, personalizado: isPersonalizado, nome_personalizado: nomePessoal, numero_personalizado: numeroPessoal, feminino: isFeminino });
+        }
+      }
+    }
+  }
+
+  const { error } = await supabase
     .from("pedidos")
     .update({ status: "cancelado" })
     .eq("status", "pendente")
-    .lt("created_at", cutoff)
-    .select("id");
+    .lt("created_at", cutoff);
 
   if (error) {
     console.error("Erro ao auto-cancelar pedidos expirados:", error);
     return 0;
   }
-  return data?.length ?? 0;
+  return expired.length;
 }
 
 // ── Pacotes ──
@@ -981,4 +994,83 @@ export async function criarVendaDireta(
   }
 
   return { ...saved, status: "entregue", pronta_entrega: true };
+}
+
+// ── Cupons ──
+
+export async function getCupons(): Promise<Cupom[]> {
+  const { data, error } = await supabase
+    .from("cupons")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data as Cupom[]) ?? [];
+}
+
+export async function createCupom(cupom: Omit<Cupom, "id" | "usos_atuais" | "created_at">): Promise<Cupom> {
+  const { data, error } = await supabase
+    .from("cupons")
+    .insert({ ...cupom, usos_atuais: 0 })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Cupom;
+}
+
+export async function updateCupom(id: string, updates: Partial<Cupom>): Promise<void> {
+  const { error } = await supabase.from("cupons").update(updates).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteCupom(id: string): Promise<void> {
+  const { error } = await supabase.from("cupons").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function validarCupom(codigo: string, totalPedido: number): Promise<Cupom | null> {
+  const { data, error } = await supabase
+    .from("cupons")
+    .select("*")
+    .eq("codigo", codigo.toUpperCase().trim())
+    .eq("ativo", true)
+    .single();
+  if (error || !data) return null;
+  const cupom = data as Cupom;
+  if (cupom.uso_maximo !== null && cupom.usos_atuais >= cupom.uso_maximo) return null;
+  if (cupom.valor_minimo_pedido !== null && totalPedido < cupom.valor_minimo_pedido) return null;
+  if (cupom.data_expiracao && new Date(cupom.data_expiracao) < new Date()) return null;
+  return cupom;
+}
+
+export async function validarCupomPorTelefone(codigo: string, telefone: string): Promise<boolean> {
+  const digits = telefone.replace(/\D/g, "");
+  if (!digits) return true;
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select("endereco")
+    .eq("cupom_codigo", codigo.toUpperCase().trim());
+  if (error || !data) return true;
+  const jaUsou = data.some((row) => {
+    if (!row.endereco) return false;
+    const addr = typeof row.endereco === "string" ? JSON.parse(row.endereco) : row.endereco;
+    return addr.telefone?.replace(/\D/g, "") === digits;
+  });
+  return !jaUsou;
+}
+
+export function aplicarCupom(total: number, cupom: Cupom): number {
+  if (cupom.tipo === "porcentagem") {
+    return Math.round((total - total * (cupom.valor / 100)) * 100) / 100;
+  }
+  return Math.max(0, Math.round((total - cupom.valor) * 100) / 100);
+}
+
+export async function incrementarUsoCupom(id: string): Promise<void> {
+  const { error } = await supabase.rpc("incrementar_uso_cupom", { cupom_id: id });
+  if (error) {
+    const { data } = await supabase.from("cupons").select("usos_atuais").eq("id", id).single();
+    if (data) {
+      await supabase.from("cupons").update({ usos_atuais: (data as Cupom).usos_atuais + 1 }).eq("id", id);
+    }
+  }
 }

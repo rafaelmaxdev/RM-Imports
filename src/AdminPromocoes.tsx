@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
+import { updateProduto, parseImageUrls, setPromocaoTime, removePromocaoTime, setDescontoGlobal, removeDescontoGlobal, updateLojaConfig } from "./lib/db";
 import type { DbProduto } from "./lib/db";
-import { setPromocaoCategoria, updateProduto, parseImageUrls, setPromocaoTime, removePromocaoTime, setDescontoGlobal, removeDescontoGlobal } from "./lib/db";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { TIPOS_CATEGORIA, DEFAULT_CONFIG, formatarMoeda, getCachedImageUrl } from "./types";
 import { normalizarBusca } from "./lib/utils";
-import { updateLojaConfig } from "./lib/db";
 
 interface AdminPromocoesProps {
   produtos: DbProduto[];
@@ -62,11 +61,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
     try {
       const newAtiva = { ...config.promocao_ativa, [tipo]: ativa };
       await updateLojaConfig("promocao_ativa", newAtiva);
-      await setPromocaoCategoria(tipo, ativa);
       setConfig((prev) => ({ ...prev, promocao_ativa: newAtiva }));
-      setProdutos((prev) =>
-        prev.map((p) => (p.tipo === tipo ? { ...p, promocao: ativa } : p))
-      );
       setMessage(`${ativa ? "Promoção ativada" : "Promoção desativada"} para ${tipo}`);
       setTimeout(() => setMessage(""), 3000);
     } catch (err) {
@@ -80,14 +75,8 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
       for (const tipo of TIPOS_CATEGORIA) {
         newAtiva[tipo] = ativa;
       }
-      await Promise.all([
-        updateLojaConfig("promocao_ativa", newAtiva),
-        ...TIPOS_CATEGORIA.map((tipo) => setPromocaoCategoria(tipo, ativa)),
-      ]);
+      await updateLojaConfig("promocao_ativa", newAtiva);
       setConfig((prev) => ({ ...prev, promocao_ativa: newAtiva }));
-      setProdutos((prev) =>
-        prev.map((p) => ({ ...p, promocao: ativa }))
-      );
       setMessage(ativa ? "Todas as promoções ativadas" : "Todas as promoções desativadas");
       setTimeout(() => setMessage(""), 3000);
     } catch (err) {
@@ -426,7 +415,10 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
       <div className="border-t border-border pt-6 mb-8">
         <h4 className="text-lg font-bold text-primary mb-2">🌐 Promoção Site-wide</h4>
         <p className="text-sm text-text-muted mb-4">
-          Aplica um desconto percentual em <strong>todos</strong> os produtos. Sobrescreve promoções individuais existentes.
+          Aplica um desconto percentual em <strong>todos</strong> os produtos. Não sobrescreve promoções individuais ou por time.
+          {config.desconto_global && (
+            <span className="block mt-1 text-accent font-semibold">Atualmente: {config.desconto_global}% OFF em todos os produtos</span>
+          )}
         </p>
         <div className="flex gap-2 items-end">
           <div className="flex-1">
@@ -449,9 +441,9 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
               try {
                 const pct = parseFloat(sitewidePct);
                 if (pct < 1 || pct > 99) { setMessage("Desconto deve ser entre 1% e 99%."); return; }
-                const updated = await setDescontoGlobal(pct);
-                setProdutos(prev => prev.map(p => updated.find(u => u.id === p.id) || p));
-                setMessage(`Desconto de ${pct}% aplicado a todos os ${updated.length} produtos!`);
+                await setDescontoGlobal(pct);
+                setConfig(prev => ({ ...prev, desconto_global: pct }));
+                setMessage(`Desconto de ${pct}% aplicado a todos os produtos!`);
                 setSitewidePct("");
               } catch (err) {
                 console.error("Erro ao aplicar desconto site-wide:", err);
@@ -470,9 +462,9 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
             onClick={async () => {
               setSavingSitewide(true);
               try {
-                const updated = await removeDescontoGlobal();
-                setProdutos(prev => prev.map(p => updated.find(u => u.id === p.id) || p));
-                setMessage(`Promoção removida de ${updated.length} produtos.`);
+                await removeDescontoGlobal();
+                setConfig(prev => ({ ...prev, desconto_global: null }));
+                setMessage("Desconto site-wide removido.");
               } catch (err) {
                 console.error("Erro ao remover desconto site-wide:", err);
                 setMessage("Erro ao remover desconto.");
@@ -491,29 +483,15 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
       <div className="border-t border-border pt-6 mb-8">
         <h4 className="text-lg font-bold text-primary mb-2">⚽ Promoção por Time</h4>
         <p className="text-sm text-text-muted mb-4">
-          Aplica ou remove promoção de todos os produtos de um time. Também funciona para remover promoções aplicadas site-wide de um time específico.
+          Aplica ou remove promoção de todos os produtos de um time. Não sobrescreve promoções individuais de produtos.
         </p>
 
-        {/* Active team promos list */}
+        {/* Active team promos list — from config */}
         {(() => {
-          const teamPromos = new Map<string, { count: number; label: string }>();
-          for (const p of produtos) {
-            if (p.promocao && p.promocao_tipo) {
-              const existing = teamPromos.get(p.time);
-              const label = p.promocao_tipo === "porcentagem" ? `${p.promocao_valor}% OFF`
-                : p.promocao_tipo === "novo_preco" ? `R$ ${p.preco_customizado}`
-                : p.promocao_tipo;
-              if (existing) {
-                existing.count++;
-              } else {
-                teamPromos.set(p.time, { count: 1, label });
-              }
-            }
-          }
-          let entries = [...teamPromos.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+          const teamPromos = config.promocoes_time ?? {};
+          let entries = Object.entries(teamPromos).sort((a, b) => a[0].localeCompare(b[0]));
           const totalTeams = entries.length;
 
-          // Filter by search
           if (teamListSearch) {
             const words = normalizarBusca(teamListSearch).split(" ").filter(Boolean);
             entries = entries.filter(([time]) => {
@@ -539,35 +517,45 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
                 />
               )}
               <div className="flex flex-col gap-1">
-                {visible.map(([time, info]) => (
-                  <div key={time} className="flex items-center justify-between px-3 py-2 bg-accent/5 border border-accent/20 rounded-md">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium truncate">{time}</span>
-                      <span className="text-xs text-accent ml-2 font-semibold">{info.label}</span>
-                      <span className="text-xs text-text-muted ml-1">({info.count})</span>
+                {visible.map(([time, info]) => {
+                  const label = info.tipo === "porcentagem" ? `${info.valor}% OFF`
+                    : info.tipo === "novo_preco" ? `R$ ${info.preco}`
+                    : info.tipo;
+                  const count = produtos.filter(p => p.time === time).length;
+                  return (
+                    <div key={time} className="flex items-center justify-between px-3 py-2 bg-accent/5 border border-accent/20 rounded-md">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium truncate">{time}</span>
+                        <span className="text-xs text-accent ml-2 font-semibold">{label}</span>
+                        <span className="text-xs text-text-muted ml-1">({count})</span>
+                      </div>
+                      <button
+                        className="px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 flex-shrink-0"
+                        disabled={savingTeam}
+                        onClick={async () => {
+                          setSavingTeam(true);
+                          try {
+                            await removePromocaoTime(time);
+                            setConfig(prev => {
+                              const promocoes = { ...(prev.promocoes_time ?? {}) };
+                              delete promocoes[time];
+                              return { ...prev, promocoes_time: promocoes };
+                            });
+                            setMessage(`Promoção removida de ${time}.`);
+                          } catch (err) {
+                            console.error("Erro ao remover promoção:", err);
+                            setMessage("Erro ao remover promoção.");
+                          } finally {
+                            setSavingTeam(false);
+                            setTimeout(() => setMessage(""), 4000);
+                          }
+                        }}
+                      >
+                        Remover
+                      </button>
                     </div>
-                    <button
-                      className="px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 flex-shrink-0"
-                      disabled={savingTeam}
-                      onClick={async () => {
-                        setSavingTeam(true);
-                        try {
-                          const updated = await removePromocaoTime(time);
-                          setProdutos(prev => prev.map(p => updated.find(u => u.id === p.id) || p));
-                          setMessage(`Promoção removida de ${updated.length} produtos de ${time}.`);
-                        } catch (err) {
-                          console.error("Erro ao remover promoção:", err);
-                          setMessage("Erro ao remover promoção.");
-                        } finally {
-                          setSavingTeam(false);
-                          setTimeout(() => setMessage(""), 4000);
-                        }
-                      }}
-                    >
-                      Remover
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               {hasMore && (
                 <button
@@ -623,29 +611,33 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
 
           {selectedTeam && (() => {
             const teamProducts = produtos.filter(p => p.time === selectedTeam);
-            const promoProducts = teamProducts.filter(p => p.promocao);
+            const teamPromoAtiva = config.promocoes_time?.[selectedTeam];
             return (
               <>
                 <div className="p-3 bg-bg-base rounded-md border border-border">
                   <div className="text-sm font-medium text-primary">
                     {selectedTeam} — {teamProducts.length} produtos
-                    {promoProducts.length > 0 && (
-                      <span className="text-accent ml-2">({promoProducts.length} em promoção)</span>
+                    {teamPromoAtiva && (
+                      <span className="text-accent ml-2">(em promoção)</span>
                     )}
                   </div>
                 </div>
 
                 {/* Remove button — always visible when team has active promos */}
-                {promoProducts.length > 0 && (
+                {teamPromoAtiva && (
                   <button
                     className="w-full py-2.5 text-sm font-semibold bg-red-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
                     disabled={savingTeam}
                     onClick={async () => {
                       setSavingTeam(true);
                       try {
-                        const updated = await removePromocaoTime(selectedTeam);
-                        setProdutos(prev => prev.map(p => updated.find(u => u.id === p.id) || p));
-                        setMessage(`Promoção removida de ${updated.length} produtos de ${selectedTeam}.`);
+                        await removePromocaoTime(selectedTeam);
+                        setConfig(prev => {
+                          const promocoes = { ...(prev.promocoes_time ?? {}) };
+                          delete promocoes[selectedTeam];
+                          return { ...prev, promocoes_time: promocoes };
+                        });
+                        setMessage(`Promoção removida de ${selectedTeam}.`);
                       } catch (err) {
                         console.error("Erro ao remover promoção por time:", err);
                         setMessage("Erro ao remover promoção.");
@@ -704,10 +696,13 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
                         try {
                           const valor = teamPromoTipo === "porcentagem" ? parseFloat(teamPromoValor) : null;
                           const preco = teamPromoTipo === "novo_preco" ? parseFloat(teamPromoPreco) : null;
-                          const updated = await setPromocaoTime(selectedTeam, teamPromoTipo, valor, preco);
-                          setProdutos(prev => prev.map(p => updated.find(u => u.id === p.id) || p));
+                          await setPromocaoTime(selectedTeam, teamPromoTipo, valor, preco);
+                          setConfig(prev => ({
+                            ...prev,
+                            promocoes_time: { ...(prev.promocoes_time ?? {}), [selectedTeam]: { tipo: teamPromoTipo, valor, preco } }
+                          }));
                           const label = teamPromoTipo === "porcentagem" ? `${teamPromoValor}% OFF` : `R$ ${teamPromoPreco}`;
-                          setMessage(`Promoção ${label} aplicada a ${updated.length} produtos de ${selectedTeam}!`);
+                          setMessage(`Promoção ${label} aplicada a ${selectedTeam}!`);
                           setTeamPromoTipo("");
                           setTeamPromoValor("");
                           setTeamPromoPreco("");
@@ -734,7 +729,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
       <div className="border-t border-border pt-6">
         <h4 className="text-lg font-bold text-primary mb-2">Promoção por Produto</h4>
         <p className="text-sm text-text-muted mb-4">
-          Gerencie promoções individuais: ative, desative, edite ou remova.
+          Gerencie promoções individuais: ative, desative, edite ou remova. Tem prioridade sobre promoções de time, categoria e site-wide.
         </p>
 
         {/* Current product promos */}

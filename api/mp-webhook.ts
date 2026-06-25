@@ -196,7 +196,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Update stock for pronta_entrega orders
-  if (orderStatus === "pago" || orderStatus === "reembolsado") {
+  // Stock is deducted at order creation time, so on "pago" we do nothing.
+  // On cancel/reject/refund we restore stock.
+  if (orderStatus === "cancelado" || orderStatus === "reembolsado") {
     try {
       const { data: fullOrder } = await supabase
         .from("pedidos")
@@ -220,13 +222,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const isPersonalizado = item.personalizado ?? false;
           const nomePessoal = isPersonalizado ? (item.nomePersonalizado ?? null) : null;
           const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
+          const isFeminino = item.feminino ?? false;
 
           let query = supabase
             .from("estoque_pronta_entrega")
             .select("id, quantidade")
             .eq("produto_id", produtoId)
             .eq("tamanho", item.tamanho)
-            .eq("personalizado", isPersonalizado);
+            .eq("personalizado", isPersonalizado)
+            .eq("feminino", isFeminino);
 
           if (nomePessoal) {
             query = query.eq("nome_personalizado", nomePessoal);
@@ -241,33 +245,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           const { data: existing } = await query.maybeSingle();
 
-          if (orderStatus === "pago") {
-            // Remove from stock on payment
-            if (existing && existing.quantidade > 0) {
-              await supabase
-                .from("estoque_pronta_entrega")
-                .update({ quantidade: existing.quantidade - 1 })
-                .eq("id", existing.id);
-            }
+          // Restore to stock on cancel/refund
+          if (existing) {
+            await supabase
+              .from("estoque_pronta_entrega")
+              .update({ quantidade: existing.quantidade + 1 })
+              .eq("id", existing.id);
           } else {
-            // Restore to stock on refund
-            if (existing) {
-              await supabase
-                .from("estoque_pronta_entrega")
-                .update({ quantidade: existing.quantidade + 1 })
-                .eq("id", existing.id);
-            } else {
-              await supabase
-                .from("estoque_pronta_entrega")
-                .insert({
-                  produto_id: produtoId,
-                  tamanho: item.tamanho,
-                  quantidade: 1,
-                  personalizado: isPersonalizado,
-                  nome_personalizado: nomePessoal,
-                  numero_personalizado: numeroPessoal,
-                });
-            }
+            await supabase
+              .from("estoque_pronta_entrega")
+              .insert({
+                produto_id: produtoId,
+                tamanho: item.tamanho,
+                quantidade: 1,
+                personalizado: isPersonalizado,
+                nome_personalizado: nomePessoal,
+                numero_personalizado: numeroPessoal,
+                feminino: isFeminino,
+              });
           }
         }
       }

@@ -22,6 +22,7 @@ const AdminPacotes = lazy(() => import("./AdminPacotes"));
 const AdminDestaques = lazy(() => import("./AdminDestaques"));
 const AdminPromocoes = lazy(() => import("./AdminPromocoes"));
 const AdminEstoque = lazy(() => import("./AdminEstoque"));
+const AdminCupons = lazy(() => import("./AdminCupons"));
 const ProntaEntrega = lazy(() => import("./ProntaEntrega"));
 const NotFound = lazy(() => import("./NotFound"));
 const SizeChart = lazy(() => import("./SizeChart"));
@@ -83,8 +84,8 @@ function AppContent() {
     ]).finally(() => setLoading(false));
   }, []);
 
-  async function handleCheckout(endereco: OrderAddress, paymentMethod: PaymentMethod) {
-    const order = await createOrder(endereco, paymentMethod);
+  async function handleCheckout(endereco: OrderAddress, paymentMethod: PaymentMethod, cupom?: { codigo: string; desconto: number }) {
+    const order = await createOrder(endereco, paymentMethod, cupom);
     if (order) {
       setShowCart(false);
       navigate(`/pedido/${order.id}`);
@@ -184,7 +185,7 @@ function AppContent() {
   );
 }
 
-type AdminTab = "produtos" | "destaques" | "promocoes" | "pedidos" | "pacotes" | "estoque" | "historico";
+type AdminTab = "produtos" | "destaques" | "promocoes" | "cupons" | "pedidos" | "pacotes" | "estoque" | "historico";
 
 function AdminPanel({
   produtos,
@@ -248,6 +249,7 @@ function AdminPanel({
     { key: "promocoes", label: "Promoções" },
     { key: "pedidos", label: "Pedidos" },
     { key: "pacotes", label: "Pacotes" },
+    { key: "cupons", label: "Cupons" },
     { key: "estoque", label: "Estoque" },
     { key: "historico", label: "Histórico" },
   ];
@@ -303,6 +305,8 @@ function AdminPanel({
           <AdminOrders />
         ) : tab === "pacotes" ? (
           <AdminPacotes />
+        ) : tab === "cupons" ? (
+          <AdminCupons />
         ) : tab === "estoque" ? (
           <AdminEstoque produtos={produtos} config={config} />
         ) : (

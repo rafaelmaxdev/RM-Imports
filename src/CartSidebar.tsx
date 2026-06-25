@@ -1,12 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useCart } from "./CartContext";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
-import type { OrderAddress, PaymentMethod } from "./types";
+import type { OrderAddress, PaymentMethod, Cupom } from "./types";
 import { formatarMoeda, yupooThumbnailUrl } from "./types";
+import { validarCupom, aplicarCupom, validarCupomPorTelefone } from "./lib/db";
 
 interface CartSidebarProps {
   onClose: () => void;
-  onCheckout: (endereco: OrderAddress, paymentMethod: PaymentMethod) => void;
+  onCheckout: (endereco: OrderAddress, paymentMethod: PaymentMethod, cupom?: { codigo: string; desconto: number }) => void;
 }
 
 interface ViaCepResponse {
@@ -68,6 +69,11 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   });
 
   const [erro, setErro] = useState("");
+  const [cupomCodigo, setCupomCodigo] = useState("");
+  const [cupomAplicado, setCupomAplicado] = useState<Cupom | null>(null);
+  const [cupomErro, setCupomErro] = useState("");
+  const [cupomLoading, setCupomLoading] = useState(false);
+  const totalComDesconto = cupomAplicado ? aplicarCupom(total, cupomAplicado) : total;
 
   // Fechar dropdown ao clicar fora + limpar debounce ao desmontar
   useEffect(() => {
@@ -195,7 +201,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
     }
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     if (endereco.deliveryMethod === "entrega") {
       if (
         !endereco.nome.trim() ||
@@ -219,8 +225,19 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
         return;
       }
     }
+
+    // Check if phone already used this coupon
+    if (cupomAplicado && endereco.telefone) {
+      const disponivel = await validarCupomPorTelefone(cupomAplicado.codigo, endereco.telefone);
+      if (!disponivel) {
+        setErro("Este cupom já foi usado por este telefone.");
+        return;
+      }
+    }
+
     setErro("");
-    onCheckout(endereco, paymentMethod);
+    const desconto = cupomAplicado ? total - totalComDesconto : 0;
+    onCheckout(endereco, paymentMethod, cupomAplicado ? { codigo: cupomAplicado.codigo, desconto } : undefined);
     onClose();
   }
 
@@ -384,10 +401,69 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
             </div>
 
             <div className="px-6 py-4 border-t border-border">
-              <div className="flex justify-between font-bold text-lg mb-4">
-                <span>Total:</span>
-                <span>{formatarMoeda(total)}</span>
+              {/* Coupon */}
+              <div className="mb-4">
+                {cupomAplicado ? (
+                  <div className="flex items-center justify-between p-2.5 bg-green-50 border border-green-200 rounded-md">
+                    <div>
+                      <span className="text-xs font-semibold text-green-700">Cupom aplicado: {cupomAplicado.codigo}</span>
+                      <span className="text-xs text-green-600 ml-2">
+                        ({cupomAplicado.tipo === "porcentagem" ? `${cupomAplicado.valor}% OFF` : `R$ ${cupomAplicado.valor.toFixed(2)} OFF`})
+                      </span>
+                    </div>
+                    <button
+                      className="text-xs font-semibold text-red-500 bg-transparent border-none cursor-pointer hover:text-red-700"
+                      onClick={() => { setCupomAplicado(null); setCupomCodigo(""); setCupomErro(""); }}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={cupomCodigo}
+                      onChange={(e) => setCupomCodigo(e.target.value.toUpperCase())}
+                      placeholder="Cupom de desconto"
+                      className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                    />
+                    <button
+                      className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+                      disabled={cupomLoading || !cupomCodigo.trim()}
+                      onClick={async () => {
+                        setCupomLoading(true);
+                        setCupomErro("");
+                        try {
+                          const cupom = await validarCupom(cupomCodigo, total);
+                          if (cupom) {
+                            setCupomAplicado(cupom);
+                          } else {
+                            setCupomErro("Cupom inválido ou expirado.");
+                          }
+                        } catch {
+                          setCupomErro("Erro ao validar cupom.");
+                        } finally {
+                          setCupomLoading(false);
+                        }
+                      }}
+                    >
+                      {cupomLoading ? "..." : "Aplicar"}
+                    </button>
+                  </div>
+                )}
+                {cupomErro && <p className="text-xs text-accent mt-1">{cupomErro}</p>}
               </div>
+
+              <div className="flex justify-between font-bold text-lg mb-1">
+                <span>Total:</span>
+                <span>{formatarMoeda(totalComDesconto)}</span>
+              </div>
+              {cupomAplicado && (
+                <div className="flex justify-between text-xs text-text-muted mb-4">
+                  <span>Desconto do cupom</span>
+                  <span className="text-green-600">-{formatarMoeda(total - totalComDesconto)}</span>
+                </div>
+              )}
               <button
                 className="w-full py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"
                 onClick={handleNext}
@@ -600,10 +676,16 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
             {erro && <div className="text-accent text-sm text-center px-4">{erro}</div>}
 
             <div className="px-6 py-4 border-t border-border">
-              <div className="flex justify-between font-bold text-lg mb-4">
+              <div className="flex justify-between font-bold text-lg mb-1">
                 <span>Total:</span>
-                <span>{formatarMoeda(total)}</span>
+                <span>{formatarMoeda(totalComDesconto)}</span>
               </div>
+              {cupomAplicado && (
+                <div className="flex justify-between text-xs text-text-muted mb-4">
+                  <span>Desconto do cupom</span>
+                  <span className="text-green-600">-{formatarMoeda(total - totalComDesconto)}</span>
+                </div>
+              )}
               <div className="flex gap-2">
                 <button
                   className="flex-1 py-3 text-sm font-semibold bg-border text-text-main rounded-md cursor-pointer transition-colors hover:bg-gray-300"
@@ -686,10 +768,16 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
             </div>
 
             <div className="px-6 py-4 border-t border-border">
-              <div className="flex justify-between font-bold text-lg mb-4">
+              <div className="flex justify-between font-bold text-lg mb-1">
                 <span>Total:</span>
-                <span>{formatarMoeda(total)}</span>
+                <span>{formatarMoeda(totalComDesconto)}</span>
               </div>
+              {cupomAplicado && (
+                <div className="flex justify-between text-xs text-text-muted mb-4">
+                  <span>Desconto do cupom</span>
+                  <span className="text-green-600">-{formatarMoeda(total - totalComDesconto)}</span>
+                </div>
+              )}
               <div className="flex gap-2">
                 <button
                   className="flex-1 py-3 text-sm font-semibold bg-border text-text-main rounded-md cursor-pointer transition-colors hover:bg-gray-300"

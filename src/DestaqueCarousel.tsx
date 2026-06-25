@@ -12,7 +12,7 @@ interface DestaqueCarouselProps {
 }
 
 function Marquee({ direction }: { direction: "left" | "right" }) {
-  const text = "DESTAQUES E PROMOÇÕES\u00A0\u00A0\u00A0\u00A0\u00A0\u2022\u00A0\u00A0\u00A0\u00A0\u00A0";
+  const text = "DESTAQUES\u00A0\u00A0\u00A0\u00A0\u00A0\u2022\u00A0\u00A0\u00A0\u00A0\u00A0";
   const repeated = Array(20).fill(text).join("");
   const content = (
     <span className="whitespace-nowrap text-xs sm:text-base font-black tracking-[0.15em] sm:tracking-[0.25em] uppercase text-white/90" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
@@ -229,7 +229,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
             {produtos.map((p, index) => {
               const imgs = parseImageUrls(p.imagem_urls);
               const img = imgs.length > 0 ? getCachedImageUrl(imgs[0], p.cached_image_urls, 0, "medium") : "";
-              const { base, promo, emPromocao, badge, discountLabel } = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor);
+              const { base, promo, emPromocao, badge, discountLabel } = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time);
 
               return (
                 <div

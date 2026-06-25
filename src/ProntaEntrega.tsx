@@ -150,6 +150,7 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
     product.precoCustomizado,
     product.promocaoTipo,
     product.promocaoValor,
+    product.time,
   );
   const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
   const basePrice = promo ?? base;
@@ -557,6 +558,7 @@ export default function ProntaEntrega() {
                 p.precoCustomizado,
                 p.promocaoTipo,
                 p.promocaoValor,
+                p.time,
               );
               const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
               const baseForMarkup = promo ?? base;

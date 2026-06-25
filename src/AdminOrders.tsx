@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder, updatePedidoProntaEntrega, addOrderItemsToEstoque, removeOrderItemsFromEstoque, autoCancelExpiredOrders } from "./lib/db";
+import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder, updatePedidoProntaEntrega, addOrderItemsToEstoque, autoCancelExpiredOrders } from "./lib/db";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
@@ -135,17 +135,8 @@ export default function AdminOrders() {
 
     const currentOrder = orders.find((o) => o.id === id);
 
-    if (newStatus === "pago" && currentOrder?.pronta_entrega) {
-      // Remove from stock when paid
-      try {
-        await removeOrderItemsFromEstoque(currentOrder);
-      } catch (err) {
-        console.error("Erro ao decrementar estoque:", err);
-      }
-    }
-
     if (["cancelado", "reembolsado"].includes(newStatus) && currentOrder?.pronta_entrega) {
-      // Restore stock on cancel/refund
+      // Restore stock on cancel/refund (stock was deducted at order creation)
       try {
         await addOrderItemsToEstoque(currentOrder);
       } catch (err) {

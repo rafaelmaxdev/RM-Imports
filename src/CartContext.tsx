@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import type { CartItem, Order, OrderAddress, PaymentMethod } from "./types";
 import { gerarId } from "./types";
-import { createPedido } from "./lib/db";
+import { createPedido, removeOrderItemsFromEstoque } from "./lib/db";
 import { supabase } from "./lib/supabase";
 
 interface CartContextType {
@@ -10,7 +10,7 @@ interface CartContextType {
   removeFromCart: (index: number) => void;
   clearCart: () => void;
   total: number;
-  createOrder: (endereco: OrderAddress, paymentMethod: PaymentMethod) => Promise<Order | null>;
+  createOrder: (endereco: OrderAddress, paymentMethod: PaymentMethod, cupom?: { codigo: string; desconto: number }) => Promise<Order | null>;
   createMPPreference: (orderId: string, paymentMethod?: string) => Promise<{ preferenceId: string; initPoint: string } | null>;
 }
 
@@ -79,7 +79,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const createOrder = useCallback(
-    async (endereco: OrderAddress, paymentMethod: PaymentMethod): Promise<Order | null> => {
+    async (endereco: OrderAddress, paymentMethod: PaymentMethod, cupom?: { codigo: string; desconto: number }): Promise<Order | null> => {
       if (cart.length === 0) return null;
 
       const now = new Date();
@@ -88,6 +88,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       // Check if any item is pronta entrega
       const hasProntaEntrega = cart.some((item) => item.prontaEntrega);
+
+      const totalFinal = cupom ? Math.round((total - cupom.desconto) * 100) / 100 : total;
 
       const order: Order = {
         id: gerarId(),
@@ -107,16 +109,27 @@ export function CartProvider({ children }: { children: ReactNode }) {
           yupooUrl: item.yupooUrl,
           feminino: item.feminino,
         })),
-        total,
+        total: totalFinal,
         status: "pendente",
         endereco,
         payment_method: paymentMethod,
         pronta_entrega: hasProntaEntrega || undefined,
+        cupom_codigo: cupom?.codigo,
+        cupom_desconto: cupom?.desconto,
       };
 
       try {
-        // Save order to Supabase first, then create MP preference
+        // Save order to Supabase first
         const saved = await createPedido(order);
+
+        // Deduct stock immediately for pronta_entrega items
+        if (hasProntaEntrega) {
+          try {
+            await removeOrderItemsFromEstoque(order);
+          } catch (stockErr) {
+            console.error("Erro ao deduzir estoque:", stockErr);
+          }
+        }
 
         const mpResult = await createMPPreference(order.id, paymentMethod);
         if (mpResult) {

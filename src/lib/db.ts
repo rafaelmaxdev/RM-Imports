@@ -597,6 +597,9 @@ export interface DbEstoqueItem {
   produto_id: string;
   tamanho: string;
   quantidade: number;
+  personalizado: boolean;
+  nome_personalizado: string | null;
+  numero_personalizado: string | null;
   created_at: string;
 }
 
@@ -607,6 +610,9 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
     produto_id: db.produto_id,
     tamanho: db.tamanho,
     quantidade: db.quantidade,
+    personalizado: db.personalizado ?? false,
+    nome_personalizado: db.nome_personalizado ?? undefined,
+    numero_personalizado: db.numero_personalizado ?? undefined,
     created_at: db.created_at,
     produto_nome: produto?.nome ?? undefined,
     produto_imagem: produto ? parseImageUrls(produto.imagem_urls as string[] | string)[0] : undefined,
@@ -617,10 +623,12 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
   };
 }
 
+const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, created_at, produtos(nome, imagem_urls, tipo, time, liga, temporada)";
+
 export async function getEstoque(): Promise<EstoqueItem[]> {
   const { data, error } = await supabase
     .from("estoque_pronta_entrega")
-    .select("id, produto_id, tamanho, quantidade, created_at, produtos(nome, imagem_urls, tipo, time, liga, temporada)")
+    .select(ESTOQUE_SELECT)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -631,7 +639,7 @@ export async function getEstoque(): Promise<EstoqueItem[]> {
 export async function getEstoquePublico(): Promise<EstoqueItem[]> {
   const { data, error } = await supabase
     .from("estoque_pronta_entrega")
-    .select("id, produto_id, tamanho, quantidade, created_at, produtos(nome, imagem_urls, tipo, time, liga, temporada)")
+    .select(ESTOQUE_SELECT)
     .gt("quantidade", 0)
     .order("created_at", { ascending: false });
 
@@ -640,14 +648,64 @@ export async function getEstoquePublico(): Promise<EstoqueItem[]> {
   return (data as unknown as (DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; tipo: string; time: string; liga: string; temporada: string } | null })[]).map(dbEstoqueToEstoque);
 }
 
-export async function addEstoqueItem(produtoId: string, tamanho: string, quantidade: number): Promise<EstoqueItem> {
+export async function addEstoqueItem(
+  produtoId: string,
+  tamanho: string,
+  quantidade: number,
+  personalizado: boolean = false,
+  nomePersonalizado?: string,
+  numeroPersonalizado?: string,
+): Promise<EstoqueItem> {
+  const nomePessoal = personalizado ? (nomePersonalizado ?? null) : null;
+  const numeroPessoal = personalizado ? (numeroPersonalizado ?? null) : null;
+
+  // Check if item already exists (same product, size, and personalization)
+  let query = supabase
+    .from("estoque_pronta_entrega")
+    .select("id, quantidade")
+    .eq("produto_id", produtoId)
+    .eq("tamanho", tamanho)
+    .eq("personalizado", personalizado);
+
+  if (nomePessoal) {
+    query = query.eq("nome_personalizado", nomePessoal);
+  } else {
+    query = query.is("nome_personalizado", null);
+  }
+  if (numeroPessoal) {
+    query = query.eq("numero_personalizado", numeroPessoal);
+  } else {
+    query = query.is("numero_personalizado", null);
+  }
+
+  const { data: existing } = await query.maybeSingle();
+
+  if (existing) {
+    // Increment quantity on existing item
+    const newQty = existing.quantidade + quantidade;
+    const { data, error } = await supabase
+      .from("estoque_pronta_entrega")
+      .update({ quantidade: newQty })
+      .eq("id", existing.id)
+      .select(ESTOQUE_SELECT)
+      .single();
+
+    if (error) throw error;
+    return dbEstoqueToEstoque(data as unknown as DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; tipo: string; time: string; liga: string; temporada: string } });
+  }
+
+  // Insert new item
   const { data, error } = await supabase
     .from("estoque_pronta_entrega")
-    .upsert(
-      { produto_id: produtoId, tamanho, quantidade },
-      { onConflict: "produto_id,tamanho" }
-    )
-    .select("id, produto_id, tamanho, quantidade, created_at, produtos(nome, imagem_urls, tipo, time, liga, temporada)")
+    .insert({
+      produto_id: produtoId,
+      tamanho,
+      quantidade,
+      personalizado,
+      nome_personalizado: nomePessoal,
+      numero_personalizado: numeroPessoal,
+    })
+    .select(ESTOQUE_SELECT)
     .single();
 
   if (error) throw error;
@@ -672,7 +730,8 @@ export async function deleteEstoqueItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Add items from a delivered order to estoque (for pronta_entrega orders) */
+/** Add items from a delivered order to estoque (for pronta_entrega orders).
+ *  Considers personalization when matching existing stock entries. */
 export async function addOrderItemsToEstoque(order: import("../types").Order): Promise<void> {
   for (const item of order.itens) {
     // Find the product by name to get the produto_id
@@ -684,13 +743,30 @@ export async function addOrderItemsToEstoque(order: import("../types").Order): P
 
     if (produtos && produtos.length > 0) {
       const produtoId = produtos[0].id;
-      // Upsert: add quantidade to existing entry or create new
-      const { data: existing } = await supabase
+      const isPersonalizado = item.personalizado ?? false;
+      const nomePessoal = isPersonalizado ? (item.nomePersonalizado ?? null) : null;
+      const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
+
+      // Match by product, size, and personalization
+      let query = supabase
         .from("estoque_pronta_entrega")
         .select("id, quantidade")
         .eq("produto_id", produtoId)
         .eq("tamanho", item.tamanho)
-        .maybeSingle();
+        .eq("personalizado", isPersonalizado);
+
+      if (nomePessoal) {
+        query = query.eq("nome_personalizado", nomePessoal);
+      } else {
+        query = query.is("nome_personalizado", null);
+      }
+      if (numeroPessoal) {
+        query = query.eq("numero_personalizado", numeroPessoal);
+      } else {
+        query = query.is("numero_personalizado", null);
+      }
+
+      const { data: existing } = await query.maybeSingle();
 
       if (existing) {
         await supabase
@@ -700,8 +776,148 @@ export async function addOrderItemsToEstoque(order: import("../types").Order): P
       } else {
         await supabase
           .from("estoque_pronta_entrega")
-          .insert({ produto_id: produtoId, tamanho: item.tamanho, quantidade: 1 });
+          .insert({
+            produto_id: produtoId,
+            tamanho: item.tamanho,
+            quantidade: 1,
+            personalizado: isPersonalizado,
+            nome_personalizado: nomePessoal,
+            numero_personalizado: numeroPessoal,
+          });
       }
     }
   }
+}
+
+/** Decrement stock quantity for a pronta entrega item.
+ *  Called when a customer buys from pronta entrega.
+ *  Returns true if the stock was successfully decremented. */
+export async function decrementEstoqueItem(
+  produtoId: string,
+  tamanho: string,
+  personalizado: boolean = false,
+  nomePersonalizado?: string,
+  numeroPersonalizado?: string,
+): Promise<boolean> {
+  const nomePessoal = personalizado ? (nomePersonalizado ?? null) : null;
+  const numeroPessoal = personalizado ? (numeroPersonalizado ?? null) : null;
+
+  // Find the matching stock entry
+  let query = supabase
+    .from("estoque_pronta_entrega")
+    .select("id, quantidade")
+    .eq("produto_id", produtoId)
+    .eq("tamanho", tamanho)
+    .eq("personalizado", personalizado);
+
+  if (nomePessoal) {
+    query = query.eq("nome_personalizado", nomePessoal);
+  } else {
+    query = query.is("nome_personalizado", null);
+  }
+  if (numeroPessoal) {
+    query = query.eq("numero_personalizado", numeroPessoal);
+  } else {
+    query = query.is("numero_personalizado", null);
+  }
+
+  const { data: existing } = await query.maybeSingle();
+  if (!existing || existing.quantidade <= 0) return false;
+
+  const newQty = existing.quantidade - 1;
+  const { error } = await supabase
+    .from("estoque_pronta_entrega")
+    .update({ quantidade: newQty })
+    .eq("id", existing.id);
+
+  return !error;
+}
+
+/** Register a direct sale (venda direta/boca a boca) from admin.
+ *  Decrements stock and creates a completed order automatically.
+ *  The order goes through: pago → entregue (via DB RPC to bypass trigger). */
+export async function criarVendaDireta(
+  items: { produtoId: string; nome: string; tipo: string; temporada: string; tamanho: string; preco: number; personalizado: boolean; nomePersonalizado?: string; numeroPersonalizado?: string }[],
+  nomeCliente: string,
+): Promise<import("../types").Order> {
+  const now = new Date();
+  const data = now.toLocaleDateString("pt-BR");
+  const hora = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  const total = items.reduce((sum, i) => sum + i.preco, 0);
+
+  // Generate a unique order ID
+  const { gerarId } = await import("../types");
+  const orderId = gerarId();
+
+  const orderItens: OrderItem[] = items.map((item) => ({
+    nome: item.nome,
+    tipo: item.tipo,
+    temporada: item.temporada,
+    tamanho: item.tamanho,
+    genero: "Masculino",
+    personalizado: item.personalizado,
+    nomePersonalizado: item.nomePersonalizado,
+    numeroPersonalizado: item.numeroPersonalizado,
+    preco: item.preco,
+    yupooUrl: "",
+    feminino: false,
+  }));
+
+  // Create order as "pago" (DB trigger only accepts "pendente" or "pago" on INSERT)
+  const order: import("../types").Order = {
+    id: orderId,
+    data,
+    hora,
+    itens: orderItens,
+    total,
+    status: "pago",
+    endereco: {
+      nome: nomeCliente,
+      rua: "",
+      numero: "",
+      complemento: "",
+      bairro: "",
+      cidade: "",
+      estado: "",
+      cep: "",
+      telefone: "",
+      deliveryMethod: "retirada",
+    },
+    admin_order: true,
+    pronta_entrega: true,
+  };
+
+  // Create the order (status = "pago")
+  const saved = await createPedido(order);
+
+  // Step through status transitions to "entregue" via RPC (bypasses trigger)
+  // If RPC doesn't exist, we use the direct_sale_entregue RPC, otherwise step manually
+  const { error: rpcError } = await supabase.rpc("venda_direta_entregue", { pedido_id: orderId });
+
+  if (rpcError) {
+    // RPC doesn't exist yet — try stepping through transitions manually
+    // pago → enviado_fornecedor → em_producao → a_caminho → em_estoque → em_entrega → entregue
+    const steps = ["enviado_fornecedor", "em_producao", "a_caminho", "em_estoque", "em_entrega", "entregue"];
+    for (const step of steps) {
+      const { error } = await supabase.from("pedidos").update({ status: step }).eq("id", orderId);
+      if (error) {
+        console.error(`Erro ao avançar status para ${step}:`, error.message);
+        break;
+      }
+    }
+  }
+
+  // Decrement stock for each item
+  for (const item of items) {
+    await decrementEstoqueItem(
+      item.produtoId,
+      item.tamanho,
+      item.personalizado,
+      item.nomePersonalizado,
+      item.numeroPersonalizado,
+    );
+  }
+
+  return { ...saved, status: "entregue", pronta_entrega: true };
 }

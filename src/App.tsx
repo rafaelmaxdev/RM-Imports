@@ -304,7 +304,7 @@ function AdminPanel({
         ) : tab === "pacotes" ? (
           <AdminPacotes />
         ) : tab === "estoque" ? (
-          <AdminEstoque produtos={produtos} />
+          <AdminEstoque produtos={produtos} config={config} />
         ) : (
           <AdminHistory />
         )}

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import type { CartItem, Order, OrderAddress, PaymentMethod } from "./types";
 import { gerarId } from "./types";
-import { createPedido } from "./lib/db";
+import { createPedido, decrementEstoqueItem } from "./lib/db";
 import { supabase } from "./lib/supabase";
 
 interface CartContextType {
@@ -86,6 +86,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const data = now.toLocaleDateString("pt-BR");
       const hora = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
+      // Check if any item is pronta entrega
+      const hasProntaEntrega = cart.some((item) => item.prontaEntrega);
+
       const order: Order = {
         id: gerarId(),
         data,
@@ -108,6 +111,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         status: "pendente",
         endereco,
         payment_method: paymentMethod,
+        pronta_entrega: hasProntaEntrega || undefined,
       };
 
       try {
@@ -119,6 +123,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
           order.mp_preference_id = mpResult.preferenceId;
           // Update order with preference ID
           await supabase.from("pedidos").update({ mp_preference_id: mpResult.preferenceId }).eq("id", order.id);
+        }
+
+        // Decrement stock for pronta entrega items
+        for (const cartItem of cart) {
+          if (cartItem.prontaEntrega) {
+            await decrementEstoqueItem(
+              cartItem.productId,
+              cartItem.tamanho,
+              cartItem.personalizado,
+              cartItem.nomePersonalizado,
+              cartItem.numeroPersonalizado,
+            ).catch((err) => console.error("Erro ao decrementar estoque:", err));
+          }
         }
 
         setCart([]);

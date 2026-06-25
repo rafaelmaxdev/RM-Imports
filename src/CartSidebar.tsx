@@ -346,13 +346,24 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-sm whitespace-nowrap overflow-hidden text-ellipsis">
                       {item.nome}
+                      {item.prontaEntrega && (
+                        <span className="ml-1.5 text-[9px] font-extrabold px-1 py-0.5 bg-green-500 text-white rounded-sm uppercase tracking-wider align-middle">
+                          PE
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-text-muted">
                       {item.tamanho} • {item.genero}
                       {item.personalizado && ` • ${item.nomePersonalizado} #${item.numeroPersonalizado}`}
                     </div>
                     <div className="font-bold text-accent text-sm">
-                      {item.precoBase != null && item.precoBase > item.preco ? (
+                      {item.prontaEntrega && item.precoBase > 0 && Math.abs(item.precoBase * 1.15 - item.preco) < 0.02 ? (
+                        <span className="flex items-baseline gap-1.5">
+                          <span className="text-text-muted text-xs line-through">{formatarMoeda(item.precoBase)}</span>
+                          <span>{formatarMoeda(item.preco)}</span>
+                          <span className="text-[9px] text-green-600 font-semibold">+15%</span>
+                        </span>
+                      ) : item.precoBase != null && item.precoBase > item.preco ? (
                         <span className="flex items-baseline gap-1.5">
                           <span className="text-text-muted text-xs line-through">{formatarMoeda(item.precoBase)}</span>
                           <span>{formatarMoeda(item.preco)}</span>

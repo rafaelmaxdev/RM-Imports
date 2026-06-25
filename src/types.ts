@@ -13,6 +13,7 @@ export interface CartItem {
   preco: number;
   precoBase: number;       // Total price without any discount (base + add-ons)
   feminino: boolean;
+  prontaEntrega?: boolean; // True when buying from stock (15% markup applied)
 }
 
 export interface OrderItem {
@@ -66,6 +67,9 @@ export interface EstoqueItem {
   produto_id: string;
   tamanho: string;
   quantidade: number;
+  personalizado: boolean;
+  nome_personalizado?: string | null;
+  numero_personalizado?: string | null;
   created_at: string;
   // Joined from produtos
   produto_nome?: string;

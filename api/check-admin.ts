@@ -1,0 +1,41 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!,
+);
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token) {
+      return res.status(401).json({ isAdmin: false, error: "No token" });
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return res.status(200).json({ isAdmin: false, error: "Invalid token" });
+    }
+
+    const jwtRole = user.app_metadata?.role;
+    if (jwtRole === "admin") {
+      return res.status(200).json({ isAdmin: true });
+    }
+
+    const { data: adminUser, error: adminError } = await supabase.auth.admin.getUserById(user.id);
+    if (adminError || !adminUser) {
+      return res.status(200).json({ isAdmin: false });
+    }
+
+    const dbRole = adminUser.user?.app_metadata?.role;
+    return res.status(200).json({ isAdmin: dbRole === "admin" });
+  } catch {
+    return res.status(500).json({ isAdmin: false, error: "Internal error" });
+  }
+}

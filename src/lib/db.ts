@@ -366,9 +366,12 @@ export async function getPedidos(): Promise<import("../types").Order[]> {
 }
 
 export async function getPedidoById(id: string): Promise<import("../types").Order | null> {
-  // Use the API route for unauthenticated access (RLS restricts direct Supabase reads)
   try {
-    const res = await fetch(`/api/order/${encodeURIComponent(id)}`);
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    const res = await fetch(`/api/order/${encodeURIComponent(id)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`Failed to fetch order: ${res.status}`);
     const data = await res.json();

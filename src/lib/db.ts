@@ -603,11 +603,14 @@ export interface DbEstoqueItem {
   personalizado: boolean;
   nome_personalizado: string | null;
   numero_personalizado: string | null;
+  feminino: boolean;
   created_at: string;
 }
 
-function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; imagem_urls: string[] | string; tipo: string; time: string; liga: string; temporada: string } | null }): EstoqueItem {
+function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; imagem_urls: string[] | string; imagem_urls_feminina?: string[] | string | null; tipo: string; time: string; liga: string; temporada: string } | null }): EstoqueItem {
   const produto = db.produtos;
+  const feminineImages = produto?.imagem_urls_feminina ? parseImageUrls(produto.imagem_urls_feminina) : [];
+  const masculineImages = produto ? parseImageUrls(produto.imagem_urls as string[] | string) : [];
   return {
     id: db.id,
     produto_id: db.produto_id,
@@ -616,9 +619,10 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
     personalizado: db.personalizado ?? false,
     nome_personalizado: db.nome_personalizado ?? undefined,
     numero_personalizado: db.numero_personalizado ?? undefined,
+    feminino: db.feminino,
     created_at: db.created_at,
     produto_nome: produto?.nome ?? undefined,
-    produto_imagem: produto ? parseImageUrls(produto.imagem_urls as string[] | string)[0] : undefined,
+    produto_imagem: db.feminino && feminineImages.length > 0 ? feminineImages[0] : (masculineImages[0] ?? undefined),
     produto_tipo: produto?.tipo ?? undefined,
     produto_time: produto?.time ?? undefined,
     produto_liga: produto?.liga ?? undefined,
@@ -626,7 +630,7 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
   };
 }
 
-const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, created_at, produtos(nome, imagem_urls, tipo, time, liga, temporada)";
+const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, created_at, produtos(nome, imagem_urls, imagem_urls_feminina, tipo, time, liga, temporada)";
 
 export async function getEstoque(): Promise<EstoqueItem[]> {
   const { data, error } = await supabase
@@ -658,17 +662,18 @@ export async function addEstoqueItem(
   personalizado: boolean = false,
   nomePersonalizado?: string,
   numeroPersonalizado?: string,
+  feminino: boolean = false,
 ): Promise<EstoqueItem> {
   const nomePessoal = personalizado ? (nomePersonalizado ?? null) : null;
   const numeroPessoal = personalizado ? (numeroPersonalizado ?? null) : null;
 
-  // Check if item already exists (same product, size, and personalization)
   let query = supabase
     .from("estoque_pronta_entrega")
     .select("id, quantidade")
     .eq("produto_id", produtoId)
     .eq("tamanho", tamanho)
-    .eq("personalizado", personalizado);
+    .eq("personalizado", personalizado)
+    .eq("feminino", feminino);
 
   if (nomePessoal) {
     query = query.eq("nome_personalizado", nomePessoal);
@@ -684,21 +689,25 @@ export async function addEstoqueItem(
   const { data: existing } = await query.maybeSingle();
 
   if (existing) {
-    // Increment quantity on existing item
     const newQty = existing.quantidade + quantidade;
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("estoque_pronta_entrega")
       .update({ quantidade: newQty })
-      .eq("id", existing.id)
-      .select(ESTOQUE_SELECT)
-      .single();
+      .eq("id", existing.id);
 
     if (error) throw error;
-    return dbEstoqueToEstoque(data as unknown as DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; tipo: string; time: string; liga: string; temporada: string } });
+
+    const { data, error: fetchError } = await supabase
+      .from("estoque_pronta_entrega")
+      .select(ESTOQUE_SELECT)
+      .eq("id", existing.id)
+      .single();
+
+    if (fetchError) throw fetchError;
+    return dbEstoqueToEstoque(data as unknown as DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; imagem_urls_feminina?: string[] | string | null; tipo: string; time: string; liga: string; temporada: string } });
   }
 
-  // Insert new item
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("estoque_pronta_entrega")
     .insert({
       produto_id: produtoId,
@@ -707,12 +716,33 @@ export async function addEstoqueItem(
       personalizado,
       nome_personalizado: nomePessoal,
       numero_personalizado: numeroPessoal,
-    })
-    .select(ESTOQUE_SELECT)
-    .single();
+      feminino,
+    });
 
   if (error) throw error;
-  return dbEstoqueToEstoque(data as unknown as DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; tipo: string; time: string; liga: string; temporada: string } });
+
+  let fetchQuery = supabase
+    .from("estoque_pronta_entrega")
+    .select(ESTOQUE_SELECT)
+    .eq("produto_id", produtoId)
+    .eq("tamanho", tamanho)
+    .eq("personalizado", personalizado)
+    .eq("feminino", feminino);
+
+  if (nomePessoal) {
+    fetchQuery = fetchQuery.eq("nome_personalizado", nomePessoal);
+  } else {
+    fetchQuery = fetchQuery.is("nome_personalizado", null);
+  }
+  if (numeroPessoal) {
+    fetchQuery = fetchQuery.eq("numero_personalizado", numeroPessoal);
+  } else {
+    fetchQuery = fetchQuery.is("numero_personalizado", null);
+  }
+
+  const { data, error: fetchError } = await fetchQuery.single();
+  if (fetchError) throw fetchError;
+  return dbEstoqueToEstoque(data as unknown as DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; imagem_urls_feminina?: string[] | string | null; tipo: string; time: string; liga: string; temporada: string } });
 }
 
 export async function updateEstoqueItem(id: string, quantidade: number): Promise<void> {
@@ -737,7 +767,6 @@ export async function deleteEstoqueItem(id: string): Promise<void> {
  *  Considers personalization when matching existing stock entries. */
 export async function addOrderItemsToEstoque(order: import("../types").Order): Promise<void> {
   for (const item of order.itens) {
-    // Find the product by name to get the produto_id
     const { data: produtos } = await supabase
       .from("produtos")
       .select("id")
@@ -749,14 +778,15 @@ export async function addOrderItemsToEstoque(order: import("../types").Order): P
       const isPersonalizado = item.personalizado ?? false;
       const nomePessoal = isPersonalizado ? (item.nomePersonalizado ?? null) : null;
       const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
+      const isFeminino = item.feminino ?? false;
 
-      // Match by product, size, and personalization
       let query = supabase
         .from("estoque_pronta_entrega")
         .select("id, quantidade")
         .eq("produto_id", produtoId)
         .eq("tamanho", item.tamanho)
-        .eq("personalizado", isPersonalizado);
+        .eq("personalizado", isPersonalizado)
+        .eq("feminino", isFeminino);
 
       if (nomePessoal) {
         query = query.eq("nome_personalizado", nomePessoal);
@@ -786,6 +816,7 @@ export async function addOrderItemsToEstoque(order: import("../types").Order): P
             personalizado: isPersonalizado,
             nome_personalizado: nomePessoal,
             numero_personalizado: numeroPessoal,
+            feminino: isFeminino,
           });
       }
     }
@@ -811,6 +842,7 @@ export async function removeOrderItemsFromEstoque(order: import("../types").Orde
       item.personalizado ?? false,
       item.nomePersonalizado,
       item.numeroPersonalizado,
+      item.feminino ?? false,
     );
   }
 }
@@ -824,17 +856,21 @@ export async function decrementEstoqueItem(
   personalizado: boolean = false,
   nomePersonalizado?: string,
   numeroPersonalizado?: string,
+  feminino?: boolean,
 ): Promise<boolean> {
   const nomePessoal = personalizado ? (nomePersonalizado ?? null) : null;
   const numeroPessoal = personalizado ? (numeroPersonalizado ?? null) : null;
 
-  // Find the matching stock entry
   let query = supabase
     .from("estoque_pronta_entrega")
     .select("id, quantidade")
     .eq("produto_id", produtoId)
     .eq("tamanho", tamanho)
     .eq("personalizado", personalizado);
+
+  if (feminino !== undefined) {
+    query = query.eq("feminino", feminino);
+  }
 
   if (nomePessoal) {
     query = query.eq("nome_personalizado", nomePessoal);
@@ -863,7 +899,7 @@ export async function decrementEstoqueItem(
  *  Decrements stock and creates a completed order automatically.
  *  The order goes through: pago → entregue (via DB RPC to bypass trigger). */
 export async function criarVendaDireta(
-  items: { produtoId: string; nome: string; tipo: string; temporada: string; tamanho: string; preco: number; personalizado: boolean; nomePersonalizado?: string; numeroPersonalizado?: string }[],
+  items: { produtoId: string; nome: string; tipo: string; temporada: string; tamanho: string; preco: number; personalizado: boolean; nomePersonalizado?: string; numeroPersonalizado?: string; feminino?: boolean }[],
   nomeCliente: string,
 ): Promise<import("../types").Order> {
   const now = new Date();
@@ -872,7 +908,6 @@ export async function criarVendaDireta(
 
   const total = items.reduce((sum, i) => sum + i.preco, 0);
 
-  // Generate a unique order ID
   const { gerarId } = await import("../types");
   const orderId = gerarId();
 
@@ -881,13 +916,13 @@ export async function criarVendaDireta(
     tipo: item.tipo,
     temporada: item.temporada,
     tamanho: item.tamanho,
-    genero: "Masculino",
+    genero: item.feminino ? "Feminino" : "Masculino",
     personalizado: item.personalizado,
     nomePersonalizado: item.nomePersonalizado,
     numeroPersonalizado: item.numeroPersonalizado,
     preco: item.preco,
     yupooUrl: "",
-    feminino: false,
+    feminino: item.feminino ?? false,
   }));
 
   // Create order as "pago" (DB trigger only accepts "pendente" or "pago" on INSERT)
@@ -934,7 +969,6 @@ export async function criarVendaDireta(
     }
   }
 
-  // Decrement stock for each item
   for (const item of items) {
     await decrementEstoqueItem(
       item.produtoId,
@@ -942,6 +976,7 @@ export async function criarVendaDireta(
       item.personalizado,
       item.nomePersonalizado,
       item.numeroPersonalizado,
+      item.feminino,
     );
   }
 

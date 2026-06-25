@@ -70,6 +70,7 @@ export interface EstoqueItem {
   personalizado: boolean;
   nome_personalizado?: string | null;
   numero_personalizado?: string | null;
+  feminino: boolean;
   created_at: string;
   // Joined from produtos
   produto_nome?: string;

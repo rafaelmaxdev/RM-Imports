@@ -36,7 +36,7 @@ interface GroupedProduct {
   precoCustomizado: number | null;
   promocaoTipo: PromocaoTipo | undefined;
   promocaoValor: number | null;
-  sizes: { tamanho: string; quantidade: number; personalizado: boolean; nome_personalizado?: string | null; numero_personalizado?: string | null }[];
+  sizes: { tamanho: string; quantidade: number; personalizado: boolean; nome_personalizado?: string | null; numero_personalizado?: string | null; feminino: boolean }[];
 }
 
 const TAMANHO_ORDER: Record<string, number> = {
@@ -58,7 +58,7 @@ function groupEstoqueItems(estoque: EstoqueItem[], produtos: DbProduto[]): Group
       sizes = [];
       sizeMap.set(item.produto_id, sizes);
     }
-    sizes.push({ tamanho: item.tamanho, quantidade: item.quantidade, personalizado: item.personalizado ?? false, nome_personalizado: item.nome_personalizado, numero_personalizado: item.numero_personalizado });
+    sizes.push({ tamanho: item.tamanho, quantidade: item.quantidade, personalizado: item.personalizado ?? false, nome_personalizado: item.nome_personalizado, numero_personalizado: item.numero_personalizado, feminino: item.feminino });
   }
 
   // Sort sizes within each product

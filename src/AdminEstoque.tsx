@@ -25,6 +25,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
   const [personalizado, setPersonalizado] = useState(false);
   const [nomePersonalizado, setNomePersonalizado] = useState("");
   const [numeroPersonalizado, setNumeroPersonalizado] = useState("");
+  const [feminino, setFeminino] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
   // Venda Direta state
@@ -70,10 +71,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
   // Search results for adding products
   const resultados = useMemo(() => {
     if (!busca.trim()) return [];
-    return produtos.filter((p) => {
-      const campos = [p.nome, p.time, p.tipo, p.liga, p.temporada].join(" ");
-      return buscaPorPalavras(busca, campos);
-    }).slice(0, 20);
+    return produtos.filter((p) => buscaPorPalavras(busca, p.nome)).slice(0, 20);
   }, [produtos, busca]);
 
   const selectedProduto = useMemo(
@@ -123,6 +121,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
             personalizado,
             personalizado ? nomePersonalizado : undefined,
             personalizado ? numeroPersonalizado : undefined,
+            feminino,
           )
         )
       );
@@ -154,6 +153,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
       setPersonalizado(false);
       setNomePersonalizado("");
       setNumeroPersonalizado("");
+      setFeminino(false);
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
       console.error("Erro ao adicionar estoque:", err);
@@ -215,6 +215,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
           personalizado: vendaItem.personalizado ?? false,
           nomePersonalizado: vendaItem.nome_personalizado ?? undefined,
           numeroPersonalizado: vendaItem.numero_personalizado ?? undefined,
+          feminino: vendaItem.feminino,
         }],
         vendaNomeCliente.trim(),
       );
@@ -650,6 +651,22 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                   Personalização não disponível para este tipo de produto.
                 </p>
               )}
+            </div>
+
+            {/* Feminino */}
+            <div className="mb-4">
+              <div className="flex items-center gap-2">
+                <input
+                  id="feminino-check"
+                  type="checkbox"
+                  checked={feminino}
+                  onChange={(e) => setFeminino(e.target.checked)}
+                  className="w-4 h-4 accent-pink-500 cursor-pointer"
+                />
+                <label htmlFor="feminino-check" className="text-sm font-medium cursor-pointer select-none">
+                  Feminino
+                </label>
+              </div>
             </div>
 
             {/* Add button */}

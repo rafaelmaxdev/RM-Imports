@@ -29,12 +29,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const { data: adminUser, error: adminError } = await supabase.auth.admin.getUserById(user.id);
-    if (adminError || !adminUser) {
-      return res.status(200).json({ isAdmin: false });
+    if (!adminError && adminUser?.user?.app_metadata?.role === "admin") {
+      return res.status(200).json({ isAdmin: true });
     }
 
-    const dbRole = adminUser.user?.app_metadata?.role;
-    return res.status(200).json({ isAdmin: dbRole === "admin" });
+    const { data: dbMeta, error: rpcError } = await supabase.rpc("get_user_role", { uid: user.id });
+    if (!rpcError && dbMeta?.role === "admin") {
+      return res.status(200).json({ isAdmin: true });
+    }
+
+    return res.status(200).json({ isAdmin: false });
   } catch {
     return res.status(500).json({ isAdmin: false, error: "Internal error" });
   }

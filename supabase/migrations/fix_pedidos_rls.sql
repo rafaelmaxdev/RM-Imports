@@ -2,10 +2,12 @@
 -- Restrict SELECT to authenticated users only (currently public)
 -- Restrict UPDATE/DELETE to authenticated users only
 
--- Drop existing overly permissive policies
+-- Drop existing overly permissive policies (names from original schema)
 DROP POLICY IF EXISTS "Qualquer um pode ler pedidos" ON pedidos;
 DROP POLICY IF EXISTS "Qualquer um pode criar pedidos" ON pedidos;
 DROP POLICY IF EXISTS "Qualquer um pode atualizar pedidos" ON pedidos;
+DROP POLICY IF EXISTS "Apenas autenticados podem ler pedidos" ON pedidos;
+DROP POLICY IF EXISTS "Apenas autenticados podem atualizar pedidos" ON pedidos;
 
 -- Create restricted policies
 CREATE POLICY "Apenas autenticados podem ler pedidos"

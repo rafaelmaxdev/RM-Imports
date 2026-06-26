@@ -8,9 +8,9 @@
 export const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; icon?: string }> = {
   pendente: { label: "Aguardando pagamento", bg: "bg-yellow-100", text: "text-yellow-800", icon: "⏳" },
   pago: { label: "Pagamento confirmado", bg: "bg-green-100", text: "text-green-800", icon: "✓" },
-  enviado_fornecedor: { label: "Enviado ao fornecedor", bg: "bg-blue-100", text: "text-blue-800", icon: "📤" },
+  enviado_fornecedor: { label: "Enviado para produção", bg: "bg-blue-100", text: "text-blue-800", icon: "📤" },
   em_producao: { label: "Em produção", bg: "bg-purple-100", text: "text-purple-800", icon: "🏭" },
-  a_caminho: { label: "A caminho", bg: "bg-indigo-100", text: "text-indigo-800", icon: "✈️" },
+  a_caminho: { label: "A caminho do estoque", bg: "bg-indigo-100", text: "text-indigo-800", icon: "✈️" },
   em_estoque: { label: "Em estoque", bg: "bg-teal-100", text: "text-teal-800", icon: "📦" },
   em_entrega: { label: "Em entrega", bg: "bg-cyan-100", text: "text-cyan-800", icon: "🚚" },
   entregue: { label: "Entregue", bg: "bg-emerald-100", text: "text-emerald-800", icon: "✅" },

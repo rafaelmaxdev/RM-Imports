@@ -11,54 +11,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Search by phone number
   const phone = req.query.phone;
-  if (phone && typeof phone === "string") {
-    const { data: orders, error } = await supabase
+  const payment = req.query.payment;
+
+  // Search by payment ID
+  if (payment && typeof payment === "string") {
+    const pid = payment.trim();
+    const { data: order } = await supabase
       .from("pedidos")
-      .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, pronta_entrega, created_at")
-      .order("created_at", { ascending: false })
-      .limit(5);
-
-    if (error || !orders) {
-      return res.status(500).json({ error: "Erro ao buscar pedidos" });
+      .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
+      .eq("mp_payment_id", pid)
+      .maybeSingle();
+    if (order) {
+      const parsed = { ...order, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens };
+      return res.status(200).json([parsed]);
     }
+    return res.status(404).json({ error: "Nenhum pedido encontrado com esse ID de pagamento." });
+  }
 
+  // Search by phone number
+  if (phone && typeof phone === "string") {
     const digits = phone.replace(/\D/g, "");
-    const filtered = orders.filter((o: any) => {
+    if (digits.length < 8) {
+      return res.status(400).json({ error: "Telefone deve ter pelo menos 8 dígitos." });
+    }
+    const { data: orders } = await supabase
+      .from("pedidos")
+      .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    const filtered = (orders || []).filter((o: any) => {
       if (!o.endereco) return false;
       const addr = typeof o.endereco === "string" ? JSON.parse(o.endereco) : o.endereco;
-      return addr.telefone?.replace(/\D/g, "") === digits;
+      return addr.telefone?.replace(/\D/g, "").includes(digits) || digits.includes(addr.telefone?.replace(/\D/g, "") || "");
     });
-
-    const parsed = filtered.map((o: any) => ({
-      ...o,
-      itens: typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens,
-    }));
-
+    if (filtered.length === 0) {
+      return res.status(404).json({ error: "Nenhum pedido encontrado com esse telefone." });
+    }
+    const parsed = filtered.map((o: any) => ({ ...o, itens: typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens }));
     return res.status(200).json(parsed);
   }
 
   // Search by order ID
   const { id } = req.query;
   if (!id || typeof id !== "string") {
-    return res.status(400).json({ error: "Missing order ID" });
+    return res.status(400).json({ error: "Informe o ID do pedido, telefone ou ID do pagamento." });
   }
 
-  const { data: order, error } = await supabase
+  const { data: order } = await supabase
     .from("pedidos")
-    .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, pronta_entrega, created_at")
+    .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
-  if (error || !order) {
-    return res.status(404).json({ error: "Pedido não encontrado" });
+  if (!order) {
+    return res.status(404).json({ error: "Pedido não encontrado." });
   }
 
-  const parsed = {
-    ...order,
-    itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens,
-  };
-
-  return res.status(200).json(parsed);
+  const parsed = { ...order, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens };
+  return res.status(200).json([parsed]);
 }

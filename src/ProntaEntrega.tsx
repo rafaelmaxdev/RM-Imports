@@ -332,7 +332,7 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
                     }}
                   >
                     <span>{s.tamanho}</span>
-                    <span className="text-[10px] opacity-70">({s.quantidade} {s.quantidade === 1 ? 'un' : 'uns'}{s.quantidade === 1 ? <span className="text-orange-500 font-semibold ml-0.5">última!</span> : ''})</span>
+                    <span className="text-[10px] opacity-70">({s.quantidade} {s.quantidade === 1 ? 'un' : 'uns'}{s.quantidade === 1 ? <span className="ml-0.5">🚨</span> : ''})</span>
                     {s.personalizado && (
                       <span className="text-[10px] text-accent font-semibold">★ {s.nome_personalizado || ''}{s.nome_personalizado && s.numero_personalizado ? ' #' : ''}{s.numero_personalizado || ''}</span>
                     )}
@@ -686,7 +686,7 @@ export default function ProntaEntrega() {
                       <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
                         {p.sizes.slice(0, 4).map((s, idx) => (
                           <span key={`${s.tamanho}-${idx}`} className="text-[10px] sm:text-xs">
-                            <strong>{s.tamanho}</strong> ({s.quantidade} {s.quantidade === 1 ? 'unidade' : 'unidades'}){s.personalizado ? ' ★' : ''}{s.feminino && p.stockTipo === "ambos" ? <span className="text-pink-500 ml-0.5">F</span> : ''}{s.quantidade === 1 ? <span className="text-orange-500 ml-0.5 font-semibold">última!</span> : ''}
+                            <strong>{s.tamanho}</strong> ({s.quantidade} {s.quantidade === 1 ? 'unidade' : 'unidades'}){s.personalizado ? ' ★' : ''}{s.feminino && p.stockTipo === "ambos" ? <span className="text-pink-500 ml-0.5">F</span> : ''}{s.quantidade === 1 ? <span className="ml-0.5">🚨</span> : ''}
                           </span>
                         ))}
                         {p.sizes.length > 4 && (

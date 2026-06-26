@@ -98,7 +98,7 @@ function AppContent() {
   }
 
   return (
-    <>
+    <div className="flex flex-col min-h-screen">
       <nav className="sticky top-0 z-50 flex items-center justify-between px-4 sm:px-8 py-3 bg-primary text-white shadow-md relative" aria-label="Navegação principal">
         <button
           className={`hamburger-btn bg-transparent border-none cursor-pointer p-2 flex flex-col items-center justify-center gap-[5px] w-10 h-10 ${showMenu ? 'open' : ''}`}
@@ -158,7 +158,8 @@ function AppContent() {
         </div>
       )}
 
-      <main>
+      <div className="flex flex-col min-h-screen">
+      <main className="flex-1">
         {loading ? (
           <LoadingSkeleton />
         ) : (
@@ -190,7 +191,7 @@ function AppContent() {
       )}
       <Footer />
       <WhatsAppButton />
-    </>
+    </div>
   );
 }
 
@@ -210,6 +211,34 @@ function AdminPanel({
   const [tab, setTab] = useState<AdminTab>("produtos");
   const [precacheStatus, setPrecacheStatus] = useState<string | null>(null);
   const [precacheLoading, setPrecacheLoading] = useState(false);
+  const [exportingCSV, setExportingCSV] = useState(false);
+
+  async function handleExportCSV() {
+    setExportingCSV(true);
+    try {
+      const { getPedidos } = await import("./lib/db");
+      const orders = await getPedidos();
+      const rows = [["ID", "Data", "Hora", "Status", "Total", "Pagamento", "Cliente", "Telefone", "Itens"]];
+      for (const o of orders) {
+        const nome = o.endereco && typeof o.endereco === "object" ? (o.endereco as any).nome || "" : "";
+        const tel = o.endereco && typeof o.endereco === "object" ? (o.endereco as any).telefone || "" : "";
+        const itens = o.itens.map((i: any) => `${i.nome} (${i.tamanho})`).join("; ");
+        rows.push([o.id, o.data, o.hora, o.status, String(o.total), o.payment_method || "", nome, tel, itens]);
+      }
+      const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pedidos-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Erro ao exportar CSV:", err);
+    } finally {
+      setExportingCSV(false);
+    }
+  }
 
   async function handlePrecacheAll() {
     if (precacheLoading) return;
@@ -300,6 +329,13 @@ function AdminPanel({
           className="px-4 py-2 bg-accent text-white rounded-md text-sm font-semibold hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {precacheLoading ? "⏳ Cacheando..." : "🖼️ Pre-cache Todas as Imagens"}
+        </button>
+        <button
+          onClick={handleExportCSV}
+          disabled={exportingCSV}
+          className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
+        >
+          {exportingCSV ? "⏳ Exportando..." : "📥 Exportar Pedidos (CSV)"}
         </button>
       </div>
 

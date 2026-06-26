@@ -1,7 +1,19 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { setCorsHeaders } from "../lib/cors.js";
-import { checkRateLimit } from "../lib/rate-limit.js";
+
+const rateLimitHits = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitHits.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitHits.set(ip, { count: 1, resetAt: now + 60000 });
+    return true;
+  }
+  if (entry.count >= 30) return false;
+  entry.count++;
+  return true;
+}
 
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!serviceRoleKey) {

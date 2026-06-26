@@ -52,11 +52,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (Array.isArray(phone)) phone = phone[0];
     if (Array.isArray(payment)) payment = payment[0];
 
-    // Debug: return request info
-    if (phone || payment) {
-      return res.status(200).json({ debug: { phone, payment, query: req.query, url: req.url, path: req.query.path } });
-    }
-
     if (phone && typeof phone === "string") {
       const digits = phone.replace(/\D/g, "");
       if (digits.length < 10) {

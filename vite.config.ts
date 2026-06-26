@@ -285,7 +285,7 @@ function imageProxyPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), ignoreApiDir(), orderApiPlugin(), imageProxyPlugin(), devApiPlugin()],
+  plugins: [react(), tailwindcss(), ignoreApiDir(), orderApiPlugin(), orderSearchPlugin(), imageProxyPlugin(), devApiPlugin()],
   build: {
     rollupOptions: {
       external: ['mercadopago'],

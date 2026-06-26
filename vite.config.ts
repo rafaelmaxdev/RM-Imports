@@ -99,8 +99,10 @@ function orderApiPlugin(): Plugin {
         // Handle /api/order?phone=... or /api/order?payment=...
         if (isOrderQuery) {
           const url = new URL(req.url || "/", "http://localhost");
-          const phone = url.searchParams.get("phone");
-          const payment = url.searchParams.get("payment");
+          let phone = url.searchParams.get("phone");
+          let payment = url.searchParams.get("payment");
+          if (Array.isArray(phone)) phone = phone[0];
+          if (Array.isArray(payment)) payment = payment[0];
 
           if (payment) {
             const pid = payment.trim();

@@ -21,12 +21,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Extract order ID from path
   let id: string | undefined;
 
-  const { path } = req.query;
-  if (Array.isArray(path)) {
-    id = path[0];
-  } else if (typeof path === "string" && path) {
-    id = path;
-  }
+  const rawPath = req.query.path;
+  const path = Array.isArray(rawPath) ? rawPath[0] : rawPath;
+  if (path && typeof path === "string") id = path;
 
   if (!id && req.url) {
     const cleanUrl = req.url.split("?")[0].split("#")[0];
@@ -43,14 +40,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!id) {
-    const queryId = req.query.id;
+    const rawId = req.query.id;
+    const queryId = Array.isArray(rawId) ? rawId[0] : rawId;
     if (typeof queryId === "string" && queryId) id = queryId;
   }
 
   if (!id) {
     // Phone or payment search (public)
-    const phone = req.query.phone;
-    const payment = req.query.payment;
+    let phone = req.query.phone;
+    let payment = req.query.payment;
+    if (Array.isArray(phone)) phone = phone[0];
+    if (Array.isArray(payment)) payment = payment[0];
 
     if (phone && typeof phone === "string") {
       const digits = phone.replace(/\D/g, "");

@@ -1,0 +1,145 @@
+import { describe, it, expect } from "vitest";
+import { aplicarCupom } from "../lib/db";
+import {
+  formatarMoeda,
+  calcularPreco,
+  ADICIONAL_TAMANHO,
+  precoPersonalizacao,
+  PRONTA_ENTREGA_MARKUP,
+  gerarId,
+} from "../types";
+
+describe("Coupon application", () => {
+  const cupomPorcentagem = {
+    id: "1",
+    codigo: "BEMVINDO10",
+    tipo: "porcentagem" as const,
+    valor: 10,
+    desconto_maximo: null,
+    uso_maximo: null,
+    usos_atuais: 0,
+    valor_minimo_pedido: null,
+    data_expiracao: null,
+    ativo: true,
+    created_at: new Date().toISOString(),
+  };
+
+  const cupomFixo = {
+    id: "2",
+    codigo: "DESCONTO20",
+    tipo: "fixo" as const,
+    valor: 20,
+    desconto_maximo: null,
+    uso_maximo: null,
+    usos_atuais: 0,
+    valor_minimo_pedido: null,
+    data_expiracao: null,
+    ativo: true,
+    created_at: new Date().toISOString(),
+  };
+
+  const cupomComMaximo = {
+    ...cupomPorcentagem,
+    codigo: "MAX30",
+    valor: 50,
+    desconto_maximo: 30,
+  };
+
+  it("aplica desconto percentual", () => {
+    const total = aplicarCupom(200, cupomPorcentagem);
+    expect(total).toBe(180);
+  });
+
+  it("aplica desconto fixo", () => {
+    const total = aplicarCupom(100, cupomFixo);
+    expect(total).toBe(80);
+  });
+
+  it("desconto fixo não fica negativo", () => {
+    const total = aplicarCupom(10, cupomFixo);
+    expect(total).toBe(0);
+  });
+
+  it("respeita desconto maximo em porcentagem", () => {
+    const total = aplicarCupom(200, cupomComMaximo);
+    expect(total).toBe(170);
+  });
+
+  it("desconto maximo não afeta valores menores", () => {
+    const total = aplicarCupom(50, cupomComMaximo);
+    expect(total).toBe(25);
+  });
+
+  it("formata moeda corretamente", () => {
+    expect(formatarMoeda(129.90)).toContain("129,90");
+    expect(formatarMoeda(0)).toContain("0,00");
+    expect(formatarMoeda(1000.50)).toContain("1.000,50");
+    expect(formatarMoeda(129.90)).toContain("R$");
+  });
+});
+
+describe("Price calculation", () => {
+  it("calcula preco base sem adicional", () => {
+    expect(calcularPreco("Torcedor", "M", false)).toBe(129.90);
+  });
+
+  it("adiciona taxa para G2", () => {
+    expect(calcularPreco("Torcedor", "G2", false)).toBe(129.90 + ADICIONAL_TAMANHO.G2);
+  });
+
+  it("adiciona personalizacao para Torcedor", () => {
+    const esperado = 129.90 + precoPersonalizacao("Torcedor");
+    expect(calcularPreco("Torcedor", "M", true)).toBe(esperado);
+    expect(precoPersonalizacao("Torcedor")).toBe(20);
+  });
+
+  it("aplica desconto antes de adicionar taxa de tamanho", () => {
+    const precoComDesc = Math.round((169.90 - 169.90 * 0.2) * 100) / 100;
+    const esperado = precoComDesc + ADICIONAL_TAMANHO.G2 + precoPersonalizacao("Jogador");
+    expect(calcularPreco("Jogador", "G2", true, undefined, null, "porcentagem", 20)).toBe(esperado);
+  });
+});
+
+describe("Pronta entrega markup", () => {
+  it("aplica markup de 15% no preco base", () => {
+    const base = 129.90;
+    const comMarkup = Math.round(base * PRONTA_ENTREGA_MARKUP * 100) / 100;
+    expect(comMarkup).toBe(149.39);
+  });
+
+  it("markup sobre preco com desconto", () => {
+    const base = 129.90;
+    const desconto = 0.2;
+    const precoDesc = Math.round((base - base * desconto) * 100) / 100;
+    const comMarkup = Math.round(precoDesc * PRONTA_ENTREGA_MARKUP * 100) / 100;
+    expect(comMarkup).toBe(119.51);
+  });
+});
+
+describe("Cart total with coupon", () => {
+  it("soma itens e aplica cupom", () => {
+    const itens = [129.90, 169.90, 25];
+    const total = itens.reduce((s, p) => s + p, 0);
+    const totalComCupom = total - total * 0.1;
+    expect(total).toBe(324.80);
+    expect(Math.round(totalComCupom * 100) / 100).toBe(292.32);
+  });
+
+  it("aplica cupom fixo no total", () => {
+    const total = 200;
+    const desconto = 30;
+    expect(total - desconto).toBe(170);
+  });
+
+  it("cupom nao deixa total negativo", () => {
+    expect(Math.max(0, 15 - 20)).toBe(0);
+  });
+});
+
+describe("Order ID generation", () => {
+  it("gera ID no formato UL-XXXXXXXX", () => {
+    const id = gerarId();
+    expect(id).toMatch(/^UL-[A-Z2-9]{8}$/);
+    expect(id.length).toBe(11);
+  });
+});

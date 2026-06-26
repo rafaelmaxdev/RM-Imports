@@ -24,6 +24,7 @@ const AdminPromocoes = lazy(() => import("./AdminPromocoes"));
 const AdminEstoque = lazy(() => import("./AdminEstoque"));
 const AdminCupons = lazy(() => import("./AdminCupons"));
 const ProntaEntrega = lazy(() => import("./ProntaEntrega"));
+const MeusPedidos = lazy(() => import("./MeusPedidos"));
 const NotFound = lazy(() => import("./NotFound"));
 const SizeChart = lazy(() => import("./SizeChart"));
 
@@ -146,6 +147,9 @@ function AppContent() {
             >
               📦 Pronta Entrega
             </Link>
+            <Link to="/meu-pedido" className="px-5 py-3 text-white no-underline hover:bg-white/10 transition-colors animate-menu-item" onClick={() => setShowMenu(false)}>
+              🔍 Meu Pedido
+            </Link>
           </div>
         </div>
       )}
@@ -168,6 +172,7 @@ function AppContent() {
             <Route path="/pedido/:id" element={<OrderConfirmation />} />
             <Route path="/tamanhos" element={<SizeChart />} />
             <Route path="/pronta-entrega" element={<ProntaEntrega />} />
+            <Route path="/meu-pedido" element={<MeusPedidos />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

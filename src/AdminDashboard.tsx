@@ -13,7 +13,7 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
 };
 
 interface AdminDashboardProps {
-  onNavigate?: (tab: string) => void;
+  onNavigate?: (tab: "pedidos" | "financeiro" | "estoque") => void;
 }
 
 export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {

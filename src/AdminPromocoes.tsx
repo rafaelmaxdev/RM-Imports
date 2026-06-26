@@ -50,6 +50,11 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
   const [peMarkupValue, setPeMarkupValue] = useState("");
   const [savingPe, setSavingPe] = useState(false);
 
+  // Custo base state
+  const [custoBase, setCustoBase] = useState<Record<string, string>>({});
+  const [personalizacaoCusto, setPersonalizacaoCusto] = useState<Record<string, string>>({});
+  const [savingCusto, setSavingCusto] = useState(false);
+
   useEffect(() => {
     const pb: Record<string, string> = {};
     const pp: Record<string, string> = {};
@@ -60,6 +65,16 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
     setPrecosBase(pb);
     setPrecosPromo(pp);
     setPeMarkupValue(String(config.pronta_entrega_markup));
+    const cb: Record<string, string> = {};
+    for (const tipo of TIPOS_CATEGORIA) {
+      cb[tipo] = String(config.custo_base[tipo] ?? 0);
+    }
+    setCustoBase(cb);
+    const pc: Record<string, string> = {};
+    for (const tipo of Object.keys(config.personalizacao_custo)) {
+      pc[tipo] = String(config.personalizacao_custo[tipo]);
+    }
+    setPersonalizacaoCusto(pc);
   }, [config]);
 
   async function handleTogglePromo(tipo: string, ativa: boolean) {
@@ -526,6 +541,80 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
             {savingPe ? "Salvando..." : "Salvar"}
           </button>
         </div>
+      </div>
+
+      {/* ── Custo base por categoria ── */}
+      <div className="border-t border-border pt-6 mb-8">
+        <h4 className="text-lg font-bold text-primary mb-2">💰 Custo Base por Categoria (USD)</h4>
+        <p className="text-sm text-text-muted mb-4">
+          Custo de cada camisa em dólar. Usado para calcular automaticamente o custo total nos pacotes.
+        </p>
+        <div className="flex flex-col gap-3 mb-4">
+          {TIPOS_CATEGORIA.map((tipo) => (
+            <div key={tipo} className="grid grid-cols-[1fr_120px] gap-3 items-center">
+              <span className="text-sm font-medium">{tipo}</span>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-text-muted">$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={custoBase[tipo] ?? ""}
+                  onChange={(e) => setCustoBase((prev) => ({ ...prev, [tipo]: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-border pt-4 mb-4">
+          <h5 className="text-sm font-semibold text-text-muted mb-3">Custo de Personalização (USD)</h5>
+          <div className="flex flex-col gap-3">
+            {Object.entries(personalizacaoCusto).map(([tipo, val]) => (
+              <div key={tipo} className="grid grid-cols-[1fr_120px] gap-3 items-center">
+                <span className="text-sm font-medium">{tipo}</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-text-muted">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={val}
+                    onChange={(e) => setPersonalizacaoCusto((prev) => ({ ...prev, [tipo]: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <button
+          className="w-full py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50"
+          disabled={savingCusto}
+          onClick={async () => {
+            setSavingCusto(true);
+            try {
+              const newBase: Record<string, number> = {};
+              for (const tipo of TIPOS_CATEGORIA) {
+                newBase[tipo] = parseFloat(custoBase[tipo]) || 0;
+              }
+              await updateLojaConfig("custo_base", newBase);
+              setConfig((prev) => ({ ...prev, custo_base: newBase }));
+              const newPers: Record<string, number> = {};
+              for (const [tipo, val] of Object.entries(personalizacaoCusto)) {
+                newPers[tipo] = parseFloat(val) || 0;
+              }
+              await updateLojaConfig("personalizacao_custo", newPers);
+              setConfig((prev) => ({ ...prev, personalizacao_custo: newPers }));
+            } catch (err) {
+              console.error("Erro ao salvar custo base:", err);
+            } finally {
+              setSavingCusto(false);
+            }
+          }}
+        >
+          {savingCusto ? "Salvando..." : "Salvar Custos Base"}
+        </button>
       </div>
 
       {/* ── Team promotion ── */}

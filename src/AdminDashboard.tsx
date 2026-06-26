@@ -54,7 +54,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && o.status !== "pendente");
     const peVendas = orders.filter((o) => o.pronta_entrega && !o.admin_order && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente");
     const adminOrders = orders.filter((o) => o.admin_order && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente");
-    const revenue = ativos.reduce((s, o) => s + o.total, 0);
+    const revenue = ativos.reduce((s, o) => s + o.total, 0) + peVendas.reduce((s, o) => s + o.total, 0);
     const pending = orders.filter((o) => o.status === "pendente").length;
 
     // Monthly revenue for 6-month window
@@ -64,7 +64,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       monthMap[key] = { revenue: 0, count: 0, itens: 0 };
     }
-    for (const o of ativos) {
+    for (const o of [...ativos, ...peVendas]) {
       const partes = o.data?.split("/");
       if (!partes || partes.length !== 3) continue;
       const d = new Date(parseInt(partes[2]), parseInt(partes[1]) - 1, parseInt(partes[0]));
@@ -77,9 +77,9 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
       }
     }
 
-    // Top 10 products (only regular sales)
+    // Top 10 products
     const productCount: Record<string, { count: number; revenue: number }> = {};
-    for (const o of ativos) {
+    for (const o of [...ativos, ...peVendas]) {
       for (const item of o.itens) {
         if (!productCount[item.nome]) productCount[item.nome] = { count: 0, revenue: 0 };
         productCount[item.nome].count += 1;
@@ -93,7 +93,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
     // Payment method distribution
     const payCount: Record<string, number> = {};
-    for (const o of ativos) {
+    for (const o of [...ativos, ...peVendas]) {
       const method = o.payment_method || "unknown";
       payCount[method] = (payCount[method] || 0) + 1;
     }

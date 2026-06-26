@@ -109,6 +109,8 @@ export interface LojaConfig {
   desconto_global?: number | null;
   promocoes_time?: Record<string, { tipo: string; valor: number | null; preco: number | null }>;
   pronta_entrega_markup: number;
+  custo_base: Record<string, number>;
+  personalizacao_custo: Record<string, number>;
 }
 
 export const DEFAULT_CONFIG: LojaConfig = {
@@ -151,6 +153,22 @@ export const DEFAULT_CONFIG: LojaConfig = {
   desconto_global: null,
   promocoes_time: {},
   pronta_entrega_markup: 20,
+  custo_base: {
+    "Torcedor": 8.50,
+    "Jogador": 12,
+    "Retrô": 13,
+    "Manga Longa Torcedor": 14,
+    "Manga Longa Jogador": 17,
+    "Manga Longa Retrô": 17,
+    "Goleiro": 0,
+    "Treinamento": 0,
+    "Polo": 0,
+    "NBA": 0,
+  },
+  personalizacao_custo: {
+    "Torcedor": 2,
+    "Jogador": 3,
+  },
 };
 
 export const TIPOS_CATEGORIA = ["Torcedor", "Jogador", "Retrô", "Manga Longa Torcedor", "Manga Longa Jogador", "Manga Longa Retrô", "Goleiro", "Treinamento", "Polo", "NBA"] as const;

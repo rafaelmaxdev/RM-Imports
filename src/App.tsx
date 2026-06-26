@@ -356,7 +356,7 @@ function AdminPanel({
         ) : tab === "pedidos" ? (
           <AdminOrders />
         ) : tab === "pacotes" ? (
-          <AdminPacotes />
+          <AdminPacotes config={config} />
         ) : tab === "cupons" ? (
           <AdminCupons />
         ) : tab === "financeiro" ? (

@@ -3,6 +3,7 @@ import { getPedidos, updatePedidoStatus, getPacotes, createPacote, updatePacoteS
 import type { Order, OrderItem } from "./types";
 import type { Pacote, DbProduto } from "./lib/db";
 import { montarMensagemItem, formatarMoeda, TAMANHO_FORNECEDOR, yupooThumbnailUrl } from "./types";
+import type { LojaConfig } from "./types";
 import { PAYMENT_LABELS_SHORT, TIPO_ENGLISH, PACKAGE_STATUS_PIPELINE, PACKAGE_STATUS_LABELS, PACKAGE_NEXT_STATUS, PACKAGE_PREV_STATUS, PACKAGE_PREV_ACTION_LABELS, PACKAGE_STATUS_ACTION_LABELS, getMPFeeRate } from "./lib/status";
 
 type Tab = "montar" | "pacotes" | "historico";
@@ -14,7 +15,7 @@ interface SharingState {
   onDone: () => void;
 }
 
-export default function AdminPacotes() {
+export default function AdminPacotes({ config }: { config: LojaConfig }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [produtos, setProdutos] = useState<DbProduto[]>([]);
@@ -714,6 +715,7 @@ export default function AdminPacotes() {
                     key={pacote.id}
                     pacote={pacote}
                     allOrders={allOrders}
+                    config={config}
                     onSaveFinanceiro={handleSaveFinanceiro}
                     onRemovePedido={handleRemovePedido}
                     onDeletePacote={handleDeletePacote}
@@ -909,12 +911,14 @@ function ProfitSummary({ pacotes, allOrders }: { pacotes: Pacote[]; allOrders: O
 function DeliveredPacoteCard({
   pacote,
   allOrders,
+  config,
   onSaveFinanceiro,
   onRemovePedido,
   onDeletePacote,
 }: {
   pacote: Pacote;
   allOrders: Order[];
+  config: LojaConfig;
   onSaveFinanceiro: (pacote: Pacote, field: "custo" | "frete" | "taxa_importacao", value: string) => void;
   onRemovePedido: (pacoteId: string, pedidoId: string) => void;
   onDeletePacote: (pacoteId: string) => void;
@@ -923,6 +927,7 @@ function DeliveredPacoteCard({
   const [localCusto, setLocalCusto] = useState(pacote.custo?.toString() ?? "");
   const [localFrete, setLocalFrete] = useState(pacote.frete?.toString() ?? "");
   const [localTaxa, setLocalTaxa] = useState(pacote.taxa_importacao?.toString() ?? "");
+  const [localDolar, setLocalDolar] = useState("");
   const [creditReleasePeriod, setCreditReleasePeriod] = useState<"immediate" | "14_days" | "30_days">("immediate");
 
   const orders = pacote.pedido_ids
@@ -933,7 +938,18 @@ function DeliveredPacoteCard({
   const totalVendido = nonAdminOrders.reduce((sum, o) => sum + o.total, 0);
   const totalCamisas = orders.reduce((sum, o) => sum + o.itens.length, 0);
   const totalCamisasVendidas = nonAdminOrders.reduce((sum, o) => sum + o.itens.length, 0);
-  const custoValue = parseFloat(localCusto) || 0;
+
+  // Auto-calculate custo from categories
+  const custoCalculadoUSD = orders.reduce((sum, o) => {
+    return sum + o.itens.reduce((s, item) => {
+      const custoCat = config.custo_base[item.tipo] ?? 0;
+      const custoPers = item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0;
+      return s + custoCat + custoPers;
+    }, 0);
+  }, 0);
+  const dolarRate = parseFloat(localDolar) || 0;
+  const custoCalculadoBRL = custoCalculadoUSD * dolarRate;
+  const custoValue = localCusto ? (parseFloat(localCusto) || 0) : custoCalculadoBRL;
   const freteValue = parseFloat(localFrete) || 0;
   const taxaValue = parseFloat(localTaxa) || 0;
 
@@ -988,6 +1004,28 @@ function DeliveredPacoteCard({
           {/* Financial inputs */}
           <div className="mt-4 mb-4 p-3 bg-green-50 rounded-md border border-green-200">
             <h4 className="text-sm font-semibold text-green-800 mb-3">💰 Dados Financeiros</h4>
+
+            {/* Dólar rate + auto-calc hint */}
+            <div className="mb-3 p-2 bg-white rounded border border-green-200">
+              <div className="flex items-center gap-3 mb-1">
+                <label className="text-xs text-green-700 font-medium">Cotação do dólar (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={localDolar}
+                  onChange={(e) => setLocalDolar(e.target.value)}
+                  placeholder="Ex: 5.20"
+                  className="w-28 px-2 py-1 text-sm border border-green-300 rounded-md bg-white"
+                />
+              </div>
+              <p className="text-[11px] text-green-600">
+                Custo calculado: <strong>${custoCalculadoUSD.toFixed(2)} USD</strong>
+                {dolarRate > 0 && <> → <strong>R$ {custoCalculadoBRL.toFixed(2)}</strong></>}
+                {dolarRate > 0 && !localCusto && <span className="ml-1">(preenchido automaticamente)</span>}
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
               <div>
                 <label className="block text-xs text-green-700 mb-1">Custo do pacote (R$)</label>
@@ -997,9 +1035,12 @@ function DeliveredPacoteCard({
                   value={localCusto}
                   onChange={(e) => setLocalCusto(e.target.value)}
                   onBlur={() => onSaveFinanceiro(pacote, "custo", localCusto)}
-                  placeholder="0.00"
+                  placeholder={custoCalculadoBRL > 0 ? custoCalculadoBRL.toFixed(2) : "0.00"}
                   className="w-full px-3 py-2 border border-green-300 rounded-md bg-white text-sm"
                 />
+                {custoCalculadoBRL > 0 && !localCusto && (
+                  <p className="text-[10px] text-green-500 mt-0.5">Auto: R$ {custoCalculadoBRL.toFixed(2)}</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-green-700 mb-1">Frete (R$)</label>

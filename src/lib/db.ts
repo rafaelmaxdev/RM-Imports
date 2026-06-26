@@ -168,13 +168,17 @@ async function fetchLojaConfigFromDb(): Promise<LojaConfig> {
       config.promocoes_time = row.value as Record<string, { tipo: string; valor: number | null; preco: number | null }>;
     } else if (row.key === "pronta_entrega_markup") {
       config.pronta_entrega_markup = row.value as number;
+    } else if (row.key === "custo_base" && typeof row.value === "object") {
+      config.custo_base = row.value as Record<string, number>;
+    } else if (row.key === "personalizacao_custo" && typeof row.value === "object") {
+      config.personalizacao_custo = row.value as Record<string, number>;
     }
   }
   return config;
 }
 
 export async function updateLojaConfig(
-  key: "precos_base" | "precos_promocao" | "promocao_ativa" | "desconto_global" | "promocoes_time" | "pronta_entrega_markup",
+  key: "precos_base" | "precos_promocao" | "promocao_ativa" | "desconto_global" | "promocoes_time" | "pronta_entrega_markup" | "custo_base" | "personalizacao_custo",
   value: Record<string, number> | Record<string, boolean> | number | null | Record<string, { tipo: string; valor: number | null; preco: number | null }>,
 ): Promise<void> {
   const { error } = await supabase

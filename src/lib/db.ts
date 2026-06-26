@@ -194,13 +194,11 @@ export async function toggleDestaque(id: string, destaque: boolean): Promise<voi
 }
 
 export async function reorderDestaques(items: { id: string; ordem_destaque: number }[]): Promise<void> {
-  // Update each item's ordem_destaque individually
-  for (const item of items) {
-    const { error } = await supabase
-      .from("produtos")
-      .update({ ordem_destaque: item.ordem_destaque })
-      .eq("id", item.id);
-
+  const promises = items.map((item) =>
+    supabase.from("produtos").update({ ordem_destaque: item.ordem_destaque }).eq("id", item.id)
+  );
+  const results = await Promise.all(promises);
+  for (const { error } of results) {
     if (error) throw error;
   }
 }
@@ -341,6 +339,23 @@ const row = {
 }
 
 export async function getPedidos(): Promise<import("../types").Order[]> {
+  const CACHE_KEY = "pedidos";
+  const CACHE_TTL = 30 * 1000;
+
+  const cached = getCached<import("../types").Order[]>(CACHE_KEY);
+  if (cached) {
+    if (isCacheStale(CACHE_KEY, CACHE_TTL)) {
+      fetchPedidosFromDb().then((data) => setCache(CACHE_KEY, data)).catch(() => {});
+    }
+    return cached;
+  }
+
+  const data = await fetchPedidosFromDb();
+  setCache(CACHE_KEY, data);
+  return data;
+}
+
+async function fetchPedidosFromDb(): Promise<import("../types").Order[]> {
   const { data, error } = await supabase
     .from("pedidos")
     .select("*")

@@ -18,34 +18,33 @@ export function getCached<T>(key: string): T | null {
     if (!raw) return null;
     const entry: CacheEntry<T> = JSON.parse(raw);
     return entry.data;
-  } catch {
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn("[cache] getCached:", err);
     return null;
   }
 }
 
-/** Store data in cache with current timestamp. */
 export function setCache<T>(key: string, data: T): void {
   try {
     const entry: CacheEntry<T> = { data, timestamp: Date.now() };
     localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(entry));
-  } catch {
-    // localStorage full or unavailable — silently ignore
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn("[cache] setCache:", err);
   }
 }
 
-/** Check if cached data is stale (older than TTL). Returns true if no cache exists. */
 export function isCacheStale(key: string, ttl = DEFAULT_TTL): boolean {
   try {
     const raw = localStorage.getItem(`${CACHE_PREFIX}${key}`);
     if (!raw) return true;
     const entry: CacheEntry<unknown> = JSON.parse(raw);
     return Date.now() - entry.timestamp > ttl;
-  } catch {
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn("[cache] isCacheStale:", err);
     return true;
   }
 }
 
-/** Clear a specific cache key, or all RM cache entries if no key provided. */
 export function clearCache(key?: string): void {
   try {
     if (key) {
@@ -54,7 +53,7 @@ export function clearCache(key?: string): void {
       const keys = Object.keys(localStorage).filter((k) => k.startsWith(CACHE_PREFIX));
       keys.forEach((k) => localStorage.removeItem(k));
     }
-  } catch {
-    // Ignore
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn("[cache] clearCache:", err);
   }
 }

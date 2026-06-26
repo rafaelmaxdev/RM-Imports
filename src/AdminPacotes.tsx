@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { getPedidos, updatePedidoStatus, getPacotes, createPacote, updatePacoteStatus, updatePacoteFinanceiro, removePedidoFromPacote, deletePacote, getProdutos } from "./lib/db";
 import type { Order, OrderItem } from "./types";
 import type { Pacote, DbProduto } from "./lib/db";
@@ -82,18 +82,17 @@ export default function AdminPacotes() {
     });
   }
 
-  // Get order by ID from allOrders
+  const orderMap = useMemo(() => new Map(allOrders.map((o) => [o.id, o])), [allOrders]);
+  const productMap = useMemo(() => new Map(produtos.map((p) => [p.yupoo_url, p])), [produtos]);
+
   function getOrderById(id: string): Order | undefined {
-    return allOrders.find((o) => o.id === id);
+    return orderMap.get(id);
   }
 
-  // Find product image by matching order item's yupooUrl to product's yupoo_url
-  // If feminino is true, use feminine images if available
   function getProductImage(yupooUrl: string, feminino?: boolean): string {
     if (!yupooUrl) return "";
-    const prod = produtos.find((p) => p.yupoo_url === yupooUrl);
+    const prod = productMap.get(yupooUrl);
     if (!prod) return "";
-    // Use feminine images when the item is feminine and they exist
     if (feminino && prod.imagem_urls_feminina && prod.imagem_urls_feminina.length > 0) {
       return yupooThumbnailUrl(prod.imagem_urls_feminina[0], "medium");
     }

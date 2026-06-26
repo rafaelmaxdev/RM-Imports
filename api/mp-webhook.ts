@@ -11,12 +11,12 @@ const mpClient = new MercadoPagoConfig({
 // Warn if service role key is missing
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!serviceRoleKey) {
-  console.warn("[mp-webhook] SUPABASE_SERVICE_ROLE_KEY not set — order updates may fail due to RLS");
+  console.error("[mp-webhook] SUPABASE_SERVICE_ROLE_KEY not configured");
 }
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
-  serviceRoleKey || process.env.VITE_SUPABASE_ANON_KEY!
+  serviceRoleKey!
 );
 
 /** Map MP payment_type_id to our internal payment method values.

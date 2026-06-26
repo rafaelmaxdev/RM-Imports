@@ -2,9 +2,14 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { setCorsHeaders } from "../lib/cors.js";
 
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!serviceRoleKey) {
+  console.error("[api/order] SUPABASE_SERVICE_ROLE_KEY not configured");
+}
+
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
+  serviceRoleKey!
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -15,12 +15,12 @@ const BUCKET = 'images';
 // Fail loudly if service role key is missing
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!serviceRoleKey) {
-  console.warn("[api/image] SUPABASE_SERVICE_ROLE_KEY not set — image cache will not work correctly");
+  console.error("[api/image] SUPABASE_SERVICE_ROLE_KEY not configured");
 }
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
-  serviceRoleKey || process.env.VITE_SUPABASE_ANON_KEY!
+  serviceRoleKey!
 );
 
 function urlToKey(url: string): string {

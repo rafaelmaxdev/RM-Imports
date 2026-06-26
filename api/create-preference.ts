@@ -9,12 +9,12 @@ const client = new MercadoPagoConfig({
 
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!serviceRoleKey) {
-  console.warn("[create-preference] SUPABASE_SERVICE_ROLE_KEY not set — order validation may fail");
+  console.error("[create-preference] SUPABASE_SERVICE_ROLE_KEY not configured");
 }
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
-  serviceRoleKey || process.env.VITE_SUPABASE_ANON_KEY!
+  serviceRoleKey!
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

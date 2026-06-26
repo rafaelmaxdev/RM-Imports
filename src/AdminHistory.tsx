@@ -46,7 +46,6 @@ export default function AdminHistory() {
       ...order.itens.map((item) => item.nome),
     ].filter(Boolean).join(" ");
     return buscaPorPalavras(search, campos);
-    return false;
   });
 
   if (loading) {

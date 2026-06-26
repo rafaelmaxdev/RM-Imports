@@ -103,31 +103,22 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       });
     }
 
-    // Sort
+    // Pre-compute prices for sorting
+    const precos = new Map(res.map((p) => {
+      const info = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time);
+      return [p.id, info.promo ?? info.base];
+    }));
+
     switch (ordenacao) {
       case "time":
         res.sort((a, b) => a.time.localeCompare(b.time) || a.nome.localeCompare(b.nome));
         break;
-      case "preco-asc": {
-        res.sort((a, b) => {
-          const priceA = getPrecoProduto(a.tipo, config, a.preco_customizado, (a.promocao_tipo as PromocaoTipo) ?? undefined, a.promocao_valor, a.time);
-          const priceB = getPrecoProduto(b.tipo, config, b.preco_customizado, (b.promocao_tipo as PromocaoTipo) ?? undefined, b.promocao_valor, b.time);
-          const valA = priceA.promo ?? priceA.base;
-          const valB = priceB.promo ?? priceB.base;
-          return valA - valB;
-        });
+      case "preco-asc":
+        res.sort((a, b) => (precos.get(a.id) ?? 0) - (precos.get(b.id) ?? 0));
         break;
-      }
-      case "preco-desc": {
-        res.sort((a, b) => {
-          const priceA = getPrecoProduto(a.tipo, config, a.preco_customizado, (a.promocao_tipo as PromocaoTipo) ?? undefined, a.promocao_valor, a.time);
-          const priceB = getPrecoProduto(b.tipo, config, b.preco_customizado, (b.promocao_tipo as PromocaoTipo) ?? undefined, b.promocao_valor, b.time);
-          const valA = priceA.promo ?? priceA.base;
-          const valB = priceB.promo ?? priceB.base;
-          return valB - valA;
-        });
+      case "preco-desc":
+        res.sort((a, b) => (precos.get(b.id) ?? 0) - (precos.get(a.id) ?? 0));
         break;
-      }
       case "categoria":
         res.sort((a, b) => a.tipo.localeCompare(b.tipo) || a.time.localeCompare(b.time) || a.nome.localeCompare(b.nome));
         break;

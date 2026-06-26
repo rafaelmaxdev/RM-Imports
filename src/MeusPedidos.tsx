@@ -77,7 +77,8 @@ export default function MeusPedidos() {
       }
 
       setError("Nenhum pedido encontrado.");
-    } catch {
+    } catch (err) {
+      console.error("[MP] Erro na busca:", err);
       setError("Erro de conexão. Tente novamente.");
     } finally {
       setLoading(false);

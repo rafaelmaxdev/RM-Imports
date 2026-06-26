@@ -13,12 +13,12 @@ const BUCKET = 'images';
 
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!serviceRoleKey) {
-  console.warn("[api/precache-batch] SUPABASE_SERVICE_ROLE_KEY not set — precache will not work");
+  console.error("[api/precache-batch] SUPABASE_SERVICE_ROLE_KEY not configured");
 }
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
-  serviceRoleKey || process.env.VITE_SUPABASE_ANON_KEY!
+  serviceRoleKey!
 );
 
 function urlToKey(url: string): string {

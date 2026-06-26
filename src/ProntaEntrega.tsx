@@ -92,7 +92,6 @@ function groupEstoqueItems(estoque: EstoqueItem[], produtos: DbProduto[]): Group
     const displayUrls = stockTipo === "feminino" && feminineUrls.length > 0 ? feminineUrls
       : stockTipo === "ambos" ? [...masculineUrls, ...feminineUrls]
       : masculineUrls;
-    console.log("[PE debug]", { nome: item.produto_nome, produto_id: item.produto_id, sizes: sizes.map(s => ({ t: s.tamanho, f: s.feminino })), temMasculino, temFeminino, stockTipo, feminineUrls, masculineUrls, displayUrls });
     result.push({
       produto_id: item.produto_id,
       nome: p?.nome ?? item.produto_nome ?? "Sem nome",

@@ -119,7 +119,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
         }
         return next;
       });
-    } catch {
+    } catch (err) {
+      console.error("Erro ao buscar CEP:", err);
       setCepError("Erro ao buscar CEP. Verifique a conexão.");
     } finally {
       setCepLoading(false);

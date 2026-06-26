@@ -320,6 +320,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                       alt={first.produto_nome ?? ""}
                       width={40}
                       height={40}
+                      loading="lazy"
                       className="w-10 h-10 object-cover rounded flex-shrink-0"
                     />
                   ) : (

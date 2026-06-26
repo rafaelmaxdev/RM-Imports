@@ -35,8 +35,10 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     load();
   }, []);
 
+  const [mesOffset, setMesOffset] = useState(0);
   const now = new Date();
-  const seisMesesAtras = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const fimPeriodo = new Date(now.getFullYear(), now.getMonth() + 1 - mesOffset * 6, 1);
+  const inicioPeriodo = new Date(fimPeriodo.getFullYear(), fimPeriodo.getMonth() - 6, 1);
 
   const {
     totalOrders,
@@ -55,10 +57,10 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     const revenue = ativos.reduce((s, o) => s + o.total, 0);
     const pending = orders.filter((o) => o.status === "pendente").length;
 
-    // Monthly revenue for last 6 months
+    // Monthly revenue for 6-month window
     const monthMap: Record<string, { revenue: number; count: number; itens: number }> = {};
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const d = new Date(fimPeriodo.getFullYear(), fimPeriodo.getMonth() - i - 1, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       monthMap[key] = { revenue: 0, count: 0, itens: 0 };
     }
@@ -66,7 +68,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
       const partes = o.data?.split("/");
       if (!partes || partes.length !== 3) continue;
       const d = new Date(parseInt(partes[2]), parseInt(partes[1]) - 1, parseInt(partes[0]));
-      if (d < seisMesesAtras) continue;
+      if (d < inicioPeriodo || d >= fimPeriodo) continue;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       if (monthMap[key]) {
         monthMap[key].revenue += o.total;
@@ -169,7 +171,23 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
       {/* Monthly Revenue Chart */}
       <div className="bg-card-bg rounded-lg border border-border p-4">
-        <h3 className="text-sm font-semibold text-primary mb-4">Receita Mensal (últimos 6 meses)</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-primary">Receita Mensal</h3>
+          <div className="flex gap-1">
+            <button
+              className="w-8 h-8 flex items-center justify-center rounded-md border border-border bg-card-bg cursor-pointer hover:bg-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              disabled={fimPeriodo >= new Date(now.getFullYear(), now.getMonth() + 1, 1)}
+              onClick={() => setMesOffset((p) => p - 1)}
+              aria-label="Período anterior"
+            >←</button>
+            <button
+              className="w-8 h-8 flex items-center justify-center rounded-md border border-border bg-card-bg cursor-pointer hover:bg-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              disabled={mesOffset <= 0}
+              onClick={() => setMesOffset((p) => p + 1)}
+              aria-label="Próximo período"
+            >→</button>
+          </div>
+        </div>
         <div className="flex items-end gap-3 h-48">
           {monthlyData.map((m) => {
             const pct = maxRevenue > 0 ? (m.revenue / maxRevenue) * 100 : 0;
@@ -190,6 +208,9 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
             );
           })}
         </div>
+        <p className="text-[10px] text-text-muted text-center mt-2">
+          {monthlyData[0]?.mes ?? ""} a {monthlyData[monthlyData.length - 1]?.mes ?? ""}
+        </p>
       </div>
 
       {/* Bottom Grid */}

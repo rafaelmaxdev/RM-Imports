@@ -30,6 +30,7 @@ interface GroupedProduct {
   liga: string;
   temporada: string;
   feminino: boolean;
+  stockTipo: "masculino" | "feminino" | "ambos";
   imagemUrls: string[];
   imagemUrlsFeminina: string[];
   yupooUrl: string;
@@ -82,6 +83,14 @@ function groupEstoqueItems(estoque: EstoqueItem[], produtos: DbProduto[]): Group
 
     const feminineFromEstoque = item.produto_imagens_femininas ?? [];
     const feminineFromProd = p ? parseImageUrls(p.imagem_urls_feminina) : [];
+    const feminineUrls = feminineFromProd.length > 0 ? feminineFromProd : feminineFromEstoque;
+    const masculineUrls = p ? parseImageUrls(p.imagem_urls) : (item.produto_imagem ? [item.produto_imagem] : []);
+    const temMasculino = sizes.some((s) => !s.feminino);
+    const temFeminino = sizes.some((s) => s.feminino);
+    const stockTipo = temMasculino && temFeminino ? "ambos" : temFeminino ? "feminino" : "masculino";
+    const displayUrls = stockTipo === "feminino" && feminineUrls.length > 0 ? feminineUrls
+      : stockTipo === "ambos" ? [...masculineUrls, ...feminineUrls]
+      : masculineUrls;
     result.push({
       produto_id: item.produto_id,
       nome: p?.nome ?? item.produto_nome ?? "Sem nome",
@@ -90,8 +99,9 @@ function groupEstoqueItems(estoque: EstoqueItem[], produtos: DbProduto[]): Group
       liga: p?.liga ?? item.produto_liga ?? "",
       temporada: p?.temporada ?? item.produto_temporada ?? "",
       feminino: p?.feminino ?? false,
-      imagemUrls: p ? parseImageUrls(p.imagem_urls) : (item.produto_imagem ? [item.produto_imagem] : []),
-      imagemUrlsFeminina: feminineFromProd.length > 0 ? feminineFromProd : feminineFromEstoque,
+      stockTipo,
+      imagemUrls: displayUrls,
+      imagemUrlsFeminina: feminineUrls,
       yupooUrl: p?.yupoo_url ?? "",
       cachedImageUrls: p?.cached_image_urls ?? null,
       precoCustomizado: p?.preco_customizado ?? null,
@@ -137,21 +147,19 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
     return () => document.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
-  // Images based on gender — try to get feminine images from product data as fallback
-  const [feminineImages, setFeminineImages] = useState(product.imagemUrlsFeminina);
+  const [feminineImages, setFeminineImages] = useState<string[]>([]);
   useEffect(() => {
-    if (feminineImages.length === 0 && product.feminino) {
-      supabase.from("produtos").select("imagem_urls_feminina").eq("id", product.produto_id).single().then(({ data }: { data: { imagem_urls_feminina: string[] | string | null } | null }) => {
-        if (data?.imagem_urls_feminina) {
-          const imgs = Array.isArray(data.imagem_urls_feminina) ? data.imagem_urls_feminina.filter(Boolean) : typeof data.imagem_urls_feminina === "string" ? [data.imagem_urls_feminina] : [];
-          if (imgs.length > 0) setFeminineImages(imgs);
-        }
-      });
-    }
-  }, [feminineImages.length, product.feminino, product.produto_id]);
+    supabase.from("produtos").select("imagem_urls_feminina").eq("id", product.produto_id).single().then(({ data }: any) => {
+      if (data?.imagem_urls_feminina) {
+        const fem = Array.isArray(data.imagem_urls_feminina) ? data.imagem_urls_feminina.filter(Boolean) : [];
+        setFeminineImages(fem);
+      }
+    });
+  }, [product.produto_id]);
+  const isFeminineMode = genero === "Feminino" && feminineImages.length > 0;
 
   const allImages =
-    genero === "Feminino" && feminineImages.length > 0
+    isFeminineMode
       ? feminineImages
       : product.imagemUrls;
 
@@ -274,8 +282,8 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
             )}
           </div>
 
-          {/* Gender selection (only for products with feminino flag) */}
-          {product.feminino && (
+          {/* Gender selection (only when both genders have stock) */}
+          {product.stockTipo === "ambos" && (
             <div className="mb-4">
               <label className="block text-sm font-semibold text-text-muted mb-2">Modelo</label>
               <div className="flex gap-2">
@@ -590,11 +598,12 @@ export default function ProntaEntrega() {
                   className="product-card-hover bg-card-bg rounded-lg overflow-hidden shadow-card border border-border hover:-translate-y-1 hover:shadow-card-hover hover:border-accent/20 transition-all duration-300 ease-out cursor-default flex flex-col h-full relative"
                 >
                   {/* Badges */}
-                  <span className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 bg-accent text-white text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-sm shadow-md uppercase tracking-wider z-10">
+                  <span className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-accent text-white text-[8px] sm:text-[10px] font-extrabold px-1 sm:px-2 py-0.5 rounded-sm shadow-md uppercase tracking-wider z-10 leading-tight">
                     Pronta Entrega
                   </span>
+
                   {emPromocao && (
-                    <span className="animate-promo-pulse absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-accent text-white text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-sm shadow-md uppercase tracking-wider z-10">
+                    <span className="animate-promo-pulse absolute top-1 right-1 sm:top-2 sm:right-2 bg-accent text-white text-[8px] sm:text-[10px] font-extrabold px-1 sm:px-2 py-0.5 rounded-sm shadow-md uppercase tracking-wider z-10 leading-tight">
                       {badge || "PROMO"}
                     </span>
                   )}
@@ -668,11 +677,14 @@ export default function ProntaEntrega() {
 
                     {/* Available sizes */}
                     <div className="mb-2 sm:mb-3">
-                      <p className="text-[10px] sm:text-xs text-text-muted font-medium mb-1">Tamanhos disponíveis:</p>
-                      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                      <p className="text-[10px] sm:text-xs text-text-muted font-medium mb-1">
+                        Tamanhos disponíveis
+                        {p.stockTipo === "feminino" && <span className="text-pink-500"> (Feminino)</span>}
+                      </p>
+                      <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
                         {p.sizes.map((s, idx) => (
                           <span key={`${s.tamanho}-${idx}`} className="text-[10px] sm:text-xs">
-                            <strong>{s.tamanho}</strong> ({s.quantidade} {s.quantidade === 1 ? 'unidade' : 'unidades'}){s.personalizado ? ' ★' : ''}
+                            <strong>{s.tamanho}</strong> ({s.quantidade} {s.quantidade === 1 ? 'unidade' : 'unidades'}){s.personalizado ? ' ★' : ''}{s.feminino && p.stockTipo === "ambos" ? <span className="text-pink-500 ml-0.5">F</span> : ''}
                           </span>
                         ))}
                       </div>

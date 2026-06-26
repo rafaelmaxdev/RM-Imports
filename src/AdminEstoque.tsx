@@ -654,19 +654,32 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
               )}
             </div>
 
-            {/* Feminino */}
+            {/* Gênero */}
             <div className="mb-4">
-              <div className="flex items-center gap-2">
-                <input
-                  id="feminino-check"
-                  type="checkbox"
-                  checked={feminino}
-                  onChange={(e) => setFeminino(e.target.checked)}
-                  className="w-4 h-4 accent-pink-500 cursor-pointer"
-                />
-                <label htmlFor="feminino-check" className="text-sm font-medium cursor-pointer select-none">
+              <label className="text-sm font-semibold text-text-muted mb-2 block">Modelo</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className={`px-4 py-2 border rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                    !feminino
+                      ? "bg-primary text-white border-primary"
+                      : "bg-card-bg border-border text-text-main hover:border-primary/50"
+                  }`}
+                  onClick={() => setFeminino(false)}
+                >
+                  Masculino
+                </button>
+                <button
+                  type="button"
+                  className={`px-4 py-2 border rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                    feminino
+                      ? "bg-pink-500 text-white border-pink-500"
+                      : "bg-card-bg border-border text-text-main hover:border-pink-500/50"
+                  }`}
+                  onClick={() => setFeminino(true)}
+                >
                   Feminino
-                </label>
+                </button>
               </div>
             </div>
 

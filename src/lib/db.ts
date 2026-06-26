@@ -180,6 +180,8 @@ export async function updateLojaConfig(
     .upsert({ key, value }, { onConflict: "key" });
 
   if (error) throw error;
+  const { clearCache } = await import("./cache");
+  clearCache("loja_config");
 }
 
 export async function toggleDestaque(id: string, destaque: boolean): Promise<void> {
@@ -224,6 +226,8 @@ export async function setPromocaoTime(
   current[time] = { tipo: promocaoTipo, valor: promocaoValor, preco: precoCustomizado };
   const { error } = await supabase.from("loja_config").upsert({ key: "promocoes_time", value: current }, { onConflict: "key" });
   if (error) throw error;
+  const { clearCache } = await import("./cache");
+  clearCache("loja_config");
 }
 
 /** Remove promotion from all products of a specific team */
@@ -233,18 +237,24 @@ export async function removePromocaoTime(time: string): Promise<void> {
   delete current[time];
   const { error } = await supabase.from("loja_config").upsert({ key: "promocoes_time", value: current }, { onConflict: "key" });
   if (error) throw error;
+  const { clearCache } = await import("./cache");
+  clearCache("loja_config");
 }
 
 /** Apply percentage discount to ALL products (site-wide) — stored in loja_config */
 export async function setDescontoGlobal(porcentagem: number): Promise<void> {
   const { error } = await supabase.from("loja_config").upsert({ key: "desconto_global", value: porcentagem }, { onConflict: "key" });
   if (error) throw error;
+  const { clearCache } = await import("./cache");
+  clearCache("loja_config");
 }
 
 /** Remove site-wide discount */
 export async function removeDescontoGlobal(): Promise<void> {
   const { error } = await supabase.from("loja_config").upsert({ key: "desconto_global", value: null }, { onConflict: "key" });
   if (error) throw error;
+  const { clearCache } = await import("./cache");
+  clearCache("loja_config");
 }
 
 export async function updateProdutoCustomPrice(id: string, preco_customizado: number | null): Promise<void> {

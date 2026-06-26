@@ -7,6 +7,7 @@ import { precoPersonalizacao, ADICIONAL_TAMANHO, formatarMoeda, getPrecoProduto,
 import ImageCarousel from "./ImageCarousel";
 import ImageLightbox from "./ImageLightbox";
 import { parseImageUrls } from "./lib/db";
+import { supabase } from "./lib/supabase";
 import { tables, headerKeyMap } from "./sizeChartData";
 
 interface CartModalProps {
@@ -54,11 +55,20 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
   const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo);
   const tamanhosTipo = tamanhosDisponiveis(produto.tipo, genero === "Feminino");
 
-  // Use feminine images when Feminino is selected, fall back to masculine images
-  const femininoImages = parseImageUrls(produto.imagem_urls_feminina);
-  const allImages = genero === "Feminino" && femininoImages.length > 0
-    ? femininoImages
+  const [feminineImages, setFeminineImages] = useState<string[]>([]);
+  useEffect(() => {
+    supabase.from("produtos").select("imagem_urls_feminina").eq("id", produto.id).single().then(({ data }: any) => {
+      if (data?.imagem_urls_feminina) {
+        const imgs = Array.isArray(data.imagem_urls_feminina) ? data.imagem_urls_feminina.filter(Boolean) : [];
+        setFeminineImages(imgs);
+      }
+    });
+  }, [produto.id]);
+
+  const allImages = genero === "Feminino" && feminineImages.length > 0
+    ? feminineImages
     : parseImageUrls(produto.imagem_urls);
+  const isFeminineMode = genero === "Feminino" && feminineImages.length > 0;
 
   const { base: precoBase, promo: precoPromo, emPromocao, discountLabel } = getPrecoProduto(
     produto.tipo,
@@ -184,12 +194,12 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
                 <ImageCarousel
                   images={allImages}
                   alt={produto.nome}
-                  cachedImageUrls={produto.cached_image_urls}
+                  cachedImageUrls={isFeminineMode ? null : produto.cached_image_urls}
                   onImageClick={(i) => setLightbox({
                     images: allImages,
                     alt: produto.nome,
                     index: i,
-                    cachedImageUrls: produto.cached_image_urls,
+                    cachedImageUrls: isFeminineMode ? null : produto.cached_image_urls,
                   })}
                 />
               </div>

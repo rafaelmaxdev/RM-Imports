@@ -381,7 +381,7 @@ export async function getPedidoById(id: string): Promise<import("../types").Orde
     const data = await res.json();
     return {
       ...data,
-      itens: typeof data.itens === "string" ? JSON.parse(data.itens) : data.itens,
+      itens: data.itens ? (typeof data.itens === "string" ? JSON.parse(data.itens) : data.itens) : [],
       endereco: data.endereco
         ? (typeof data.endereco === "string" ? JSON.parse(data.endereco) : data.endereco)
         : undefined,

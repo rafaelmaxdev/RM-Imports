@@ -9,6 +9,7 @@ import ImageLightbox from "./ImageLightbox";
 import {
   formatarMoeda,
   getPrecoProduto,
+  precoPersonalizacao,
   ADICIONAL_TAMANHO,
   TAMANHOS_POR_TIPO,
   TAMANHOS_FEMININA,
@@ -91,6 +92,7 @@ function groupEstoqueItems(estoque: EstoqueItem[], produtos: DbProduto[]): Group
     const displayUrls = stockTipo === "feminino" && feminineUrls.length > 0 ? feminineUrls
       : stockTipo === "ambos" ? [...masculineUrls, ...feminineUrls]
       : masculineUrls;
+    console.log("[PE debug]", { nome: item.produto_nome, produto_id: item.produto_id, sizes: sizes.map(s => ({ t: s.tamanho, f: s.feminino })), temMasculino, temFeminino, stockTipo, feminineUrls, masculineUrls, displayUrls });
     result.push({
       produto_id: item.produto_id,
       nome: p?.nome ?? item.produto_nome ?? "Sem nome",
@@ -126,9 +128,10 @@ interface DetailModalProps {
 function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailModalProps) {
   const { addToCart } = useCart();
 
-  const [tamanho, setTamanho] = useState("");
+
   const temMasculino = product.sizes.some((s) => !s.feminino);
   const [genero, setGenero] = useState<"Masculino" | "Feminino">(temMasculino ? "Masculino" : "Feminino");
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [erro, setErro] = useState("");
   const [lightbox, setLightbox] = useState<{
     images: string[];
@@ -180,19 +183,17 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
     product.time,
   );
   const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
-  const adicionalTam = ADICIONAL_TAMANHO[tamanho] || 0;
-  const precoBaseMarcado = Math.round((base + adicionalTam) * PRONTA_ENTREGA_MARKUP * 100) / 100;
-  const precoPromoMarcado = promo !== null ? Math.round((promo + adicionalTam) * PRONTA_ENTREGA_MARKUP * 100) / 100 : null;
+  const selectedSizeInfo = selectedIdx !== null ? availableSizes[selectedIdx] ?? null : null;
+  const selectedTam = selectedSizeInfo?.tamanho ?? "";
+  const adicionalTam = ADICIONAL_TAMANHO[selectedTam] || 0;
+  const adicionalPers = selectedSizeInfo?.personalizado ? precoPersonalizacao(product.tipo) : 0;
+  const precoBaseMarcado = Math.round((base + adicionalTam + adicionalPers) * PRONTA_ENTREGA_MARKUP * 100) / 100;
+  const precoPromoMarcado = promo !== null ? Math.round((promo + adicionalTam + adicionalPers) * PRONTA_ENTREGA_MARKUP * 100) / 100 : null;
   const prontaEntregaPrice = precoPromoMarcado ?? precoBaseMarcado;
   const prontaEntregaBasePrice = precoBaseMarcado;
 
-  // Find the selected size's stock info (for personalization display)
-  const selectedSizeInfo = tamanho
-    ? product.sizes.find((s) => s.tamanho === tamanho)
-    : null;
-
   function handleConfirm() {
-    if (!tamanho) {
+    if (selectedIdx === null || !selectedSizeInfo) {
       setErro("Selecione um tamanho.");
       return;
     }
@@ -204,14 +205,14 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
       yupooUrl: product.yupooUrl,
       tipo: product.tipo,
       temporada: product.temporada,
-      tamanho,
+      tamanho: selectedSizeInfo.tamanho,
       genero,
       feminino: genero === "Feminino",
-      personalizado: selectedSizeInfo?.personalizado ?? false,
-      nomePersonalizado: selectedSizeInfo?.personalizado ? (selectedSizeInfo.nome_personalizado ?? undefined) : undefined,
-      numeroPersonalizado: selectedSizeInfo?.personalizado ? (selectedSizeInfo.numero_personalizado ?? undefined) : undefined,
+      personalizado: selectedSizeInfo.personalizado ?? false,
+      nomePersonalizado: selectedSizeInfo.personalizado ? (selectedSizeInfo.nome_personalizado ?? undefined) : undefined,
+      numeroPersonalizado: selectedSizeInfo.personalizado ? (selectedSizeInfo.numero_personalizado ?? undefined) : undefined,
       preco: prontaEntregaPrice,
-      precoBase: priceInfo.base + adicionalTam,
+      precoBase: priceInfo.base + adicionalTam + adicionalPers,
       prontaEntrega: true,
     };
 
@@ -252,13 +253,13 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
               <ImageCarousel
                 images={allImages}
                 alt={product.nome}
-                cachedImageUrls={product.cachedImageUrls}
+                cachedImageUrls={product.stockTipo === "masculino" ? product.cachedImageUrls : null}
                 onImageClick={(i) =>
                   setLightbox({
                     images: allImages,
                     alt: product.nome,
                     index: i,
-                    cachedImageUrls: product.cachedImageUrls,
+                    cachedImageUrls: product.stockTipo === "masculino" ? product.cachedImageUrls : null,
                   })
                 }
               />
@@ -282,8 +283,8 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
             )}
           </div>
 
-          {/* Gender selection (only when both genders have stock) */}
-          {product.stockTipo === "ambos" && (
+          {/* Gender selection (only for products with feminino flag) */}
+          {product.feminino && (
             <div className="mb-4">
               <label className="block text-sm font-semibold text-text-muted mb-2">Modelo</label>
               <div className="flex gap-2">
@@ -298,7 +299,7 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
                       onClick={() => {
                         if (count === 0) return;
                         setGenero(g);
-                        setTamanho("");
+                        setSelectedIdx(null);
                         setErro("");
                       }}
                     >
@@ -319,24 +320,19 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
               </p>
             ) : (
               <div className="flex gap-2 flex-wrap">
-                {availableSizes.map((s) => (
+                {availableSizes.map((s, idx) => (
                   <button
-                    key={s.tamanho}
+                    key={`${s.tamanho}-${idx}`}
                     className={`px-3 py-1.5 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors flex flex-col items-center gap-0.5 ${
-                      tamanho === s.tamanho ? "bg-primary text-white border-primary" : ""
+                      selectedIdx === idx ? "bg-primary text-white border-primary" : ""
                     }`}
                     onClick={() => {
-                      setTamanho(s.tamanho);
+                      setSelectedIdx(idx);
                       setErro("");
                     }}
                   >
                     <span>{s.tamanho}</span>
-                    <span className="text-[10px] opacity-70">({s.quantidade} disp.)</span>
-                    {ADICIONAL_TAMANHO[s.tamanho] && (
-                      <span className="text-[10px] text-accent font-semibold">
-                        +{formatarMoeda(ADICIONAL_TAMANHO[s.tamanho])}
-                      </span>
-                    )}
+                    <span className="text-[10px] opacity-70">({s.quantidade} {s.quantidade === 1 ? 'un' : 'uns'})</span>
                     {s.personalizado && (
                       <span className="text-[10px] text-accent font-semibold">★ {s.nome_personalizado || ''}{s.nome_personalizado && s.numero_personalizado ? ' #' : ''}{s.numero_personalizado || ''}</span>
                     )}
@@ -372,8 +368,14 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
             <span>{formatarMoeda(base)}</span>
             {adicionalTam > 0 && (
               <>
-                <span>Tamanho {tamanho}:</span>
+                <span>Tamanho {selectedTam}:</span>
                 <span>+{formatarMoeda(adicionalTam)}</span>
+              </>
+            )}
+            {adicionalPers > 0 && (
+              <>
+                <span>Personalização:</span>
+                <span>+{formatarMoeda(adicionalPers)}</span>
               </>
             )}
             <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">
@@ -385,7 +387,7 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
           <button
             className="w-full py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleConfirm}
-            disabled={!tamanho}
+            disabled={selectedIdx === null}
           >
             Adicionar ao Carrinho
           </button>
@@ -615,13 +617,13 @@ export default function ProntaEntrega() {
                         <ImageCarousel
                           images={p.imagemUrls}
                           alt={p.nome}
-                          cachedImageUrls={p.cachedImageUrls}
+                          cachedImageUrls={p.stockTipo === "masculino" ? p.cachedImageUrls : null}
                           onImageClick={(i) =>
                             setLightbox({
                               images: p.imagemUrls,
                               alt: p.nome,
                               index: i,
-                              cachedImageUrls: p.cachedImageUrls,
+                              cachedImageUrls: p.stockTipo === "masculino" ? p.cachedImageUrls : null,
                             })
                           }
                         />
@@ -682,11 +684,19 @@ export default function ProntaEntrega() {
                         {p.stockTipo === "feminino" && <span className="text-pink-500"> (Feminino)</span>}
                       </p>
                       <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
-                        {p.sizes.map((s, idx) => (
+                        {p.sizes.slice(0, 4).map((s, idx) => (
                           <span key={`${s.tamanho}-${idx}`} className="text-[10px] sm:text-xs">
                             <strong>{s.tamanho}</strong> ({s.quantidade} {s.quantidade === 1 ? 'unidade' : 'unidades'}){s.personalizado ? ' ★' : ''}{s.feminino && p.stockTipo === "ambos" ? <span className="text-pink-500 ml-0.5">F</span> : ''}
                           </span>
                         ))}
+                        {p.sizes.length > 4 && (
+                          <button
+                            className="text-[10px] sm:text-xs text-accent font-semibold bg-transparent border-none cursor-pointer hover:underline p-0"
+                            onClick={() => setProdutoSelecionado(p)}
+                          >
+                            +{p.sizes.length - 4} ver mais
+                          </button>
+                        )}
                       </div>
                     </div>
 

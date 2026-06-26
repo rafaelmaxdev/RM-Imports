@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder, updatePedidoProntaEntrega, addOrderItemsToEstoque, autoCancelExpiredOrders } from "./lib/db";
+import { clearCache } from "./lib/cache";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
@@ -145,6 +146,8 @@ export default function AdminOrders() {
         console.error("Erro ao restaurar estoque:", err);
       }
     }
+
+    clearCache("pedidos");
 
     if (["entregue", "cancelado", "reembolsado"].includes(newStatus)) {
       setOrders((prev) => prev.filter((o) => o.id !== id));

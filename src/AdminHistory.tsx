@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getPedidos, deletePedido, updatePedidoAdminOrder } from "./lib/db";
+import { clearCache } from "./lib/cache";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
 import { STATUS_CONFIG_ADMIN, PAYMENT_LABELS_SHORT } from "./lib/status";
@@ -33,6 +34,7 @@ export default function AdminHistory() {
   async function handleDelete(id: string) {
     if (!confirm(`Remover pedido ${id} do histórico?`)) return;
     await deletePedido(id);
+    clearCache("pedidos");
     setHistory((prev) => prev.filter((o) => o.id !== id));
   }
 

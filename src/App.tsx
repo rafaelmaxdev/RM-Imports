@@ -23,6 +23,7 @@ const AdminDestaques = lazy(() => import("./AdminDestaques"));
 const AdminPromocoes = lazy(() => import("./AdminPromocoes"));
 const AdminEstoque = lazy(() => import("./AdminEstoque"));
 const AdminCupons = lazy(() => import("./AdminCupons"));
+const AdminFinanceiro = lazy(() => import("./AdminFinanceiro"));
 const ProntaEntrega = lazy(() => import("./ProntaEntrega"));
 const MeusPedidos = lazy(() => import("./MeusPedidos"));
 const NotFound = lazy(() => import("./NotFound"));
@@ -193,7 +194,7 @@ function AppContent() {
   );
 }
 
-type AdminTab = "produtos" | "destaques" | "promocoes" | "cupons" | "pedidos" | "pacotes" | "estoque" | "historico";
+type AdminTab = "produtos" | "destaques" | "promocoes" | "cupons" | "pedidos" | "pacotes" | "estoque" | "historico" | "financeiro";
 
 function AdminPanel({
   produtos,
@@ -216,8 +217,9 @@ function AdminPanel({
     try {
       const { getPedidos } = await import("./lib/db");
       const orders = await getPedidos();
+      const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado");
       const rows = [["ID", "Data", "Hora", "Status", "Total", "Pagamento", "Cliente", "Telefone", "Itens"]];
-      for (const o of orders) {
+      for (const o of ativos) {
         const nome = o.endereco && typeof o.endereco === "object" ? (o.endereco as any).nome || "" : "";
         const tel = o.endereco && typeof o.endereco === "object" ? (o.endereco as any).telefone || "" : "";
         const itens = o.itens.map((i: any) => `${i.nome} (${i.tamanho})`).join("; ");
@@ -286,6 +288,7 @@ function AdminPanel({
     { key: "pedidos", label: "Pedidos" },
     { key: "pacotes", label: "Pacotes" },
     { key: "cupons", label: "Cupons" },
+    { key: "financeiro", label: "Financeiro" },
     { key: "estoque", label: "Estoque" },
     { key: "historico", label: "Histórico" },
   ];
@@ -320,7 +323,7 @@ function AdminPanel({
         </div>
       )}
 
-      <div className="mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
         <button
           onClick={handlePrecacheAll}
           disabled={precacheLoading}
@@ -350,6 +353,8 @@ function AdminPanel({
           <AdminPacotes />
         ) : tab === "cupons" ? (
           <AdminCupons />
+        ) : tab === "financeiro" ? (
+          <AdminFinanceiro />
         ) : tab === "estoque" ? (
           <AdminEstoque produtos={produtos} config={config} />
         ) : (

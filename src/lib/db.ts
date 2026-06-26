@@ -668,6 +668,7 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
     nome_personalizado: db.nome_personalizado ?? undefined,
     numero_personalizado: db.numero_personalizado ?? undefined,
     feminino: db.feminino,
+    custo: (db as any).custo ?? undefined,
     created_at: db.created_at,
     produto_nome: produto?.nome ?? undefined,
     produto_imagem: db.feminino && feminineImages.length > 0 ? feminineImages[0] : (masculineImages[0] ?? undefined),
@@ -679,7 +680,7 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
   };
 }
 
-const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, created_at, produtos(nome, imagem_urls, imagem_urls_feminina, tipo, time, liga, temporada)";
+const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, custo, created_at, produtos(nome, imagem_urls, imagem_urls_feminina, tipo, time, liga, temporada)";
 
 export async function getEstoque(): Promise<EstoqueItem[]> {
   const { data, error } = await supabase
@@ -714,6 +715,7 @@ export async function addEstoqueItem(
   nomePersonalizado?: string,
   numeroPersonalizado?: string,
   feminino: boolean = false,
+  custo?: number | null,
 ): Promise<EstoqueItem> {
   const nomePessoal = personalizado ? (nomePersonalizado ?? null) : null;
   const numeroPessoal = personalizado ? (numeroPersonalizado ?? null) : null;
@@ -768,6 +770,7 @@ export async function addEstoqueItem(
       nome_personalizado: nomePessoal,
       numero_personalizado: numeroPessoal,
       feminino,
+      custo: custo ?? null,
     });
 
   if (error) throw error;
@@ -1085,10 +1088,10 @@ export async function validarCupomPorTelefone(codigo: string, telefone: string):
   if (!digits) return true;
   const { data, error } = await supabase
     .from("pedidos")
-    .select("endereco")
+    .select("endereco, cupom_codigo")
     .eq("cupom_codigo", codigo.toUpperCase().trim());
   if (error || !data) return true;
-  const jaUsou = data.some((row) => {
+  const jaUsou = data.some((row: any) => {
     if (!row.endereco) return false;
     const addr = typeof row.endereco === "string" ? JSON.parse(row.endereco) : row.endereco;
     return addr.telefone?.replace(/\D/g, "") === digits;

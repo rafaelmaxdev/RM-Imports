@@ -74,6 +74,7 @@ export interface EstoqueItem {
   nome_personalizado?: string | null;
   numero_personalizado?: string | null;
   feminino: boolean;
+  custo?: number | null;
   created_at: string;
   // Joined from produtos
   produto_nome?: string;

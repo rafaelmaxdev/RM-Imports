@@ -26,12 +26,14 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
   const [nomePersonalizado, setNomePersonalizado] = useState("");
   const [numeroPersonalizado, setNumeroPersonalizado] = useState("");
   const [feminino, setFeminino] = useState(false);
+  const [custoCompra, setCustoCompra] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
   // Venda Direta state
   const [showVendaDireta, setShowVendaDireta] = useState(false);
   const [vendaItem, setVendaItem] = useState<EstoqueItem | null>(null);
   const [vendaNomeCliente, setVendaNomeCliente] = useState("");
+  const [vendaValor, setVendaValor] = useState("");
   const [vendaSaving, setVendaSaving] = useState(false);
 
   // Inline editing state
@@ -122,6 +124,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
             personalizado ? nomePersonalizado : undefined,
             personalizado ? numeroPersonalizado : undefined,
             feminino,
+            custoCompra ? parseFloat(custoCompra) : undefined,
           )
         )
       );
@@ -154,6 +157,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
       setNomePersonalizado("");
       setNumeroPersonalizado("");
       setFeminino(false);
+      setCustoCompra("");
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
       console.error("Erro ao adicionar estoque:", err);
@@ -203,7 +207,8 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
       );
       const basePrice = priceInfo.promo ?? priceInfo.base;
       const adicionalTam = ADICIONAL_TAMANHO[vendaItem.tamanho] || 0;
-      const preco = Math.round((basePrice + adicionalTam) * PRONTA_ENTREGA_MARKUP * 100) / 100;
+      const precoCalculado = Math.round((basePrice + adicionalTam) * PRONTA_ENTREGA_MARKUP * 100) / 100;
+      const precoVenda = vendaValor ? parseFloat(vendaValor) : precoCalculado;
 
       await criarVendaDireta(
         [{
@@ -212,7 +217,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
           tipo: p?.tipo ?? vendaItem.produto_tipo ?? "",
           temporada: p?.temporada ?? vendaItem.produto_temporada ?? "",
           tamanho: vendaItem.tamanho,
-          preco,
+          preco: precoVenda,
           personalizado: vendaItem.personalizado ?? false,
           nomePersonalizado: vendaItem.nome_personalizado ?? undefined,
           numeroPersonalizado: vendaItem.numero_personalizado ?? undefined,
@@ -230,6 +235,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
       setShowVendaDireta(false);
       setVendaItem(null);
       setVendaNomeCliente("");
+      setVendaValor("");
     } catch (err) {
       console.error("Erro ao registrar venda direta:", err);
       alert("Erro ao registrar venda.");
@@ -688,6 +694,20 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
               </div>
             </div>
 
+            {/* Custo de compra (por fora) */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-text-muted mb-1">Custo de compra (R$) <span className="font-normal text-text-muted">— opcional, para calcular lucro de itens comprados por fora</span></label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={custoCompra}
+                onChange={(e) => setCustoCompra(e.target.value)}
+                placeholder="Ex: 80.00"
+                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+              />
+            </div>
+
             {/* Add button */}
             {tamanhosDisponiveis.length > 0 && (
               <div className="flex items-center justify-between">
@@ -755,8 +775,8 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
               )}
             </div>
 
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-text-muted mb-2">Nome do cliente</label>
+            <div className="mb-3">
+              <label className="block text-sm font-semibold text-text-muted mb-1">Nome do cliente</label>
               <input
                 type="text"
                 value={vendaNomeCliente}
@@ -764,6 +784,18 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                 placeholder="Ex: João Silva"
                 className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                 autoFocus
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-text-muted mb-1">Valor vendido (opcional)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={vendaValor}
+                onChange={(e) => setVendaValor(e.target.value)}
+                placeholder="Deixe em branco para usar o preço calculado"
+                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
               />
             </div>
 

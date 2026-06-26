@@ -45,13 +45,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const total = useMemo(() => cart.reduce((sum, item) => sum + item.preco, 0), [cart]);
 
   const createMPPreference = useCallback(
-    async (orderId: string, paymentMethod?: string): Promise<{ preferenceId: string; initPoint: string } | null> => {
+    async (orderId: string, paymentMethod?: string, cupomDesconto?: number): Promise<{ preferenceId: string; initPoint: string } | null> => {
       try {
+        const rawTotal = cart.reduce((s, i) => s + i.preco, 0);
+        const ratio = cupomDesconto && rawTotal > 0 ? (rawTotal - cupomDesconto) / rawTotal : 1;
         const payload = {
           items: cart.map((item) => ({
             title: `${item.nome} (${item.tipo} - ${item.tamanho})`,
             quantity: 1,
-            unit_price: item.preco,
+            unit_price: Math.round(item.preco * ratio * 100) / 100,
           })),
           orderId,
           paymentMethod,
@@ -131,10 +133,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        const mpResult = await createMPPreference(order.id, paymentMethod);
+        const mpResult = await createMPPreference(order.id, paymentMethod, cupom?.desconto);
         if (mpResult) {
           order.mp_preference_id = mpResult.preferenceId;
-          // Update order with preference ID
           await supabase.from("pedidos").update({ mp_preference_id: mpResult.preferenceId }).eq("id", order.id);
         }
 

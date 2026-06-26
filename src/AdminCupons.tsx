@@ -11,6 +11,7 @@ export default function AdminCupons() {
   const [usoMaximo, setUsoMaximo] = useState("");
   const [valorMinimo, setValorMinimo] = useState("");
   const [dataExpiracao, setDataExpiracao] = useState("");
+  const [descontoMaximo, setDescontoMaximo] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -37,6 +38,7 @@ export default function AdminCupons() {
         codigo: codigo.toUpperCase().trim(),
         tipo,
         valor: parseFloat(valor),
+        desconto_maximo: descontoMaximo ? parseFloat(descontoMaximo) : null,
         uso_maximo: usoMaximo ? parseInt(usoMaximo) : null,
         valor_minimo_pedido: valorMinimo ? parseFloat(valorMinimo) : null,
         data_expiracao: dataExpiracao || null,
@@ -48,6 +50,7 @@ export default function AdminCupons() {
       setUsoMaximo("");
       setValorMinimo("");
       setDataExpiracao("");
+      setDescontoMaximo("");
       await loadCupons();
     } catch (err) {
       console.error("Erro ao criar cupom:", err);
@@ -80,7 +83,7 @@ export default function AdminCupons() {
   if (loading) return <div className="text-center py-8 text-text-muted">Carregando cupons...</div>;
 
   return (
-    <div>
+    <div className="pb-16">
       <h3 className="text-xl mb-4 text-primary">Cupons de Desconto</h3>
 
       {message && (
@@ -119,6 +122,17 @@ export default function AdminCupons() {
               className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
             />
           </div>
+          {tipo === "porcentagem" && (
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={descontoMaximo}
+              onChange={(e) => setDescontoMaximo(e.target.value)}
+              placeholder="Desconto máximo em R$ (opcional — ex: 30,00)"
+              className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
+            />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <input
               type="number"
@@ -139,11 +153,13 @@ export default function AdminCupons() {
             />
           </div>
           <div>
+            <label className="block text-xs font-semibold text-text-muted mb-1">
+              Validade do cupom <span className="font-normal text-text-muted">(opcional — deixe em branco para não expirar)</span>
+            </label>
             <input
               type="date"
               value={dataExpiracao}
               onChange={(e) => setDataExpiracao(e.target.value)}
-              placeholder="Data de expiração (opcional)"
               className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
             />
           </div>
@@ -181,9 +197,12 @@ export default function AdminCupons() {
                   </div>
                   <div className="text-sm text-text-muted mt-1">
                     {c.tipo === "porcentagem" ? `${c.valor}% OFF` : `R$ ${c.valor.toFixed(2)} OFF`}
+                    {c.tipo === "porcentagem" && c.desconto_maximo !== null && ` (máx. R$ ${c.desconto_maximo.toFixed(2)})`}
                     {c.uso_maximo !== null ? ` • ${c.usos_atuais}/${c.uso_maximo} usos` : ` • ${c.usos_atuais} uso(s)`}
                     {c.valor_minimo_pedido !== null && ` • Mín: R$ ${c.valor_minimo_pedido.toFixed(2)}`}
-                    {c.data_expiracao && ` • Expira: ${new Date(c.data_expiracao).toLocaleDateString("pt-BR")}`}
+                    {c.data_expiracao
+                      ? ` • Expira em ${new Date(c.data_expiracao).toLocaleDateString("pt-BR")}`
+                      : ` • Sem data de expiração`}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

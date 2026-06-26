@@ -294,6 +294,16 @@ function dbPedidoToOrder(db: DbPedido): import("../types").Order {
   };
 }
 
+export async function getProdutosByIds(ids: string[]): Promise<DbProduto[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from("produtos")
+    .select("*")
+    .in("id", ids);
+  if (error) throw error;
+  return (data as DbProduto[]) ?? [];
+}
+
 export async function createPedido(order: import("../types").Order): Promise<import("../types").Order> {
 const row = {
     id: order.id,
@@ -636,6 +646,7 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
     created_at: db.created_at,
     produto_nome: produto?.nome ?? undefined,
     produto_imagem: db.feminino && feminineImages.length > 0 ? feminineImages[0] : (masculineImages[0] ?? undefined),
+    produto_imagens_femininas: feminineImages.length > 0 ? feminineImages : undefined,
     produto_tipo: produto?.tipo ?? undefined,
     produto_time: produto?.time ?? undefined,
     produto_liga: produto?.liga ?? undefined,
@@ -653,7 +664,8 @@ export async function getEstoque(): Promise<EstoqueItem[]> {
 
   if (error) throw error;
   if (!data) return [];
-  return (data as unknown as (DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; tipo: string; time: string; liga: string; temporada: string } | null })[]).map(dbEstoqueToEstoque);
+  const typed1 = data as unknown as (DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; imagem_urls_feminina?: string[] | string | null; tipo: string; time: string; liga: string; temporada: string } | null })[];
+  return typed1.map(dbEstoqueToEstoque);
 }
 
 export async function getEstoquePublico(): Promise<EstoqueItem[]> {
@@ -665,7 +677,8 @@ export async function getEstoquePublico(): Promise<EstoqueItem[]> {
 
   if (error) throw error;
   if (!data) return [];
-  return (data as unknown as (DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; tipo: string; time: string; liga: string; temporada: string } | null })[]).map(dbEstoqueToEstoque);
+  const typedPublico = data as unknown as (DbEstoqueItem & { produtos: { nome: string; imagem_urls: string[] | string; imagem_urls_feminina?: string[] | string | null; tipo: string; time: string; liga: string; temporada: string } | null })[];
+  return typedPublico.map(dbEstoqueToEstoque);
 }
 
 export async function addEstoqueItem(
@@ -1060,7 +1073,9 @@ export async function validarCupomPorTelefone(codigo: string, telefone: string):
 
 export function aplicarCupom(total: number, cupom: Cupom): number {
   if (cupom.tipo === "porcentagem") {
-    return Math.round((total - total * (cupom.valor / 100)) * 100) / 100;
+    const desconto = total * (cupom.valor / 100);
+    const capped = cupom.desconto_maximo !== null ? Math.min(desconto, cupom.desconto_maximo) : desconto;
+    return Math.max(0, Math.round((total - capped) * 100) / 100);
   }
   return Math.max(0, Math.round((total - cupom.valor) * 100) / 100);
 }

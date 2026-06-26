@@ -77,6 +77,7 @@ export interface EstoqueItem {
   // Joined from produtos
   produto_nome?: string;
   produto_imagem?: string;
+  produto_imagens_femininas?: string[];
   produto_tipo?: string;
   produto_time?: string;
   produto_liga?: string;
@@ -343,6 +344,7 @@ export interface Cupom {
   codigo: string;
   tipo: "porcentagem" | "fixo";
   valor: number;
+  desconto_maximo: number | null;
   uso_maximo: number | null;
   usos_atuais: number;
   valor_minimo_pedido: number | null;

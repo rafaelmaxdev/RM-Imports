@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS cupons (
   codigo TEXT NOT NULL UNIQUE,
   tipo TEXT NOT NULL CHECK (tipo IN ('porcentagem', 'fixo')),
   valor NUMERIC(10,2) NOT NULL CHECK (valor > 0),
+  desconto_maximo NUMERIC(10,2),
   uso_maximo INTEGER,
   usos_atuais INTEGER NOT NULL DEFAULT 0,
   valor_minimo_pedido NUMERIC(10,2),

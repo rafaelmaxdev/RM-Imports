@@ -230,7 +230,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
     if (cupomAplicado && endereco.telefone) {
       const disponivel = await validarCupomPorTelefone(cupomAplicado.codigo, endereco.telefone);
       if (!disponivel) {
-        setErro("Este cupom já foi usado por este telefone.");
+        setErro("Este cupom já foi utilizado.");
         return;
       }
     }

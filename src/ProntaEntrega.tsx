@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { getEstoquePublico, getProdutos, getLojaConfig, parseImageUrls } from "./lib/db";
+import { getEstoquePublico, getProdutosByIds, getLojaConfig, parseImageUrls } from "./lib/db";
 import type { DbProduto } from "./lib/db";
 import type { EstoqueItem, LojaConfig, PromocaoTipo, CachedImageMap, CartItem } from "./types";
 import { useCart } from "./CartContext";
@@ -88,7 +88,7 @@ function groupEstoqueItems(estoque: EstoqueItem[], produtos: DbProduto[]): Group
       temporada: p?.temporada ?? item.produto_temporada ?? "",
       feminino: p?.feminino ?? false,
       imagemUrls: p ? parseImageUrls(p.imagem_urls) : (item.produto_imagem ? [item.produto_imagem] : []),
-      imagemUrlsFeminina: p ? parseImageUrls(p.imagem_urls_feminina) : [],
+      imagemUrlsFeminina: p ? parseImageUrls(p.imagem_urls_feminina) : (item.produto_imagens_femininas ?? []),
       yupooUrl: p?.yupoo_url ?? "",
       cachedImageUrls: p?.cached_image_urls ?? null,
       precoCustomizado: p?.preco_customizado ?? null,
@@ -114,7 +114,8 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
   const { addToCart } = useCart();
 
   const [tamanho, setTamanho] = useState("");
-  const [genero, setGenero] = useState<"Masculino" | "Feminino">("Masculino");
+  const temMasculino = product.sizes.some((s) => !s.feminino);
+  const [genero, setGenero] = useState<"Masculino" | "Feminino">(temMasculino ? "Masculino" : "Feminino");
   const [erro, setErro] = useState("");
   const [lightbox, setLightbox] = useState<{
     images: string[];
@@ -139,9 +140,12 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
       ? product.imagemUrlsFeminina
       : product.imagemUrls;
 
-  // Sizes available for the selected gender
-  const genderSizes = genero === "Feminino" ? TAMANHOS_FEMININA : TAMANHOS_POR_TIPO[product.tipo] ?? TAMANHOS;
-  const availableSizes = product.sizes.filter((s) => genderSizes.includes(s.tamanho));
+  const availableSizes = product.sizes.filter((s) => {
+    const isFeminino = genero === "Feminino";
+    const genderMatch = s.feminino === isFeminino;
+    const sizeMatch = isFeminino ? TAMANHOS_FEMININA.includes(s.tamanho) : (TAMANHOS_POR_TIPO[product.tipo] ?? TAMANHOS).includes(s.tamanho);
+    return genderMatch && sizeMatch;
+  });
 
   // Pricing
   const priceInfo = getPrecoProduto(
@@ -153,12 +157,11 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
     product.time,
   );
   const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
-  const basePrice = promo ?? base;
   const adicionalTam = ADICIONAL_TAMANHO[tamanho] || 0;
-  const priceBeforeMarkup = basePrice + adicionalTam;
-  const prontaEntregaPrice = Math.round(priceBeforeMarkup * PRONTA_ENTREGA_MARKUP * 100) / 100;
-  const baseBeforeMarkup = base + adicionalTam;
-  const prontaEntregaBasePrice = Math.round(baseBeforeMarkup * PRONTA_ENTREGA_MARKUP * 100) / 100;
+  const precoBaseMarcado = Math.round((base + adicionalTam) * PRONTA_ENTREGA_MARKUP * 100) / 100;
+  const precoPromoMarcado = promo !== null ? Math.round((promo + adicionalTam) * PRONTA_ENTREGA_MARKUP * 100) / 100 : null;
+  const prontaEntregaPrice = precoPromoMarcado ?? precoBaseMarcado;
+  const prontaEntregaBasePrice = precoBaseMarcado;
 
   // Find the selected size's stock info (for personalization display)
   const selectedSizeInfo = tamanho
@@ -261,21 +264,25 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
             <div className="mb-4">
               <label className="block text-sm font-semibold text-text-muted mb-2">Modelo</label>
               <div className="flex gap-2">
-                {(["Masculino", "Feminino"] as const).map((g) => (
-                  <button
-                    key={g}
-                    className={`px-4 py-2 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors ${
-                      genero === g ? "bg-primary text-white border-primary" : ""
-                    }`}
-                    onClick={() => {
-                      setGenero(g);
-                      setTamanho("");
-                      setErro("");
-                    }}
-                  >
-                    {g}
-                  </button>
-                ))}
+                {(["Masculino", "Feminino"] as const).map((g) => {
+                  const count = product.sizes.filter((s) => g === "Feminino" ? s.feminino : !s.feminino).length;
+                  return (
+                    <button
+                      key={g}
+                      className={`px-4 py-2 border border-border bg-card-bg rounded-md cursor-pointer text-sm transition-colors ${
+                        genero === g ? "bg-primary text-white border-primary" : ""
+                      } ${count === 0 ? "opacity-40 cursor-not-allowed" : ""}`}
+                      onClick={() => {
+                        if (count === 0) return;
+                        setGenero(g);
+                        setTamanho("");
+                        setErro("");
+                      }}
+                    >
+                      {g} {count > 0 ? `(${count})` : "(indisponível)"}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -346,9 +353,6 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
                 <span>+{formatarMoeda(adicionalTam)}</span>
               </>
             )}
-            <span className="text-xs text-text-muted">Markup pronta entrega (15%):</span>
-            <span className="text-xs text-text-muted">+{formatarMoeda(Math.round(priceBeforeMarkup * (PRONTA_ENTREGA_MARKUP - 1) * 100) / 100)}</span>
-
             <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">
               <span>Total:</span>
               <span>{formatarMoeda(prontaEntregaPrice)}</span>
@@ -409,16 +413,17 @@ export default function ProntaEntrega() {
         setLoading(true);
         setError(null);
 
-        const [estoqueData, produtosData, lojaConfig] = await Promise.all([
+        const [estoqueData, lojaConfig] = await Promise.all([
           getEstoquePublico(),
-          getProdutos(),
           getLojaConfig(),
         ]);
 
         if (!cancelled) {
           setEstoque(estoqueData);
-          setProdutos(produtosData);
           setConfig(lojaConfig);
+          const ids = [...new Set(estoqueData.map((e) => e.produto_id))];
+          const produtosData = await getProdutosByIds(ids);
+          setProdutos(produtosData);
         }
       } catch (err) {
         if (!cancelled) {
@@ -561,8 +566,8 @@ export default function ProntaEntrega() {
                 p.time,
               );
               const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
-              const baseForMarkup = promo ?? base;
-              const pePrice = Math.round(baseForMarkup * PRONTA_ENTREGA_MARKUP * 100) / 100;
+              const precoBaseMarcado = Math.round(base * PRONTA_ENTREGA_MARKUP * 100) / 100;
+              const pePrice = promo !== null ? Math.round(promo * PRONTA_ENTREGA_MARKUP * 100) / 100 : precoBaseMarcado;
 
               return (
                 <div
@@ -652,7 +657,7 @@ export default function ProntaEntrega() {
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                         {p.sizes.map((s, idx) => (
                           <span key={`${s.tamanho}-${idx}`} className="text-[10px] sm:text-xs">
-                            <strong>{s.tamanho}</strong>: {s.quantidade}{s.personalizado ? ' ★' : ''}
+                            <strong>{s.tamanho}</strong> ({s.quantidade} {s.quantidade === 1 ? 'unidade' : 'unidades'}){s.personalizado ? ' ★' : ''}
                           </span>
                         ))}
                       </div>

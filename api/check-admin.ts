@@ -8,7 +8,7 @@ if (!serviceRoleKey) {
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
-  serviceRoleKey || process.env.VITE_SUPABASE_ANON_KEY!,
+  serviceRoleKey!,
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -4,29 +4,45 @@ import { STATUS_CONFIG } from "./lib/status";
 import type { Order } from "./types";
 
 export default function MeusPedidos() {
-  const [orderId, setOrderId] = useState("");
-  const [order, setOrder] = useState<Order | null>(null);
+  const [busca, setBusca] = useState("");
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSearch() {
-    const id = orderId.trim().toUpperCase();
-    if (!id) return;
+    const q = busca.trim();
+    if (!q) return;
     setLoading(true);
     setError("");
-    setOrder(null);
+    setOrders([]);
+
+    const digits = q.replace(/\D/g, "");
+
     try {
-      const res = await fetch(`/api/public-order/${encodeURIComponent(id)}`);
-      if (res.status === 404) {
-        setError("Pedido não encontrado.");
-        return;
+      if (digits.length >= 8) {
+        const res = await fetch(`/api/public-order?phone=${encodeURIComponent(digits)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setOrders(data as Order[]);
+            setLoading(false);
+            return;
+          }
+        }
       }
-      if (!res.ok) {
-        setError("Erro ao buscar pedido. Tente novamente.");
-        return;
+
+      const up = q.toUpperCase();
+      if (up.startsWith("UL-")) {
+        const res = await fetch(`/api/public-order/${encodeURIComponent(up)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setOrders([data as Order]);
+          setLoading(false);
+          return;
+        }
       }
-      const data = await res.json();
-      setOrder(data as Order);
+
+      setError("Nenhum pedido encontrado. Verifique o ID ou telefone.");
     } catch {
       setError("Erro de conexão. Tente novamente.");
     } finally {
@@ -38,22 +54,22 @@ export default function MeusPedidos() {
     <div className="max-w-xl mx-auto px-4 pt-8 pb-16">
       <h2 className="text-xl font-bold text-primary mb-2">Meu Pedido</h2>
       <p className="text-sm text-text-muted mb-6">
-        Digite o ID do seu pedido para acompanhar o status.
+        Digite o ID do pedido ou seu telefone para acompanhar.
       </p>
 
       <div className="flex gap-2 mb-6">
         <input
           type="text"
-          value={orderId}
-          onChange={(e) => setOrderId(e.target.value.toUpperCase())}
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-          placeholder="Ex: UL-A3B2C1D4"
+          placeholder="ID do pedido ou telefone"
           className="flex-1 px-3 py-2.5 text-sm border border-border rounded-md bg-card-bg"
         />
         <button
           className="px-5 py-2.5 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
           onClick={handleSearch}
-          disabled={loading || !orderId.trim()}
+          disabled={loading || !busca.trim()}
         >
           {loading ? "Buscando..." : "Buscar"}
         </button>
@@ -65,9 +81,8 @@ export default function MeusPedidos() {
         </div>
       )}
 
-      {order && (
-        <div className="bg-card-bg rounded-lg border border-border overflow-hidden">
-          {/* Header */}
+      {orders.map((order) => (
+        <div key={order.id} className="bg-card-bg rounded-lg border border-border overflow-hidden mb-4">
           <div className="p-4 border-b border-border bg-bg-base">
             <div className="flex items-center justify-between">
               <div>
@@ -82,11 +97,10 @@ export default function MeusPedidos() {
             </div>
           </div>
 
-          {/* Items */}
           <div className="p-4 border-b border-border">
             <h4 className="text-sm font-semibold text-text-muted mb-3">Itens</h4>
             <div className="flex flex-col gap-2">
-              {order.itens.map((item, i) => (
+              {order.itens.map((item: any, i: number) => (
                 <div key={i} className="flex justify-between items-start p-2.5 bg-bg-base rounded-md">
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm">{item.nome}</div>
@@ -107,13 +121,11 @@ export default function MeusPedidos() {
             </div>
           </div>
 
-          {/* Total */}
           <div className="p-4 flex justify-between items-center">
             <span className="font-bold text-base">Total</span>
             <span className="font-bold text-lg text-accent">{formatarMoeda(order.total)}</span>
           </div>
 
-          {/* Payment button for pending orders */}
           {order.status === "pendente" && order.mp_preference_id && (
             <div className="px-4 pb-4">
               <a
@@ -127,7 +139,7 @@ export default function MeusPedidos() {
             </div>
           )}
         </div>
-      )}
+      ))}
     </div>
   );
 }

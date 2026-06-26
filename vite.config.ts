@@ -175,6 +175,72 @@ function orderApiPlugin(): Plugin {
   };
 }
 
+function orderSearchPlugin(): Plugin {
+  return {
+    name: "order-search",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith("/api/order-search")) return next();
+        const env = loadEnv(server.config.mode, process.cwd(), "");
+        const supabaseUrl = env.VITE_SUPABASE_URL;
+        const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!supabaseUrl || !serviceKey) {
+          res.statusCode = 500;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "SUPABASE_SERVICE_ROLE_KEY não configurada" }));
+          return;
+        }
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabase = createClient(supabaseUrl, serviceKey);
+        const url = new URL(req.url, "http://localhost");
+        const phone = url.searchParams.get("phone");
+        const payment = url.searchParams.get("payment");
+
+        if (phone) {
+          const digits = phone.replace(/\D/g, "");
+          const last8 = digits.slice(-8);
+          const { data: orders } = await supabase
+            .from("pedidos")
+            .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco")
+            .order("created_at", { ascending: false });
+          const filtered = (orders || []).filter((o: any) => {
+            if (!o.endereco) return false;
+            const addr = typeof o.endereco === "string" ? JSON.parse(o.endereco) : o.endereco;
+            const raw = addr.telefone || "";
+            const clean = raw.replace(/\D/g, "");
+            return clean.includes(digits) || digits.includes(clean) || clean.endsWith(last8) || last8.endsWith(clean);
+          });
+          const parsed = filtered.map((o: any) => {
+            const { endereco, ...rest } = o;
+            return { ...rest, itens: typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens };
+          });
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify(parsed));
+          return;
+        }
+
+        if (payment) {
+          const pid = payment.trim();
+          const { data: order } = await supabase
+            .from("pedidos")
+            .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
+            .eq("mp_payment_id", pid)
+            .maybeSingle();
+          const parsed = order ? [{ ...order, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens }] : [];
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify(parsed));
+          return;
+        }
+
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "Informe telefone ou ID do pagamento." }));
+      });
+    },
+  };
+}
+
 function imageProxyPlugin(): Plugin {
   return {
     name: "image-proxy",

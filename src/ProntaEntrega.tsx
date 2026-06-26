@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { getEstoquePublico, getProdutosByIds, getLojaConfig, parseImageUrls } from "./lib/db";
+import { supabase } from "./lib/supabase";
 import type { DbProduto } from "./lib/db";
 import type { EstoqueItem, LojaConfig, PromocaoTipo, CachedImageMap, CartItem } from "./types";
 import { useCart } from "./CartContext";
@@ -79,6 +80,8 @@ function groupEstoqueItems(estoque: EstoqueItem[], produtos: DbProduto[]): Group
 
     const p = productMap.get(item.produto_id);
 
+    const feminineFromEstoque = item.produto_imagens_femininas ?? [];
+    const feminineFromProd = p ? parseImageUrls(p.imagem_urls_feminina) : [];
     result.push({
       produto_id: item.produto_id,
       nome: p?.nome ?? item.produto_nome ?? "Sem nome",
@@ -88,7 +91,7 @@ function groupEstoqueItems(estoque: EstoqueItem[], produtos: DbProduto[]): Group
       temporada: p?.temporada ?? item.produto_temporada ?? "",
       feminino: p?.feminino ?? false,
       imagemUrls: p ? parseImageUrls(p.imagem_urls) : (item.produto_imagem ? [item.produto_imagem] : []),
-      imagemUrlsFeminina: p ? parseImageUrls(p.imagem_urls_feminina) : (item.produto_imagens_femininas ?? []),
+      imagemUrlsFeminina: feminineFromProd.length > 0 ? feminineFromProd : feminineFromEstoque,
       yupooUrl: p?.yupoo_url ?? "",
       cachedImageUrls: p?.cached_image_urls ?? null,
       precoCustomizado: p?.preco_customizado ?? null,
@@ -134,10 +137,22 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
     return () => document.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
-  // Images based on gender
+  // Images based on gender — try to get feminine images from product data as fallback
+  const [feminineImages, setFeminineImages] = useState(product.imagemUrlsFeminina);
+  useEffect(() => {
+    if (feminineImages.length === 0 && product.feminino) {
+      supabase.from("produtos").select("imagem_urls_feminina").eq("id", product.produto_id).single().then(({ data }: { data: { imagem_urls_feminina: string[] | string | null } | null }) => {
+        if (data?.imagem_urls_feminina) {
+          const imgs = Array.isArray(data.imagem_urls_feminina) ? data.imagem_urls_feminina.filter(Boolean) : typeof data.imagem_urls_feminina === "string" ? [data.imagem_urls_feminina] : [];
+          if (imgs.length > 0) setFeminineImages(imgs);
+        }
+      });
+    }
+  }, [feminineImages.length, product.feminino, product.produto_id]);
+
   const allImages =
-    genero === "Feminino" && product.imagemUrlsFeminina.length > 0
-      ? product.imagemUrlsFeminina
+    genero === "Feminino" && feminineImages.length > 0
+      ? feminineImages
       : product.imagemUrls;
 
   const availableSizes = product.sizes.filter((s) => {

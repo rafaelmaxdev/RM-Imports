@@ -26,7 +26,6 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
   const [nomePersonalizado, setNomePersonalizado] = useState("");
   const [numeroPersonalizado, setNumeroPersonalizado] = useState("");
   const [feminino, setFeminino] = useState(false);
-  const [custoCompra, setCustoCompra] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
   // Venda Direta state
@@ -124,7 +123,6 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
             personalizado ? nomePersonalizado : undefined,
             personalizado ? numeroPersonalizado : undefined,
             feminino,
-            custoCompra ? parseFloat(custoCompra) : undefined,
           )
         )
       );
@@ -157,7 +155,6 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
       setNomePersonalizado("");
       setNumeroPersonalizado("");
       setFeminino(false);
-      setCustoCompra("");
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
       console.error("Erro ao adicionar estoque:", err);
@@ -692,20 +689,6 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                   Feminino
                 </button>
               </div>
-            </div>
-
-            {/* Custo de compra (por fora) */}
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-text-muted mb-1">Custo de compra (R$) <span className="font-normal text-text-muted">— opcional, para calcular lucro de itens comprados por fora</span></label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={custoCompra}
-                onChange={(e) => setCustoCompra(e.target.value)}
-                placeholder="Ex: 80.00"
-                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
-              />
             </div>
 
             {/* Add button */}

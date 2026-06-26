@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { getPedidos, getPacotes, getEstoque } from "./lib/db";
+import { getPedidos, getPacotes } from "./lib/db";
 import type { Pacote } from "./lib/db";
-import type { Order, EstoqueItem } from "./types";
+import type { Order } from "./types";
 import { formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
 
@@ -28,7 +28,6 @@ function saveExtras(extras: ExtraCusto[]) {
 export default function AdminFinanceiro() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [pacotes, setPacotes] = useState<Pacote[]>([]);
-  const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [extras, setExtras] = useState<ExtraCusto[]>([]);
   useEffect(() => {
@@ -47,11 +46,10 @@ export default function AdminFinanceiro() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getPedidos(), getPacotes(), getEstoque()]).then(([o, p, e]) => {
+    Promise.all([getPedidos(), getPacotes()]).then(([o, p]) => {
       if (cancelled) return;
       setOrders(o);
       setPacotes(p);
-      setEstoque(e);
     }).catch((err) => {
       if (!cancelled) console.error("[Financeiro]", err);
     }).finally(() => {
@@ -131,20 +129,19 @@ export default function AdminFinanceiro() {
     for (const id of p.pedido_ids) pedidosEmPacotes.add(id);
   }
 
-  const custoPorFora = estoque.reduce((s, e) => s + (e.custo || 0), 0);
   const extraTotal = extras.reduce((s, e) => s + e.quantidade * e.preco, 0);
   const receitaBruta = ativos.reduce((s, o) => s + o.total, 0);
   const receitaPE = peVendas.reduce((s, o) => s + o.total, 0);
   const receitaCancelados = cancelados.reduce((s, o) => s + o.total, 0);
   const receitaEmPacotes = [...ativos, ...peVendas].filter((o) => pedidosEmPacotes.has(o.id)).reduce((s, o) => s + o.total, 0);
-  const custosTotais = custoPacote + freteTotal + taxaTotal + custoPorFora + extraTotal;
-  const lucro = receitaEmPacotes - custoPacote - freteTotal - taxaTotal - custoPorFora - extraTotal;
+  const custosTotais = custoPacote + freteTotal + taxaTotal + extraTotal;
+  const lucro = receitaEmPacotes - custoPacote - freteTotal - taxaTotal - extraTotal;
 
   const pieData = [
     { label: "Produtos", value: custoPacote, color: "#E63946" },
     { label: "Frete", value: freteTotal, color: "#457B9D" },
     { label: "Taxa", value: taxaTotal, color: "#2A9D8F" },
-    { label: "Estoque", value: custoPorFora, color: "#E9C46A" },
+
     ...extras.map((e) => ({
       label: e.nome + (e.quantidade > 1 ? ` (${e.quantidade}x)` : ""),
       value: e.quantidade * e.preco,
@@ -189,7 +186,7 @@ export default function AdminFinanceiro() {
   const totalRevenue = mesesComReceita.reduce((s, [, v]) => s + v.total, 0) || 1;
   for (const [mes, { total }] of mesesComReceita) {
     const share = total / totalRevenue;
-    const pkgCost = (custoPacote + freteTotal + taxaTotal + custoPorFora) * share;
+    const pkgCost = (custoPacote + freteTotal + taxaTotal) * share;
     custoPorMes.set(mes, (custoPorMes.get(mes) || 0) + pkgCost);
   }
 
@@ -197,7 +194,18 @@ export default function AdminFinanceiro() {
     <div className="pb-16">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <h3 className="text-xl text-primary">Financeiro</h3>
-        <button className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-semibold cursor-pointer hover:opacity-90 transition-opacity" onClick={exportCSV}>📥 Exportar CSV</button>
+        <div className="flex gap-2">
+          <button
+            className={`px-3 py-2 text-sm font-semibold rounded-md cursor-pointer transition-all whitespace-nowrap ${
+              loading ? "bg-accent/20 text-accent/60" : "bg-accent/10 text-accent hover:bg-accent/20"
+            }`}
+            onClick={() => window.location.reload()}
+            disabled={loading}
+          >
+            {loading ? <span className="inline-flex items-center gap-1.5"><span className="inline-block animate-spin">↻</span> Atualizando…</span> : "↻ Atualizar"}
+          </button>
+          <button className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-semibold cursor-pointer hover:opacity-90 transition-opacity" onClick={exportCSV}>📥 Exportar CSV</button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
@@ -226,7 +234,7 @@ export default function AdminFinanceiro() {
 
       {custosTotais > 0 && (
         <div className="p-3 bg-bg-base rounded-md border border-border text-xs text-text-muted mb-6 space-y-1">
-          <p>Produtos: {formatarMoeda(custoPacote)} | Frete: {formatarMoeda(freteTotal)} | Taxa: {formatarMoeda(taxaTotal)} | Estoque: {formatarMoeda(custoPorFora)} | Extras: {formatarMoeda(extraTotal)}</p>
+          <p>Produtos: {formatarMoeda(custoPacote)} | Frete: {formatarMoeda(freteTotal)} | Taxa: {formatarMoeda(taxaTotal)} | Extras: {formatarMoeda(extraTotal)}</p>
         </div>
       )}
 

@@ -453,32 +453,28 @@ export async function autoCancelExpiredOrders(hours = 24): Promise<number> {
   }
   if (!expired || expired.length === 0) return 0;
 
+  // Batch fetch product IDs
+  const nomes = [...new Set(expired.flatMap((o: any) => {
+    if (!o.pronta_entrega || !o.itens) return [];
+    const itens = typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens;
+    return itens.map((i: any) => i.nome);
+  }))];
+  const { data: produtosBatch } = await supabase.from("produtos").select("id, nome").in("nome", nomes);
+  const produtoMap = new Map((produtosBatch || []).map((p: any) => [p.nome, p.id]));
+
   for (const order of expired) {
     if (order.pronta_entrega && order.itens) {
       const itens = typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens;
       for (const item of itens) {
-        const { data: produtos } = await supabase
-          .from("produtos")
-          .select("id")
-          .eq("nome", item.nome)
-          .limit(1);
-        if (!produtos || produtos.length === 0) continue;
-        const produtoId = produtos[0].id;
+        const produtoId = produtoMap.get(item.nome);
+        if (!produtoId) continue;
         const isPersonalizado = item.personalizado ?? false;
         const nomePessoal = isPersonalizado ? (item.nomePersonalizado ?? null) : null;
         const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
         const isFeminino = item.feminino ?? false;
-        let query = supabase
-          .from("estoque_pronta_entrega")
-          .select("id, quantidade")
-          .eq("produto_id", produtoId)
-          .eq("tamanho", item.tamanho)
-          .eq("personalizado", isPersonalizado)
-          .eq("feminino", isFeminino);
-        if (nomePessoal) { query = query.eq("nome_personalizado", nomePessoal); }
-        else { query = query.is("nome_personalizado", null); }
-        if (numeroPessoal) { query = query.eq("numero_personalizado", numeroPessoal); }
-        else { query = query.is("numero_personalizado", null); }
+        let query = supabase.from("estoque_pronta_entrega").select("id, quantidade").eq("produto_id", produtoId).eq("tamanho", item.tamanho).eq("personalizado", isPersonalizado).eq("feminino", isFeminino);
+        if (nomePessoal) query = query.eq("nome_personalizado", nomePessoal); else query = query.is("nome_personalizado", null);
+        if (numeroPessoal) query = query.eq("numero_personalizado", numeroPessoal); else query = query.is("numero_personalizado", null);
         const { data: existing } = await query.maybeSingle();
         if (existing) {
           await supabase.from("estoque_pronta_entrega").update({ quantidade: existing.quantidade + 1 }).eq("id", existing.id);
@@ -817,62 +813,28 @@ export async function deleteEstoqueItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Add items from a delivered order to estoque (for pronta_entrega orders).
- *  Considers personalization when matching existing stock entries. */
 export async function addOrderItemsToEstoque(order: import("../types").Order): Promise<void> {
+  const nomes = [...new Set(order.itens.map((i) => i.nome))];
+  const { data: batch } = await supabase.from("produtos").select("id, nome").in("nome", nomes);
+  const produtoMap = new Map((batch || []).map((p: any) => [p.nome, p.id]));
+
   for (const item of order.itens) {
-    const { data: produtos } = await supabase
-      .from("produtos")
-      .select("id")
-      .eq("nome", item.nome)
-      .limit(1);
+    const produtoId = produtoMap.get(item.nome);
+    if (!produtoId) continue;
+    const isPersonalizado = item.personalizado ?? false;
+    const nomePessoal = isPersonalizado ? (item.nomePersonalizado ?? null) : null;
+    const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
+    const isFeminino = item.feminino ?? false;
 
-    if (produtos && produtos.length > 0) {
-      const produtoId = produtos[0].id;
-      const isPersonalizado = item.personalizado ?? false;
-      const nomePessoal = isPersonalizado ? (item.nomePersonalizado ?? null) : null;
-      const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
-      const isFeminino = item.feminino ?? false;
+    let query = supabase.from("estoque_pronta_entrega").select("id, quantidade").eq("produto_id", produtoId).eq("tamanho", item.tamanho).eq("personalizado", isPersonalizado).eq("feminino", isFeminino);
+    if (nomePessoal) query = query.eq("nome_personalizado", nomePessoal); else query = query.is("nome_personalizado", null);
+    if (numeroPessoal) query = query.eq("numero_personalizado", numeroPessoal); else query = query.is("numero_personalizado", null);
 
-      let query = supabase
-        .from("estoque_pronta_entrega")
-        .select("id, quantidade")
-        .eq("produto_id", produtoId)
-        .eq("tamanho", item.tamanho)
-        .eq("personalizado", isPersonalizado)
-        .eq("feminino", isFeminino);
-
-      if (nomePessoal) {
-        query = query.eq("nome_personalizado", nomePessoal);
-      } else {
-        query = query.is("nome_personalizado", null);
-      }
-      if (numeroPessoal) {
-        query = query.eq("numero_personalizado", numeroPessoal);
-      } else {
-        query = query.is("numero_personalizado", null);
-      }
-
-      const { data: existing } = await query.maybeSingle();
-
-      if (existing) {
-        await supabase
-          .from("estoque_pronta_entrega")
-          .update({ quantidade: existing.quantidade + 1 })
-          .eq("id", existing.id);
-      } else {
-        await supabase
-          .from("estoque_pronta_entrega")
-          .insert({
-            produto_id: produtoId,
-            tamanho: item.tamanho,
-            quantidade: 1,
-            personalizado: isPersonalizado,
-            nome_personalizado: nomePessoal,
-            numero_personalizado: numeroPessoal,
-            feminino: isFeminino,
-          });
-      }
+    const { data: existing } = await query.maybeSingle();
+    if (existing) {
+      await supabase.from("estoque_pronta_entrega").update({ quantidade: existing.quantidade + 1 }).eq("id", existing.id);
+    } else {
+      await supabase.from("estoque_pronta_entrega").insert({ produto_id: produtoId, tamanho: item.tamanho, quantidade: 1, personalizado: isPersonalizado, nome_personalizado: nomePessoal, numero_personalizado: numeroPessoal, feminino: isFeminino });
     }
   }
 }
@@ -880,24 +842,14 @@ export async function addOrderItemsToEstoque(order: import("../types").Order): P
 /** Remove items from estoque when a pronta_entrega order is paid.
  *  Looks up each product by name, then decrements stock by 1 per item. */
 export async function removeOrderItemsFromEstoque(order: import("../types").Order): Promise<void> {
+  const nomes = [...new Set(order.itens.map((i) => i.nome))];
+  const { data: batch } = await supabase.from("produtos").select("id, nome").in("nome", nomes);
+  const produtoMap = new Map((batch || []).map((p: any) => [p.nome, p.id]));
+
   for (const item of order.itens) {
-    const { data: produtos } = await supabase
-      .from("produtos")
-      .select("id")
-      .eq("nome", item.nome)
-      .limit(1);
-
-    if (!produtos || produtos.length === 0) continue;
-
-    const produtoId = produtos[0].id;
-    await decrementEstoqueItem(
-      produtoId,
-      item.tamanho,
-      item.personalizado ?? false,
-      item.nomePersonalizado,
-      item.numeroPersonalizado,
-      item.feminino ?? false,
-    );
+    const produtoId = produtoMap.get(item.nome);
+    if (!produtoId) continue;
+    await decrementEstoqueItem(produtoId, item.tamanho, item.personalizado ?? false, item.nomePersonalizado, item.numeroPersonalizado, item.feminino ?? false);
   }
 }
 

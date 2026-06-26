@@ -20,7 +20,7 @@ export default function MeusPedidos() {
 
     try {
       if (digits.length > 5 && !q.toUpperCase().startsWith("UL-")) {
-        const res = await fetch(`/api/public-order?payment=${encodeURIComponent(digits)}`);
+        const res = await fetch(`/api/order?payment=${encodeURIComponent(digits)}`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
@@ -32,7 +32,7 @@ export default function MeusPedidos() {
       }
 
       if (digits.length >= 8) {
-        const res = await fetch(`/api/public-order?phone=${encodeURIComponent(digits)}`);
+        const res = await fetch(`/api/order?phone=${encodeURIComponent(digits)}`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
@@ -45,7 +45,7 @@ export default function MeusPedidos() {
 
       const up = q.toUpperCase();
       if (up.startsWith("UL-")) {
-        const res = await fetch(`/api/public-order/${encodeURIComponent(up)}`);
+        const res = await fetch(`/api/order/${encodeURIComponent(up)}`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {

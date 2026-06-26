@@ -66,7 +66,8 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
 
   // Split pacotes into active (not entregue) and delivered
   const activePacotes = pacotes.filter((p) => p.status !== "entregue" && p.status !== "em_estoque");
-  const deliveredPacotes = pacotes.filter((p) => p.status === "entregue" || p.status === "em_estoque");
+  const estoquePacotes = pacotes.filter((p) => p.status === "em_estoque");
+  const deliveredPacotes = pacotes.filter((p) => p.status === "entregue");
 
   const wouldExceed = (order: Order): boolean => {
     if (selectedIds.has(order.id)) return false;
@@ -439,7 +440,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
           }`}
           onClick={() => setTab("historico")}
         >
-          📊 Financeiro
+          📊 Histórico
           {deliveredPacotes.length > 0 && (
             <span className="ml-2 inline-block px-1.5 py-0.5 rounded-full text-xs bg-green-100 text-green-800">{deliveredPacotes.length}</span>
           )}
@@ -689,6 +690,29 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Packages in stock — show finance form */}
+          {estoquePacotes.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-lg font-bold text-primary mb-4">
+                📦 Pacotes em Estoque
+                <span className="ml-2 inline-block px-1.5 py-0.5 rounded-full text-xs bg-teal-100 text-teal-800">{estoquePacotes.length}</span>
+              </h3>
+              <div className="flex flex-col gap-4">
+                {estoquePacotes.map((pacote) => (
+                  <DeliveredPacoteCard
+                    key={pacote.id}
+                    pacote={pacote}
+                    allOrders={allOrders}
+                    config={config}
+                    onSaveFinanceiro={handleSaveFinanceiro}
+                    onRemovePedido={handleRemovePedido}
+                    onDeletePacote={handleDeletePacote}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </>

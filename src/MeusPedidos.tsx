@@ -70,6 +70,9 @@ export default function MeusPedidos() {
             setLoading(false);
             return;
           }
+        } else {
+          const errBody = await res.json().catch(() => ({}));
+          console.log("[MP] API error:", res.status, errBody);
         }
       }
 

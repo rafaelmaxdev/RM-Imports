@@ -149,12 +149,12 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
 
   const [feminineImages, setFeminineImages] = useState<string[]>([]);
   useEffect(() => {
-    supabase.from("produtos").select("imagem_urls_feminina").eq("id", product.produto_id).single().then(({ data }: any) => {
+    Promise.resolve(supabase.from("produtos").select("imagem_urls_feminina").eq("id", product.produto_id).single()).then(({ data }: any) => {
       if (data?.imagem_urls_feminina) {
         const fem = Array.isArray(data.imagem_urls_feminina) ? data.imagem_urls_feminina.filter(Boolean) : [];
         setFeminineImages(fem);
       }
-    });
+    }).catch(() => {});
   }, [product.produto_id]);
   const isFeminineMode = genero === "Feminino" && feminineImages.length > 0;
 

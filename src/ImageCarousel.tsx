@@ -199,10 +199,10 @@ export default memo(function ImageCarousel({
       {/* Left arrow */}
       <button
         onClick={(e) => { e.stopPropagation(); prev(); }}
-        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
+        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-11 h-11 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
         aria-label="Imagem anterior"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <polyline points="15 18 9 12 15 6" />
         </svg>
       </button>
@@ -210,27 +210,29 @@ export default memo(function ImageCarousel({
       {/* Right arrow */}
       <button
         onClick={(e) => { e.stopPropagation(); next(); }}
-        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
+        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-11 h-11 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
         aria-label="Próxima imagem"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <polyline points="9 18 15 12 9 6" />
         </svg>
       </button>
 
       {/* Dot indicators */}
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-0 z-10">
         {validImages.map((_, i) => (
           <button
             key={i}
             onClick={(e) => { e.stopPropagation(); setCurrent(i); }}
-            className={`w-2 h-2 rounded-full transition-all duration-200 cursor-pointer ${
+            className={`p-2.5 rounded-full transition-all duration-200 cursor-pointer ${
               i === current
-                ? "bg-white scale-125 shadow-sm"
-                : "bg-white/60 hover:bg-white/80"
+                ? "text-white scale-125"
+                : "text-white/60 hover:text-white/80"
             }`}
             aria-label={`Ir para imagem ${i + 1}`}
-          />
+          >
+            <span className={`block w-2 h-2 rounded-full bg-current`} />
+          </button>
         ))}
       </div>
     </div>

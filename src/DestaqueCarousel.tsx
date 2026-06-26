@@ -191,16 +191,16 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
         {needsScroll && canScrollLeft && (
           <button
             onClick={goPrev}
-            className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center cursor-pointer border-none transition-colors"
+            className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-10 w-11 h-11 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center cursor-pointer border-none transition-colors"
             aria-label="Anterior"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
         )}
         {needsScroll && canScrollRight && (
           <button
             onClick={goNext}
-            className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center cursor-pointer border-none transition-colors"
+            className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10 w-11 h-11 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center cursor-pointer border-none transition-colors"
             aria-label="Próximo"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
@@ -289,16 +289,18 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
 
         {/* Dots indicator */}
         {needsScroll && (
-          <div className="flex justify-center gap-1.5 mt-2 sm:mt-4">
+          <div className="flex justify-center gap-0 mt-2 sm:mt-4">
             {Array.from({ length: maxIndex + 1 }, (_, i) => (
               <button
                 key={i}
                 onClick={() => goTo(i)}
-                className={`w-2 h-2 rounded-full cursor-pointer transition-all ${
-                  i === currentIndex ? "bg-white scale-125" : "bg-white/40 hover:bg-white/60"
+                className={`p-2.5 rounded-full cursor-pointer transition-all ${
+                  i === currentIndex ? "text-white scale-125" : "text-white/40 hover:text-white/60"
                 }`}
                 aria-label={`Ir para ${i + 1}`}
-              />
+              >
+                <span className={`block w-2 h-2 rounded-full bg-current`} />
+              </button>
             ))}
           </div>
         )}

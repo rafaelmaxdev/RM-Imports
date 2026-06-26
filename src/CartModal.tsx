@@ -57,12 +57,12 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
 
   const [feminineImages, setFeminineImages] = useState<string[]>([]);
   useEffect(() => {
-    supabase.from("produtos").select("imagem_urls_feminina").eq("id", produto.id).single().then(({ data }: any) => {
+    Promise.resolve(supabase.from("produtos").select("imagem_urls_feminina").eq("id", produto.id).single()).then(({ data }: any) => {
       if (data?.imagem_urls_feminina) {
         const imgs = Array.isArray(data.imagem_urls_feminina) ? data.imagem_urls_feminina.filter(Boolean) : [];
         setFeminineImages(imgs);
       }
-    });
+    }).catch(() => {});
   }, [produto.id]);
 
   const allImages = genero === "Feminino" && feminineImages.length > 0

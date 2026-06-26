@@ -529,3 +529,12 @@ CREATE POLICY "Service role upload images"
 CREATE POLICY "Service role update images"
   ON storage.objects FOR UPDATE
   USING (bucket_id = 'images' AND auth.role() = 'service_role');
+
+-- ── Performance Indexes ──
+CREATE INDEX IF NOT EXISTS idx_produtos_tipo ON produtos(tipo);
+CREATE INDEX IF NOT EXISTS idx_produtos_time ON produtos(time);
+CREATE INDEX IF NOT EXISTS idx_produtos_liga ON produtos(liga);
+CREATE INDEX IF NOT EXISTS idx_produtos_destaque ON produtos(destaque) WHERE destaque = true;
+CREATE INDEX IF NOT EXISTS idx_pedidos_status_created ON pedidos(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_pedidos_cupom_codigo ON pedidos(cupom_codigo);
+CREATE INDEX IF NOT EXISTS idx_estoque_produto_tamanho ON estoque_pronta_entrega(produto_id, tamanho, personalizado, feminino);

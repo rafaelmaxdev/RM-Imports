@@ -45,8 +45,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (typeof queryId === "string" && queryId) id = queryId;
   }
 
-  if (!id) {
-    // Phone or payment search (public)
+  // Handle /api/order/search?phone=... or ?payment=...
+  if (path === "search" || (!id && (req.query.phone || req.query.payment))) {
     let phone = req.query.phone;
     let payment = req.query.payment;
     if (Array.isArray(phone)) phone = phone[0];

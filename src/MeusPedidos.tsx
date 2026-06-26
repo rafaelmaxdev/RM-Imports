@@ -62,7 +62,7 @@ export default function MeusPedidos() {
       if (digits.length >= 10) params.set("phone", digits);
       else if (digits.length > 0) params.set("payment", digits);
       if (params.toString()) {
-        const res = await fetch(`/api/order-search?${params.toString()}`);
+        const res = await fetch(`/api/order/search?${params.toString()}`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {

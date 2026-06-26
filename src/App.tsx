@@ -100,7 +100,7 @@ function AppContent() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen overflow-x-hidden">
       <nav className="sticky top-0 z-50 flex items-center justify-between px-4 sm:px-8 py-3 bg-primary text-white shadow-md relative" aria-label="Navegação principal">
         <button
           className={`hamburger-btn bg-transparent border-none cursor-pointer p-2 flex flex-col items-center justify-center gap-[5px] w-10 h-10 ${showMenu ? 'open' : ''}`}

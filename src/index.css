@@ -82,6 +82,7 @@
 /* Smooth scroll */
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 /* Accessible focus styles */

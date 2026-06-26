@@ -4,6 +4,19 @@ import { createHash } from 'crypto';
 import { isR2Configured, uploadToR2, checkR2Exists, getR2PublicUrl } from './lib/r2.js';
 import { getCorsOrigin } from './lib/cors.js';
 
+const rateLimitHits = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitHits.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitHits.set(ip, { count: 1, resetAt: now + 60000 });
+    return true;
+  }
+  if (entry.count >= 60) return false;
+  entry.count++;
+  return true;
+}
+
 const ALLOWED_DOMAINS = [
   "photo.yupoo.com",
   "img.yupoo.com",
@@ -103,6 +116,9 @@ async function fetchWithTimeout(url: string, timeoutMs: number, init?: RequestIn
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const ip = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown";
+  if (!checkRateLimit(ip)) { res.status(429).json({ error: "Muitas requisições. Aguarde um momento." }); return; }
+
   const { url } = req.query;
 
   if (!url || typeof url !== 'string') {

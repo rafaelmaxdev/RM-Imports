@@ -115,7 +115,7 @@ function orderApiPlugin(): Plugin {
               const parsed = { ...order, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens };
               res.statusCode = 200;
               res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify([parsed]));
+              res.end(JSON.stringify(parsed));
               return;
             }
             res.statusCode = 404;
@@ -169,7 +169,7 @@ function orderApiPlugin(): Plugin {
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
         res.setHeader("Access-Control-Allow-Origin", "*");
-        res.end(JSON.stringify([parsed]));
+        res.end(JSON.stringify(parsed));
       });
     },
   };

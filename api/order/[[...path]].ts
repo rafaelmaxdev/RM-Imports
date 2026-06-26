@@ -76,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!order) return res.status(404).json({ error: "Nenhum pedido encontrado com esse ID de pagamento." });
 
-    return res.status(200).json([{ ...order, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens }]);
+  return res.status(200).json({ ...order, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens });
   }
 
   // ── Order ID search ──

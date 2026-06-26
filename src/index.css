@@ -110,6 +110,7 @@ body {
   background-color: #f8f9fa;
   background-image: radial-gradient(#dee2e6 1px, transparent 1px);
   background-size: 32px 32px;
+  overflow-x: hidden;
 }
 
 /* Navbar gradient overlay enhancement */

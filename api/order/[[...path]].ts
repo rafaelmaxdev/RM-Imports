@@ -60,13 +60,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { data: orders } = await supabase
         .from("pedidos")
         .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
-        .order("created_at", { ascending: false })
-        .limit(50);
+        .order("created_at", { ascending: false });
+      const last8 = digits.slice(-8);
       const filtered = (orders || []).filter((o: any) => {
         if (!o.endereco) return false;
         const addr = typeof o.endereco === "string" ? JSON.parse(o.endereco) : o.endereco;
-        const telDigits = addr.telefone?.replace(/\D/g, "") || "";
-        return telDigits.includes(digits) || digits.includes(telDigits);
+        const raw = addr.telefone || "";
+        const clean = raw.replace(/\D/g, "");
+        return clean.includes(digits) || digits.includes(clean) || clean.endsWith(last8) || last8.endsWith(clean);
       });
       if (filtered.length === 0) {
         return res.status(404).json({ error: "Nenhum pedido encontrado com esse telefone." });

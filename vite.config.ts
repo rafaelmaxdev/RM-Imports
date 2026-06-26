@@ -123,6 +123,7 @@ function orderApiPlugin(): Plugin {
 
           if (phone) {
             const digits = phone.replace(/\D/g, "");
+            const last8 = digits.slice(-8);
             const { data: orders } = await supabase
               .from("pedidos")
               .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
@@ -130,8 +131,9 @@ function orderApiPlugin(): Plugin {
             const filtered = (orders || []).filter((o: any) => {
               if (!o.endereco) return false;
               const addr = typeof o.endereco === "string" ? JSON.parse(o.endereco) : o.endereco;
-              const telDigits = addr.telefone?.replace(/\D/g, "") || "";
-              return telDigits.includes(digits) || digits.includes(telDigits);
+              const raw = addr.telefone || "";
+              const clean = raw.replace(/\D/g, "");
+              return clean.includes(digits) || digits.includes(clean) || clean.endsWith(last8) || last8.endsWith(clean);
             });
             const parsed = filtered.map((o: any) => ({ ...o, itens: typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens }));
             res.statusCode = 200;

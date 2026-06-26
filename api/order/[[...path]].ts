@@ -57,9 +57,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (digits.length < 10) {
         return res.status(400).json({ error: "Telefone deve ter pelo menos 10 dígitos (DDD + número)." });
       }
-      const { data: orders, error: fetchError, count } = await supabase
+      const { data: orders, error: fetchError } = await supabase
         .from("pedidos")
-        .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco", { count: "estimated" })
+        .select("*")
         .order("created_at", { ascending: false });
       if (fetchError) {
         return res.status(500).json({ error: "Erro ao buscar pedidos.", fetchError: fetchError.message });
@@ -81,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return { id: o.id, tel: addr?.telefone, telClean: addr?.telefone?.replace(/\D/g, "") };
           } catch { return { id: o.id, enderecoType: typeof o.endereco, endereco: String(o.endereco).slice(0, 100) }; }
         });
-        return res.status(404).json({ error: "Nenhum pedido encontrado.", debug: { total: orders?.length, count, digits, last8, sample } });
+        return res.status(404).json({ error: "Nenhum pedido encontrado.", debug: { total: orders?.length, digits, last8, sample } });
       }
       const parsed = filtered.map((o: any) => {
         const { endereco, ...rest } = o;

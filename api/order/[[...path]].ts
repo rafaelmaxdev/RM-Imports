@@ -73,7 +73,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return clean.includes(digits) || digits.includes(clean) || clean.endsWith(last8) || last8.endsWith(clean);
       });
       if (filtered.length === 0) {
-        return res.status(404).json({ error: "Nenhum pedido encontrado com esse telefone." });
+        const sample = (orders || []).slice(0, 3).map((o: any) => {
+          const addr = typeof o.endereco === "string" ? (() => { try { return JSON.parse(o.endereco); } catch { return null; } })() : o.endereco;
+          return { id: o.id, tel: addr?.telefone, telClean: addr?.telefone?.replace(/\D/g, ""), endereco: o.endereco };
+        });
+        return res.status(404).json({ error: "Nenhum pedido encontrado com esse telefone.", debug: { digits, last8, sample } });
       }
       const parsed = filtered.map((o: any) => {
         const { endereco, ...rest } = o;

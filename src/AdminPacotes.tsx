@@ -65,8 +65,8 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
   const totalShirts = selectedOrders.reduce((sum, o) => sum + o.itens.length, 0);
 
   // Split pacotes into active (not entregue) and delivered
-  const activePacotes = pacotes.filter((p) => p.status !== "entregue" && p.status !== "em_estoque");
-  const estoquePacotes = pacotes.filter((p) => p.status === "em_estoque");
+  const activePacotes = pacotes.filter((p) => p.status !== "entregue" && p.status !== "a_caminho");
+  const estoquePacotes = pacotes.filter((p) => p.status === "a_caminho");
   const deliveredPacotes = pacotes.filter((p) => p.status === "entregue");
 
   const wouldExceed = (order: Order): boolean => {

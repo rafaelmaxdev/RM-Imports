@@ -62,6 +62,7 @@ export interface Order {
   credit_release_period?: "immediate" | "14_days" | "30_days";
   cupom_codigo?: string;
   cupom_desconto?: number;
+  created_at?: string;
 }
 
 export interface EstoqueItem {

@@ -411,6 +411,10 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
 // ── Page component ──
 
 export default function ProntaEntrega() {
+  useEffect(() => {
+    document.title = "Pronta Entrega — RM Imports";
+    document.querySelector('meta[name="description"]')?.setAttribute("content", "Camisas em estoque prontas para envio imediato. Consulte tamanhos e disponibilidade.");
+  }, []);
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [produtos, setProdutos] = useState<DbProduto[]>([]);
   const [config, setConfig] = useState<LojaConfig | null>(null);
@@ -493,9 +497,18 @@ export default function ProntaEntrega() {
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto px-4 pt-8 pb-16">
-        <div className="flex flex-col items-center justify-center py-20 text-text-muted">
-          <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin mb-4" />
-          <p>Carregando produtos...</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="bg-card-bg rounded-lg overflow-hidden border border-border animate-pulse">
+              <div className="aspect-square bg-gray-200" />
+              <div className="p-2.5 sm:p-4 space-y-2">
+                <div className="h-4 bg-gray-200 rounded w-3/4" />
+                <div className="h-3 bg-gray-200 rounded w-1/2" />
+                <div className="h-5 bg-gray-200 rounded w-1/3 mt-3" />
+                <div className="h-9 bg-gray-200 rounded-md mt-2" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );

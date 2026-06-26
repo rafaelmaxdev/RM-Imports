@@ -367,6 +367,10 @@ export default function OrderConfirmation() {
         </p>
       </div>
 
+      {!order && !loading && (
+        <div className="text-center py-8 text-text-muted">Pedido não encontrado.</div>
+      )}
+      {order && (
       <div className="bg-card-bg rounded-md p-6 text-left shadow-card mb-6">
         <h3 className="text-primary mb-4">Detalhes do Pedido</h3>
         <div className="flex flex-col gap-2 mb-4 pb-4 border-b border-border">
@@ -467,6 +471,7 @@ export default function OrderConfirmation() {
           </div>
         )}
       </div>
+      )}
 
       {/* Mercado Pago Payment Section */}
       {needsPayment && !isExpired && (

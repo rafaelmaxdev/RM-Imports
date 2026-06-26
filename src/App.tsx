@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Link, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation } from "react-router-dom";
 import Loja from "./Loja";
 import Footer from "./Footer";
 import WhatsAppButton from "./WhatsAppButton";
@@ -26,6 +26,7 @@ const AdminCupons = lazy(() => import("./AdminCupons"));
 const ProntaEntrega = lazy(() => import("./ProntaEntrega"));
 const MeusPedidos = lazy(() => import("./MeusPedidos"));
 const NotFound = lazy(() => import("./NotFound"));
+import ErrorBoundary from "./ErrorBoundary";
 const SizeChart = lazy(() => import("./SizeChart"));
 
 function LoadingSkeleton() {
@@ -75,8 +76,11 @@ function AppContent() {
   const [showMenu, setShowMenu] = useState(false);
   const navigate = useNavigate();
   const { cart, createOrder } = useCart();
+  const location = useLocation();
 
   useBodyScrollLock(showMenu || showCart);
+
+  useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
 
   useEffect(() => {
     Promise.all([
@@ -326,7 +330,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <CartProvider>
-        <AppContent />
+        <ErrorBoundary>
+          <AppContent />
+        </ErrorBoundary>
       </CartProvider>
     </BrowserRouter>
   );

@@ -54,13 +54,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (phone && typeof phone === "string") {
       const digits = phone.replace(/\D/g, "");
-      if (digits.length < 8) {
-        return res.status(400).json({ error: "Telefone deve ter pelo menos 8 dígitos." });
+      if (digits.length < 10) {
+        return res.status(400).json({ error: "Telefone deve ter pelo menos 10 dígitos (DDD + número)." });
       }
-      const { data: orders } = await supabase
+      const { data: orders, error: fetchError } = await supabase
         .from("pedidos")
-        .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
+        .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco")
         .order("created_at", { ascending: false });
+      if (fetchError) {
+        return res.status(500).json({ error: "Erro ao buscar pedidos." });
+      }
       const last8 = digits.slice(-8);
       const filtered = (orders || []).filter((o: any) => {
         if (!o.endereco) return false;
@@ -72,7 +75,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (filtered.length === 0) {
         return res.status(404).json({ error: "Nenhum pedido encontrado com esse telefone." });
       }
-      const parsed = filtered.map((o: any) => ({ ...o, itens: typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens }));
+      const parsed = filtered.map((o: any) => {
+        const { endereco, ...rest } = o;
+        return { ...rest, itens: typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens };
+      });
       return res.status(200).json(Array.isArray(parsed) ? parsed : [parsed]);
     }
 
@@ -80,13 +86,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const pid = payment.trim();
       const { data: order } = await supabase
         .from("pedidos")
-        .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
+        .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco")
         .eq("mp_payment_id", pid)
         .maybeSingle();
       if (!order) {
         return res.status(404).json({ error: "Nenhum pedido encontrado com esse ID de pagamento." });
       }
-      const parsed = { ...order, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens };
+      const { endereco: _, ...rest } = order;
+      const parsed = { ...rest, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens };
       return res.status(200).json([parsed]);
     }
 
@@ -125,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Public request — return limited data
   const { data: order, error } = await supabase
     .from("pedidos")
-    .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
+    .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco")
     .eq("id", id)
     .maybeSingle();
 
@@ -133,6 +140,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ error: "Pedido não encontrado." });
   }
 
-  const parsed = { ...order, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens };
+  const { endereco: _, ...rest } = order;
+  const parsed = { ...rest, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens };
   return res.status(200).json([parsed]);
 }

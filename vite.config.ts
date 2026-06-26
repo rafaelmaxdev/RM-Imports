@@ -108,7 +108,7 @@ function orderApiPlugin(): Plugin {
             const pid = payment.trim();
             const { data: order } = await supabase
               .from("pedidos")
-              .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
+              .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco")
               .eq("mp_payment_id", pid)
               .maybeSingle();
             if (order) {
@@ -128,7 +128,7 @@ function orderApiPlugin(): Plugin {
             const last8 = digits.slice(-8);
             const { data: orders } = await supabase
               .from("pedidos")
-              .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
+              .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco")
               .order("created_at", { ascending: false });
             const filtered = (orders || []).filter((o: any) => {
               if (!o.endereco) return false;
@@ -154,7 +154,7 @@ function orderApiPlugin(): Plugin {
         const id = decodeURIComponent(isOrderId[1]);
         const { data: order } = await supabase
           .from("pedidos")
-          .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at")
+          .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco")
           .eq("id", id)
           .maybeSingle();
 

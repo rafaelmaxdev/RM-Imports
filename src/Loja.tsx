@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
+
+const META_DESC = "RM Imports — Camisas de time e outros importados. Frete grátis em Bezerros-PE.";
 import type { DbProduto } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
 import CartModal from "./CartModal";
@@ -43,6 +45,10 @@ export function parseAnoTemporada(t: string): number {
 }
 
 export default function Loja({ produtos, config }: { produtos: DbProduto[]; config: LojaConfig }) {
+  useEffect(() => {
+    document.title = "RM Imports";
+    document.querySelector('meta[name="description"]')?.setAttribute("content", META_DESC);
+  }, []);
   const [categoriaSelecionada, setCategoriaSelecionada] = useState("Todas");
   const [filtroTime, setFiltroTime] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
@@ -315,6 +321,11 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                 {p.destaque && !emPromocao && (
                   <span className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 bg-yellow-400 text-primary text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-sm shadow-md uppercase tracking-wider z-10">
                     ★ DESTAQUE
+                  </span>
+                )}
+                {!emPromocao && !p.destaque && p.created_at && Date.now() - new Date(p.created_at).getTime() < 7 * 86400000 && (
+                  <span className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 bg-green-500 text-white text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-sm shadow-md uppercase tracking-wider z-10">
+                    NOVO
                   </span>
                 )}
 

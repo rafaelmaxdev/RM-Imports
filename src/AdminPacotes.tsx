@@ -65,8 +65,8 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
   const totalShirts = selectedOrders.reduce((sum, o) => sum + o.itens.length, 0);
 
   // Split pacotes into active (not entregue) and delivered
-  const activePacotes = pacotes.filter((p) => p.status !== "entregue");
-  const deliveredPacotes = pacotes.filter((p) => p.status === "entregue");
+  const activePacotes = pacotes.filter((p) => p.status !== "entregue" && p.status !== "em_estoque");
+  const deliveredPacotes = pacotes.filter((p) => p.status === "entregue" || p.status === "em_estoque");
 
   const wouldExceed = (order: Order): boolean => {
     if (selectedIds.has(order.id)) return false;
@@ -439,7 +439,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
           }`}
           onClick={() => setTab("historico")}
         >
-          📊 Histórico
+          📊 Financeiro
           {deliveredPacotes.length > 0 && (
             <span className="ml-2 inline-block px-1.5 py-0.5 rounded-full text-xs bg-green-100 text-green-800">{deliveredPacotes.length}</span>
           )}

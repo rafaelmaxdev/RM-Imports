@@ -24,6 +24,7 @@ const AdminPromocoes = lazy(() => import("./AdminPromocoes"));
 const AdminEstoque = lazy(() => import("./AdminEstoque"));
 const AdminCupons = lazy(() => import("./AdminCupons"));
 const AdminFinanceiro = lazy(() => import("./AdminFinanceiro"));
+const AdminDashboard = lazy(() => import("./AdminDashboard"));
 const ProntaEntrega = lazy(() => import("./ProntaEntrega"));
 const MeusPedidos = lazy(() => import("./MeusPedidos"));
 const NotFound = lazy(() => import("./NotFound"));
@@ -194,7 +195,7 @@ function AppContent() {
   );
 }
 
-type AdminTab = "produtos" | "destaques" | "promocoes" | "cupons" | "pedidos" | "pacotes" | "estoque" | "historico" | "financeiro";
+type AdminTab = "produtos" | "destaques" | "promocoes" | "cupons" | "pedidos" | "pacotes" | "estoque" | "historico" | "financeiro" | "dashboard";
 
 function AdminPanel({
   produtos,
@@ -207,7 +208,7 @@ function AdminPanel({
   config: LojaConfig;
   setConfig: React.Dispatch<React.SetStateAction<LojaConfig>>;
 }) {
-  const [tab, setTab] = useState<AdminTab>("produtos");
+  const [tab, setTab] = useState<AdminTab>("dashboard");
   const [precacheStatus, setPrecacheStatus] = useState<string | null>(null);
   const [precacheLoading, setPrecacheLoading] = useState(false);
   const [exportingCSV, setExportingCSV] = useState(false);
@@ -282,14 +283,15 @@ function AdminPanel({
   }
 
   const tabs: { key: AdminTab; label: string }[] = [
-    { key: "produtos", label: "Produtos" },
-    { key: "destaques", label: "Destaques" },
-    { key: "promocoes", label: "Promoções" },
+    { key: "dashboard", label: "📊 Dashboard" },
     { key: "pedidos", label: "Pedidos" },
+    { key: "estoque", label: "Estoque" },
     { key: "pacotes", label: "Pacotes" },
+    { key: "produtos", label: "Produtos" },
+    { key: "promocoes", label: "Promoções" },
+    { key: "destaques", label: "Destaques" },
     { key: "cupons", label: "Cupons" },
     { key: "financeiro", label: "Financeiro" },
-    { key: "estoque", label: "Estoque" },
     { key: "historico", label: "Histórico" },
   ];
 
@@ -323,25 +325,29 @@ function AdminPanel({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 mb-4">
-        <button
-          onClick={handlePrecacheAll}
-          disabled={precacheLoading}
-          className="px-4 py-2 bg-accent text-white rounded-md text-sm font-semibold hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-        >
-          {precacheLoading ? "⏳ Cacheando..." : "🖼️ Pre-cache Todas as Imagens"}
-        </button>
-        <button
-          onClick={handleExportCSV}
-          disabled={exportingCSV}
-          className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
-        >
-          {exportingCSV ? "⏳ Exportando..." : "📥 Exportar Pedidos (CSV)"}
-        </button>
-      </div>
+      {tab === "dashboard" && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={handlePrecacheAll}
+            disabled={precacheLoading}
+            className="px-4 py-2 bg-accent text-white rounded-md text-sm font-semibold hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {precacheLoading ? "⏳ Cacheando..." : "🖼️ Pre-cache Todas as Imagens"}
+          </button>
+          <button
+            onClick={handleExportCSV}
+            disabled={exportingCSV}
+            className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
+          >
+            {exportingCSV ? "⏳ Exportando..." : "📥 Exportar Pedidos (CSV)"}
+          </button>
+        </div>
+      )}
 
       <Suspense fallback={<div className="max-w-3xl mx-auto px-4 pt-8"><div className="animate-pulse space-y-4"><div className="h-8 bg-gray-200 rounded w-1/3" /><div className="h-64 bg-gray-200 rounded" /></div></div>}>
-        {tab === "produtos" ? (
+        {tab === "dashboard" ? (
+          <AdminDashboard onNavigate={setTab} />
+        ) : tab === "produtos" ? (
           <ProdutoForm produtos={produtos} setProdutos={setProdutos} />
         ) : tab === "destaques" ? (
           <AdminDestaques produtos={produtos} setProdutos={setProdutos} />

@@ -110,6 +110,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
           precoBase: item.precoBase,
           yupooUrl: item.yupooUrl,
           feminino: item.feminino,
+          prontaEntrega: item.prontaEntrega,
+          peMarkup: item.peMarkup,
         })),
         total: totalFinal,
         status: "pendente",

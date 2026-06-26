@@ -46,6 +46,10 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
   const [sitewidePct, setSitewidePct] = useState("");
   const [savingSitewide, setSavingSitewide] = useState(false);
 
+  // PE markup state
+  const [peMarkupValue, setPeMarkupValue] = useState("");
+  const [savingPe, setSavingPe] = useState(false);
+
   useEffect(() => {
     const pb: Record<string, string> = {};
     const pp: Record<string, string> = {};
@@ -55,6 +59,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
     }
     setPrecosBase(pb);
     setPrecosPromo(pp);
+    setPeMarkupValue(String(config.pronta_entrega_markup));
   }, [config]);
 
   async function handleTogglePromo(tipo: string, ativa: boolean) {
@@ -475,6 +480,50 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
             }}
           >
             Remover Todas
+          </button>
+        </div>
+      </div>
+
+      {/* ── Pronta Entrega markup ── */}
+      <div className="border-t border-border pt-6 mb-8">
+        <h4 className="text-lg font-bold text-primary mb-2">📦 Taxa Pronta Entrega</h4>
+        <p className="text-sm text-text-muted mb-4">
+          Valor fixo adicionado ao preço de produtos de Pronta Entrega. Atualmente: <strong className="text-green-600">R$ {config.pronta_entrega_markup.toFixed(2)}</strong>
+        </p>
+        <div className="flex gap-2 items-end">
+          <div className="w-32">
+            <label className="block text-xs font-semibold text-text-muted mb-1">Valor (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={peMarkupValue}
+              onChange={(e) => setPeMarkupValue(e.target.value)}
+              placeholder="20"
+              className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+            />
+          </div>
+          <button
+            className="px-4 py-2 text-sm font-semibold bg-green-600 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+            disabled={savingPe || !peMarkupValue}
+            onClick={async () => {
+              setSavingPe(true);
+              try {
+                const val = parseFloat(peMarkupValue);
+                if (isNaN(val) || val < 0) return;
+                await updateLojaConfig("pronta_entrega_markup", val);
+                setConfig(prev => ({ ...prev, pronta_entrega_markup: val }));
+                setMessage(`Taxa de Pronta Entrega alterada para R$ ${val.toFixed(2)}`);
+              } catch (err) {
+                console.error("Erro ao salvar taxa PE:", err);
+                setMessage("Erro ao salvar taxa.");
+              } finally {
+                setSavingPe(false);
+                setTimeout(() => setMessage(""), 4000);
+              }
+            }}
+          >
+            {savingPe ? "Salvando..." : "Salvar"}
           </button>
         </div>
       </div>

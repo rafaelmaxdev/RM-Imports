@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import type { DbProduto } from "./lib/db";
 import { getEstoque, addEstoqueItem, updateEstoqueItem, deleteEstoqueItem, criarVendaDireta } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
-import { getCachedImageUrl, TAMANHOS_POR_TIPO, TIPOS_SEM_PERSONALIZACAO, getPrecoProduto, ADICIONAL_TAMANHO, PRONTA_ENTREGA_MARKUP } from "./types";
+import { getCachedImageUrl, TAMANHOS_POR_TIPO, TIPOS_SEM_PERSONALIZACAO, getPrecoProduto, ADICIONAL_TAMANHO } from "./types";
 import type { EstoqueItem, LojaConfig } from "./types";
 import { buscaPorPalavras } from "./lib/utils";
 import type { PromocaoTipo } from "./types";
@@ -207,7 +207,8 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
       );
       const basePrice = priceInfo.promo ?? priceInfo.base;
       const adicionalTam = ADICIONAL_TAMANHO[vendaItem.tamanho] || 0;
-      const precoCalculado = Math.round((basePrice + adicionalTam) * PRONTA_ENTREGA_MARKUP * 100) / 100;
+      const peMarkup = config.pronta_entrega_markup ?? 20;
+      const precoCalculado = Math.round((basePrice + adicionalTam + peMarkup) * 100) / 100;
       const precoVenda = vendaValor ? parseFloat(vendaValor) : precoCalculado;
 
       await criarVendaDireta(
@@ -279,6 +280,11 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
           <h2 className="text-xl text-primary m-0">Estoque - Pronta Entrega</h2>
           <p className="text-sm text-text-muted mt-1">
             {estoque.length} item(ns) em estoque
+            {estoque.filter(i => i.quantidade <= 2).length > 0 && (
+              <span className="ml-2 text-red-600 font-semibold">
+                ⚠ {estoque.filter(i => i.quantidade <= 2).length} com estoque baixo
+              </span>
+            )}
           </p>
         </div>
         <button
@@ -348,6 +354,9 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                   </div>
                   <div className="text-xs font-semibold text-text-muted whitespace-nowrap">
                     {totalQty} unidade{totalQty !== 1 ? "s" : ""}
+                    {items.some(i => i.quantidade <= 2) && (
+                      <span className="ml-1.5 text-[10px] font-extrabold px-1 py-0.5 bg-red-100 text-red-700 rounded-sm">⚠ Baixo</span>
+                    )}
                   </div>
                 </div>
 
@@ -356,7 +365,9 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                   {items.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center gap-3 px-3 py-2 border-b border-border last:border-b-0 hover:bg-bg-base/50 transition-colors"
+                      className={`flex items-center gap-3 px-3 py-2 border-b border-border last:border-b-0 hover:bg-bg-base/50 transition-colors ${
+                        item.quantidade <= 2 ? "bg-red-50" : ""
+                      }`}
                     >
                       <span className="text-sm font-semibold w-14">
                         {item.tamanho}
@@ -390,7 +401,10 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                             title="Clique para editar quantidade"
                           >
                             Quantidade:{" "}
-                            <span className="font-bold">{item.quantidade}</span>
+                            <span className={`font-bold ${item.quantidade <= 2 ? 'text-red-600' : ''}`}>{item.quantidade}</span>
+                            {item.quantidade <= 2 && (
+                              <span className="ml-2 text-[10px] font-extrabold px-1 py-0.5 bg-red-100 text-red-700 rounded-sm uppercase">Estoque baixo</span>
+                            )}
                           </button>
                         )}
                       </div>

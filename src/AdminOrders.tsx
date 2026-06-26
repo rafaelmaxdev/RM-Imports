@@ -41,6 +41,7 @@ export default function AdminOrders() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [peFilter, setPeFilter] = useState(false);
 
   const loadOrders = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -66,6 +67,7 @@ export default function AdminOrders() {
 
   const filteredOrders = useMemo(() => orders.filter((order) => {
     if (statusFilter !== "all" && order.status !== statusFilter) return false;
+    if (peFilter && !order.pronta_entrega) return false;
     if (!search.trim()) return true;
     const campos = [
       order.id,
@@ -75,7 +77,7 @@ export default function AdminOrders() {
       ...order.itens.map((item) => item.nome),
     ].filter(Boolean).join(" ");
     return buscaPorPalavras(search, campos);
-  }), [orders, statusFilter, search]);
+  }), [orders, statusFilter, peFilter, search]);
 
   async function handleStatusChange(id: string, newStatus: string) {
     const label = STATUS_CONFIG_ADMIN[newStatus]?.label || newStatus;
@@ -207,6 +209,16 @@ export default function AdminOrders() {
             <option value="em_estoque">Em estoque</option>
             <option value="em_entrega">Em entrega</option>
           </select>
+          <button
+            className={`px-3 py-2 text-sm font-semibold rounded-md cursor-pointer transition-colors whitespace-nowrap ${
+              peFilter
+                ? "bg-teal-500 text-white"
+                : "bg-gray-100 text-text-muted hover:bg-gray-200"
+            }`}
+            onClick={() => setPeFilter((prev) => !prev)}
+          >
+            📦 PE
+          </button>
           <input
             type="text"
             placeholder="Buscar ID, nome, tel..."
@@ -225,6 +237,7 @@ export default function AdminOrders() {
             const isExpanded = expandedId === order.id;
             const totalItens = order.itens.length;
             const totalPersonalizacoes = order.itens.filter((i) => i.personalizado).length;
+            const totalPE = order.itens.filter((i) => i.prontaEntrega).length;
             const statusInfo = STATUS_CONFIG_ADMIN[order.status] || STATUS_CONFIG_ADMIN.pendente;
             const paymentLabel = order.payment_method ? PAYMENT_LABELS_SHORT[order.payment_method] || order.payment_method : null;
 
@@ -261,6 +274,7 @@ export default function AdminOrders() {
                       <div className="text-sm text-text-muted mt-1">
                         {order.data} às {order.hora} • {totalItens} {totalItens === 1 ? "item" : "itens"}
                         {totalPersonalizacoes > 0 && ` • ${totalPersonalizacoes} personalização${totalPersonalizacoes > 1 ? "ões" : ""}`}
+                        {totalPE > 0 && ` • ${totalPE} pronta entrega`}
                       </div>
                       {order.status === "pago" && (
                         <div className="text-xs text-accent font-semibold mt-1">
@@ -299,7 +313,14 @@ export default function AdminOrders() {
                         {order.itens.map((item, i) => (
                           <div key={i} className="flex items-start gap-3 p-3 bg-bg-base rounded-md">
                             <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-sm">{item.nome}</div>
+                              <div className="font-semibold text-sm">
+                                {item.nome}
+                                {item.prontaEntrega && (
+                                  <span className="ml-1.5 text-[9px] font-extrabold px-1 py-0.5 bg-teal-500 text-white rounded-sm uppercase tracking-wider align-middle">
+                                    PE {item.peMarkup ? `+R$${item.peMarkup}` : ''}
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted mt-1">
                                 <span className="px-1.5 py-0.5 bg-primary/10 rounded">{item.tipo}</span>
                                 <span>Tam: {item.tamanho}</span>

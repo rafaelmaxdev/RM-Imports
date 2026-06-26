@@ -5,7 +5,6 @@ import {
   calcularPreco,
   ADICIONAL_TAMANHO,
   precoPersonalizacao,
-  PRONTA_ENTREGA_MARKUP,
   gerarId,
 } from "../types";
 
@@ -101,18 +100,19 @@ describe("Price calculation", () => {
 });
 
 describe("Pronta entrega markup", () => {
-  it("aplica markup de 15% no preco base", () => {
+  const PE_MARKUP = 20;
+  it("aplica taxa fixa de R$20 no preco base", () => {
     const base = 129.90;
-    const comMarkup = Math.round(base * PRONTA_ENTREGA_MARKUP * 100) / 100;
-    expect(comMarkup).toBe(149.39);
+    const comTaxa = Math.round((base + PE_MARKUP) * 100) / 100;
+    expect(comTaxa).toBe(149.90);
   });
 
-  it("markup sobre preco com desconto", () => {
+  it("taxa fixa sobre preco com desconto", () => {
     const base = 129.90;
     const desconto = 0.2;
     const precoDesc = Math.round((base - base * desconto) * 100) / 100;
-    const comMarkup = Math.round(precoDesc * PRONTA_ENTREGA_MARKUP * 100) / 100;
-    expect(comMarkup).toBe(119.51);
+    const comTaxa = Math.round((precoDesc + PE_MARKUP) * 100) / 100;
+    expect(comTaxa).toBe(123.92);
   });
 });
 

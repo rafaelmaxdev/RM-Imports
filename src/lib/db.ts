@@ -166,13 +166,15 @@ async function fetchLojaConfigFromDb(): Promise<LojaConfig> {
       config.desconto_global = row.value as number | null;
     } else if (row.key === "promocoes_time" && typeof row.value === "object") {
       config.promocoes_time = row.value as Record<string, { tipo: string; valor: number | null; preco: number | null }>;
+    } else if (row.key === "pronta_entrega_markup") {
+      config.pronta_entrega_markup = row.value as number;
     }
   }
   return config;
 }
 
 export async function updateLojaConfig(
-  key: "precos_base" | "precos_promocao" | "promocao_ativa" | "desconto_global" | "promocoes_time",
+  key: "precos_base" | "precos_promocao" | "promocao_ativa" | "desconto_global" | "promocoes_time" | "pronta_entrega_markup",
   value: Record<string, number> | Record<string, boolean> | number | null | Record<string, { tipo: string; valor: number | null; preco: number | null }>,
 ): Promise<void> {
   const { error } = await supabase
@@ -299,6 +301,7 @@ function dbPedidoToOrder(db: DbPedido): import("../types").Order {
     mp_payment_id: db.mp_payment_id || undefined,
     admin_order: db.admin_order ?? false,
     pronta_entrega: db.pronta_entrega ?? false,
+    created_at: db.created_at,
   };
 }
 

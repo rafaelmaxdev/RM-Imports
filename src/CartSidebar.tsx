@@ -375,11 +375,11 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                       {item.personalizado && ` • ${item.nomePersonalizado} #${item.numeroPersonalizado}`}
                     </div>
                     <div className="font-bold text-accent text-sm">
-                      {item.prontaEntrega && item.precoBase > 0 && Math.abs(item.precoBase * 1.15 - item.preco) < 0.02 ? (
+                      {item.prontaEntrega ? (
                         <span className="flex items-baseline gap-1.5">
                           <span className="text-text-muted text-xs line-through">{formatarMoeda(item.precoBase)}</span>
                           <span>{formatarMoeda(item.preco)}</span>
-                          <span className="text-[9px] text-green-600 font-semibold">+15%</span>
+                          <span className="text-[9px] text-green-600 font-semibold">+R${item.peMarkup ?? 20}</span>
                         </span>
                       ) : item.precoBase != null && item.precoBase > item.preco ? (
                         <span className="flex items-baseline gap-1.5">

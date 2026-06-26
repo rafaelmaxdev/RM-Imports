@@ -19,8 +19,6 @@ import { normalizarBusca } from "./lib/utils";
 import { TIPO_SHORT } from "./lib/status";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
 
-const PRONTA_ENTREGA_MARKUP = 1.15;
-
 // ── Grouped product ──
 
 interface GroupedProduct {
@@ -182,12 +180,13 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
     product.time,
   );
   const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
+  const peMarkup = config.pronta_entrega_markup ?? 20;
   const selectedSizeInfo = selectedIdx !== null ? availableSizes[selectedIdx] ?? null : null;
   const selectedTam = selectedSizeInfo?.tamanho ?? "";
   const adicionalTam = ADICIONAL_TAMANHO[selectedTam] || 0;
   const adicionalPers = selectedSizeInfo?.personalizado ? precoPersonalizacao(product.tipo) : 0;
-  const precoBaseMarcado = Math.round((base + adicionalTam + adicionalPers) * PRONTA_ENTREGA_MARKUP * 100) / 100;
-  const precoPromoMarcado = promo !== null ? Math.round((promo + adicionalTam + adicionalPers) * PRONTA_ENTREGA_MARKUP * 100) / 100 : null;
+  const precoBaseMarcado = Math.round((base + adicionalTam + adicionalPers + peMarkup) * 100) / 100;
+  const precoPromoMarcado = promo !== null ? Math.round((promo + adicionalTam + adicionalPers + peMarkup) * 100) / 100 : null;
   const prontaEntregaPrice = precoPromoMarcado ?? precoBaseMarcado;
   const prontaEntregaBasePrice = precoBaseMarcado;
 
@@ -213,6 +212,7 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
       preco: prontaEntregaPrice,
       precoBase: priceInfo.base + adicionalTam + adicionalPers,
       prontaEntrega: true,
+      peMarkup,
     };
 
     addToCart(item);
@@ -357,26 +357,16 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
 
           {/* Price breakdown */}
           <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 p-3 bg-bg-base rounded-md mb-3 text-sm">
+            <span>Base:</span>
+            <span>{formatarMoeda(base)}</span>
             {emPromocao && promo !== null && (
               <>
-                <span className="text-accent font-semibold">{discountLabel || "Promoção"}</span>
+                <span className="text-accent font-semibold">Desconto:</span>
                 <span className="text-accent font-semibold">-{formatarMoeda(base - promo)}</span>
               </>
             )}
-            <span>Base{(emPromocao && promo !== null) ? ' (original)' : ''}:</span>
-            <span>{formatarMoeda(base)}</span>
-            {adicionalTam > 0 && (
-              <>
-                <span>Tamanho {selectedTam}:</span>
-                <span>+{formatarMoeda(adicionalTam)}</span>
-              </>
-            )}
-            {adicionalPers > 0 && (
-              <>
-                <span>Personalização:</span>
-                <span>+{formatarMoeda(adicionalPers)}</span>
-              </>
-            )}
+            <span className="text-green-600">Taxa Pronta Entrega:</span>
+            <span className="text-green-600">+{formatarMoeda(peMarkup)}</span>
             <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">
               <span>Total:</span>
               <span>{formatarMoeda(prontaEntregaPrice)}</span>
@@ -420,6 +410,12 @@ export default function ProntaEntrega() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtroBusca, setFiltroBusca] = useState("");
+  const [filtroTime, setFiltroTime] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("");
+  const [filtroPrecoMin, setFiltroPrecoMin] = useState("");
+  const [filtroPrecoMax, setFiltroPrecoMax] = useState("");
+  const ITENS_POR_PAGINA = 20;
+  const [paginaAtual, setPaginaAtual] = useState(1);
   const [produtoSelecionado, setProdutoSelecionado] = useState<GroupedProduct | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduto, setToastProduto] = useState("");
@@ -480,16 +476,62 @@ export default function ProntaEntrega() {
   // Group estoque items with full product data
   const grouped = useMemo(() => groupEstoqueItems(estoque, produtos), [estoque, produtos]);
 
-  // Text search filter
-  const filtered = useMemo(() => {
-    if (!filtroBusca.trim()) return grouped;
+  // Unique teams and types for filter dropdowns
+  const timesUnicos = useMemo(() => [...new Set(grouped.map((p) => p.time).filter(Boolean))].sort(), [grouped]);
+  const tiposUnicos = useMemo(() => [...new Set(grouped.map((p) => p.tipo).filter(Boolean))].sort(), [grouped]);
 
-    const words = normalizarBusca(filtroBusca).split(" ").filter(Boolean);
-    return grouped.filter((p) => {
-      const campos = normalizarBusca([p.nome, p.time, p.liga, p.tipo, p.temporada].join(" "));
-      return words.every((w) => campos.includes(w));
-    });
-  }, [grouped, filtroBusca]);
+  // Filters
+  const filtered = useMemo(() => {
+    let result = grouped;
+
+    if (filtroBusca.trim()) {
+      const words = normalizarBusca(filtroBusca).split(" ").filter(Boolean);
+      result = result.filter((p) => {
+        const campos = normalizarBusca([p.nome, p.time, p.liga, p.tipo, p.temporada].join(" "));
+        return words.every((w) => campos.includes(w));
+      });
+    }
+
+    if (filtroTime) {
+      result = result.filter((p) => p.time === filtroTime);
+    }
+
+    if (filtroTipo) {
+      result = result.filter((p) => p.tipo === filtroTipo);
+    }
+
+    if (filtroPrecoMin) {
+      const min = parseFloat(filtroPrecoMin);
+      if (!isNaN(min)) {
+        result = result.filter((p) => {
+          const priceInfo = getPrecoProduto(p.tipo, config!, p.precoCustomizado, p.promocaoTipo, p.promocaoValor, p.time);
+          const precoFinal = priceInfo.promo ?? priceInfo.base;
+          return precoFinal >= min;
+        });
+      }
+    }
+
+    if (filtroPrecoMax) {
+      const max = parseFloat(filtroPrecoMax);
+      if (!isNaN(max)) {
+        result = result.filter((p) => {
+          const priceInfo = getPrecoProduto(p.tipo, config!, p.precoCustomizado, p.promocaoTipo, p.promocaoValor, p.time);
+          const precoFinal = priceInfo.promo ?? priceInfo.base;
+          return precoFinal <= max;
+        });
+      }
+    }
+
+    return result;
+  }, [grouped, filtroBusca, filtroTime, filtroTipo, filtroPrecoMin, filtroPrecoMax, config]);
+
+  // Reset to page 1 when filters change
+  const filtrosKey = JSON.stringify({ filtroBusca, filtroTime, filtroTipo, filtroPrecoMin, filtroPrecoMax });
+  useEffect(() => { setPaginaAtual(1); }, [filtrosKey]);
+
+  const totalPaginas = Math.max(1, Math.ceil(filtered.length / ITENS_POR_PAGINA));
+  const paginaSegura = Math.min(paginaAtual, totalPaginas);
+  const paginated = filtered.slice((paginaSegura - 1) * ITENS_POR_PAGINA, paginaSegura * ITENS_POR_PAGINA);
 
   // ── Loading state ──
 
@@ -570,10 +612,11 @@ export default function ProntaEntrega() {
           <p className="text-sm sm:text-base text-text-muted">Camisas disponíveis para entrega imediata</p>
         </div>
 
-        {/* Search bar */}
-        <div className="mb-6">
+        {/* Filters */}
+        <div className="mb-6 space-y-3">
+          {/* Search */}
           <label className="flex flex-col gap-0.5 max-w-md mx-auto">
-            <span className="text-xs text-text-muted font-medium pl-1">Filtrar por nome, time ou liga</span>
+            <span className="text-xs text-text-muted font-medium pl-1">Buscar por nome, time ou liga</span>
             <input
               type="text"
               value={filtroBusca}
@@ -582,6 +625,53 @@ export default function ProntaEntrega() {
               className="w-full px-3 py-2 border border-border rounded-md bg-card-bg text-sm"
             />
           </label>
+
+          {/* Dropdown filters */}
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={filtroTime}
+              onChange={(e) => setFiltroTime(e.target.value)}
+              className="px-3 py-2 text-sm border border-border rounded-md bg-card-bg flex-1 min-w-[120px]"
+            >
+              <option value="">Todos os times</option>
+              {timesUnicos.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+
+            <select
+              value={filtroTipo}
+              onChange={(e) => setFiltroTipo(e.target.value)}
+              className="px-3 py-2 text-sm border border-border rounded-md bg-card-bg flex-1 min-w-[120px]"
+            >
+              <option value="">Todos os tipos</option>
+              {tiposUnicos.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+
+            <div className="flex items-center gap-1 flex-1 min-w-[180px]">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={filtroPrecoMin}
+                onChange={(e) => setFiltroPrecoMin(e.target.value)}
+                placeholder="Preço min"
+                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+              />
+              <span className="text-text-muted text-xs">—</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={filtroPrecoMax}
+                onChange={(e) => setFiltroPrecoMax(e.target.value)}
+                placeholder="Preço max"
+                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Results */}
@@ -592,8 +682,10 @@ export default function ProntaEntrega() {
             <p className="text-sm">Tente ajustar a busca.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 items-stretch">
-            {filtered.map((p) => {
+          <>
+            <p className="text-xs text-text-muted mb-2 text-center">{filtered.length} produto{filtered.length > 1 ? 's' : ''} encontrado{filtered.length > 1 ? 's' : ''}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 items-stretch">
+            {paginated.map((p) => {
               const priceInfo = getPrecoProduto(
                 p.tipo,
                 config!,
@@ -602,9 +694,10 @@ export default function ProntaEntrega() {
                 p.promocaoValor,
                 p.time,
               );
+              const peMarkup = config!.pronta_entrega_markup ?? 20;
               const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
-              const precoBaseMarcado = Math.round(base * PRONTA_ENTREGA_MARKUP * 100) / 100;
-              const pePrice = promo !== null ? Math.round(promo * PRONTA_ENTREGA_MARKUP * 100) / 100 : precoBaseMarcado;
+              const precoBaseMarcado = Math.round((base + peMarkup) * 100) / 100;
+              const pePrice = promo !== null ? Math.round((promo + peMarkup) * 100) / 100 : precoBaseMarcado;
 
               return (
                 <div
@@ -718,7 +811,7 @@ export default function ProntaEntrega() {
                         <span className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(pePrice)}</span>
                         {promo !== null && (
                           <span className="text-text-muted text-[10px] sm:text-sm line-through">
-                            {formatarMoeda(Math.round(base * PRONTA_ENTREGA_MARKUP * 100) / 100)}
+                            {formatarMoeda(Math.round((base + peMarkup) * 100) / 100)}
                           </span>
                         )}
                       </div>
@@ -743,6 +836,30 @@ export default function ProntaEntrega() {
               );
             })}
           </div>
+
+          {/* Pagination */}
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <button
+                className="px-3 py-1.5 text-sm font-semibold border border-border rounded-md bg-card-bg cursor-pointer hover:bg-border disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={paginaSegura <= 1}
+                onClick={() => setPaginaAtual((p) => Math.max(1, p - 1))}
+              >
+                ← Anterior
+              </button>
+              <span className="text-sm text-text-muted">
+                {paginaSegura} de {totalPaginas}
+              </span>
+              <button
+                className="px-3 py-1.5 text-sm font-semibold border border-border rounded-md bg-card-bg cursor-pointer hover:bg-border disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={paginaSegura >= totalPaginas}
+                onClick={() => setPaginaAtual((p) => Math.min(totalPaginas, p + 1))}
+              >
+                Próximo →
+              </button>
+            </div>
+          )}
+        </>
         )}
       </div>
 

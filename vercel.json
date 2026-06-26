@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/auto-cancel",
+      "schedule": "0 * * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }

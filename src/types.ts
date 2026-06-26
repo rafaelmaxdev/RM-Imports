@@ -13,7 +13,8 @@ export interface CartItem {
   preco: number;
   precoBase: number;       // Total price without any discount (base + add-ons)
   feminino: boolean;
-  prontaEntrega?: boolean; // True when buying from stock (15% markup applied)
+  prontaEntrega?: boolean; // True when buying from stock
+  peMarkup?: number;       // PE markup value used when added to cart
 }
 
 export interface OrderItem {
@@ -29,6 +30,8 @@ export interface OrderItem {
   precoBase?: number;      // Total price without any discount (base + add-ons); optional for backward compat
   yupooUrl: string;
   feminino: boolean;
+  prontaEntrega?: boolean;
+  peMarkup?: number;
 }
 
 export interface OrderAddress {
@@ -105,6 +108,7 @@ export interface LojaConfig {
   promocao_ativa: Record<string, boolean>;
   desconto_global?: number | null;
   promocoes_time?: Record<string, { tipo: string; valor: number | null; preco: number | null }>;
+  pronta_entrega_markup: number;
 }
 
 export const DEFAULT_CONFIG: LojaConfig = {
@@ -146,6 +150,7 @@ export const DEFAULT_CONFIG: LojaConfig = {
   },
   desconto_global: null,
   promocoes_time: {},
+  pronta_entrega_markup: 20,
 };
 
 export const TIPOS_CATEGORIA = ["Torcedor", "Jogador", "Retrô", "Manga Longa Torcedor", "Manga Longa Jogador", "Manga Longa Retrô", "Goleiro", "Treinamento", "Polo", "NBA"] as const;
@@ -355,8 +360,6 @@ export interface Cupom {
   created_at: string;
 }
 
-export const PRONTA_ENTREGA_MARKUP = 1.15;
-
 export const ADICIONAL_TAMANHO: Record<string, number> = {
   "G2": 10.00,
   "G3": 20.00,
@@ -456,7 +459,9 @@ export function montarMensagemPagamento(order: Order): string {
   msg += `*Resumo do Pedido:*\n`;
 
   order.itens.forEach((item, i) => {
-    msg += `\n*${i + 1}. ${item.nome}*\n`;
+    msg += `\n*${i + 1}. ${item.nome}*`;
+    if (item.prontaEntrega) msg += ` 📦 PE`;
+    msg += `\n`;
     msg += `   • Tamanho: ${item.tamanho}\n`;
     msg += `   • Modelo: ${item.genero}\n`;
     msg += `   • Tipo: ${item.tipo}\n`;

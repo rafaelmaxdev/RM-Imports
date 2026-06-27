@@ -25,11 +25,30 @@ function saveExtras(extras: ExtraCusto[]) {
   localStorage.setItem(EXTRA_KEY, JSON.stringify(extras));
 }
 
+const MESES = ["Todos", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+function filtrarPorData(o: Order, ano: number, mes: number | null): boolean {
+  let data: Date | null = null;
+  if (o.created_at) data = new Date(o.created_at);
+  else if (o.data) {
+    const p = o.data.split("/");
+    if (p.length === 3) data = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+  }
+  if (!data) return true;
+  if (data.getFullYear() !== ano) return false;
+  if (mes !== null && data.getMonth() + 1 !== mes) return false;
+  return true;
+}
+
 export default function AdminFinanceiro() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [pacotes, setPacotes] = useState<Pacote[]>([]);
   const [loading, setLoading] = useState(true);
   const [extras, setExtras] = useState<ExtraCusto[]>([]);
+
+  const now = new Date();
+  const [anoFiltro, setAnoFiltro] = useState(now.getFullYear());
+  const [mesFiltro, setMesFiltro] = useState<number | null>(null);
   useEffect(() => {
     loadExtrasFromSupabase().then((data) => {
       if (data.length > 0) { setExtras(data); saveExtras(data); }
@@ -116,7 +135,14 @@ export default function AdminFinanceiro() {
 
   if (loading) return <div className="text-center py-8 text-text-muted">Carregando...</div>;
 
-  const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega);
+  const anosDisponiveis = [...new Set(orders.map((o) => {
+    if (o.created_at) return new Date(o.created_at).getFullYear();
+    if (o.data) { const p = o.data.split("/"); if (p.length === 3) return parseInt(p[2]); }
+    return null;
+  }).filter((a): a is number => a !== null && !isNaN(a)))].sort((a, b) => b - a);
+  if (!anosDisponiveis.includes(anoFiltro) && anosDisponiveis.length > 0) setAnoFiltro(anosDisponiveis[0]);
+
+  const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && filtrarPorData(o, anoFiltro, mesFiltro));
   const peVendas: Order[] = [];
   const pedidosEmPacotes = new Set<string>();
   // Prorate costs by non-admin orders only
@@ -203,7 +229,21 @@ export default function AdminFinanceiro() {
     <div className="pb-16">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <h3 className="text-xl text-primary">Financeiro</h3>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center flex-wrap">
+          <select
+            className="px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+            value={anoFiltro}
+            onChange={(e) => setAnoFiltro(parseInt(e.target.value))}
+          >
+            {anosDisponiveis.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select
+            className="px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+            value={mesFiltro ?? 0}
+            onChange={(e) => setMesFiltro(parseInt(e.target.value) || null)}
+          >
+            {MESES.map((label, i) => <option key={i} value={i}>{label}</option>)}
+          </select>
           <button
             className={`px-3 py-2 text-sm font-semibold rounded-md cursor-pointer transition-all whitespace-nowrap ${
               loading ? "bg-accent/20 text-accent/60" : "bg-accent/10 text-accent hover:bg-accent/20"

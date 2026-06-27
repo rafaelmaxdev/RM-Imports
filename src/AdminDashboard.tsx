@@ -35,10 +35,35 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     load();
   }, []);
 
-  const [mesOffset, setMesOffset] = useState(0);
   const now = new Date();
-  const fimPeriodo = new Date(now.getFullYear(), now.getMonth() + 1 - mesOffset * 6, 1);
-  const inicioPeriodo = new Date(fimPeriodo.getFullYear(), fimPeriodo.getMonth() - 6, 1);
+  const anosDisponiveis = useMemo(() => {
+    const anos = new Set<number>();
+    anos.add(now.getFullYear());
+    for (const o of orders) {
+      if (o.created_at) anos.add(new Date(o.created_at).getFullYear());
+      if (o.data) {
+        const p = o.data.split("/");
+        if (p.length === 3) anos.add(parseInt(p[2]));
+      }
+    }
+    return [...anos].filter((a) => !isNaN(a)).sort((a, b) => b - a);
+  }, [orders]);
+  const [anoFiltro, setAnoFiltro] = useState(now.getFullYear());
+  const [mesFiltro, setMesFiltro] = useState<number | null>(null);
+  const MESES = ["Todos", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+  function filtrarPorData(o: Order): boolean {
+    let data: Date | null = null;
+    if (o.created_at) data = new Date(o.created_at);
+    else if (o.data) {
+      const p = o.data.split("/");
+      if (p.length === 3) data = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+    }
+    if (!data) return true;
+    if (data.getFullYear() !== anoFiltro) return false;
+    if (mesFiltro !== null && data.getMonth() + 1 !== mesFiltro) return false;
+    return true;
+  }
 
   const {
     totalOrders,
@@ -51,29 +76,39 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     paymentCount,
     statusCount,
   } = useMemo(() => {
-    const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && o.status !== "pendente");
-    const peVendas = orders.filter((o) => o.pronta_entrega && !o.admin_order && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente");
-    const adminOrders = orders.filter((o) => o.admin_order && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente");
+    const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && o.status !== "pendente" && filtrarPorData(o));
+    const peVendas = orders.filter((o) => o.pronta_entrega && !o.admin_order && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente" && filtrarPorData(o));
+    const adminOrders = orders.filter((o) => o.admin_order && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente" && filtrarPorData(o));
     const revenue = ativos.reduce((s, o) => s + o.total, 0);
     const pending = orders.filter((o) => o.status === "pendente").length;
 
-    // Monthly revenue for 6-month window
+    // Monthly revenue for filtered year
     const monthMap: Record<string, { revenue: number; count: number; itens: number }> = {};
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(fimPeriodo.getFullYear(), fimPeriodo.getMonth() - i - 1, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    for (let m = 1; m <= 12; m++) {
+      const key = `${anoFiltro}-${String(m).padStart(2, "0")}`;
       monthMap[key] = { revenue: 0, count: 0, itens: 0 };
     }
     for (const o of ativos) {
-      const partes = o.data?.split("/");
-      if (!partes || partes.length !== 3) continue;
-      const d = new Date(parseInt(partes[2]), parseInt(partes[1]) - 1, parseInt(partes[0]));
-      if (d < inicioPeriodo || d >= fimPeriodo) continue;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (monthMap[key]) {
-        monthMap[key].revenue += o.total;
-        monthMap[key].count += 1;
-        monthMap[key].itens += o.itens.length;
+      if (!filtrarPorData(o)) continue;
+      const d = o.created_at ? new Date(o.created_at) : null;
+      if (!d && o.data) {
+        const p = o.data.split("/");
+        if (p.length === 3) {
+          const dd = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+          const key = `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}`;
+          if (monthMap[key]) {
+            monthMap[key].revenue += o.total;
+            monthMap[key].count += 1;
+            monthMap[key].itens += o.itens.length;
+          }
+        }
+      } else if (d) {
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        if (monthMap[key]) {
+          monthMap[key].revenue += o.total;
+          monthMap[key].count += 1;
+          monthMap[key].itens += o.itens.length;
+        }
       }
     }
 
@@ -169,25 +204,27 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
         })}
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <select
+          className="px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+          value={anoFiltro}
+          onChange={(e) => { setAnoFiltro(parseInt(e.target.value)); setMesFiltro(null); }}
+        >
+          {anosDisponiveis.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select
+          className="px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+          value={mesFiltro ?? 0}
+          onChange={(e) => setMesFiltro(parseInt(e.target.value) || null)}
+        >
+          {MESES.map((label, i) => <option key={i} value={i}>{label}</option>)}
+        </select>
+      </div>
+
       {/* Monthly Revenue Chart */}
       <div className="bg-card-bg rounded-lg border border-border p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-primary">Receita Mensal</h3>
-          <div className="flex gap-1">
-            <button
-              className="w-8 h-8 flex items-center justify-center rounded-md border border-border bg-card-bg cursor-pointer hover:bg-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              disabled={fimPeriodo >= new Date(now.getFullYear(), now.getMonth() + 1, 1)}
-              onClick={() => setMesOffset((p) => p - 1)}
-              aria-label="Período anterior"
-            >←</button>
-            <button
-              className="w-8 h-8 flex items-center justify-center rounded-md border border-border bg-card-bg cursor-pointer hover:bg-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              disabled={mesOffset <= 0}
-              onClick={() => setMesOffset((p) => p + 1)}
-              aria-label="Próximo período"
-            >→</button>
-          </div>
-        </div>
+        <h3 className="text-sm font-semibold text-primary mb-4">Receita Mensal</h3>
         <div className="flex items-end gap-3 h-48">
           {monthlyData.map((m) => {
             const pct = maxRevenue > 0 ? (m.revenue / maxRevenue) * 100 : 0;
@@ -208,9 +245,6 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
             );
           })}
         </div>
-        <p className="text-[10px] text-text-muted text-center mt-2">
-          {monthlyData[0]?.mes ?? ""} a {monthlyData[monthlyData.length - 1]?.mes ?? ""}
-        </p>
       </div>
 
       {/* Bottom Grid */}

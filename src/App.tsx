@@ -254,10 +254,10 @@ function AdminPanel({
 
       while (!done) {
         setPrecacheStatus(`Cacheando imagens... ${totalCached} processadas, ${totalSkipped} já cacheadas.`);
-        const res = await fetch("/api/precache-batch", {
+        const res = await fetch("/api/precache", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ limit: 10, offset }),
+          body: JSON.stringify({ batch: true }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();

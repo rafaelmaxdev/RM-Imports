@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/auto-cancel",
+      "path": "/api/check-admin?action=cancel",
       "schedule": "0 3 * * *"
     }
   ],

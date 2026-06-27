@@ -138,14 +138,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const { produtoId } = req.body;
+  const { produtoId, batch } = req.body;
 
+  if (batch) {
+    // Batch mode: process all products
+    let totalCached = 0;
+    let totalSkipped = 0;
+    let cursor: string | null = null;
+    const BATCH_SIZE = 50;
+
+    while (true) {
+      let query = supabase.from('produtos').select('id, imagem_urls, imagem_urls_feminina, cached_image_urls').order('id').limit(BATCH_SIZE);
+      if (cursor) query = query.gt('id', cursor);
+      const { data: produtos } = await query;
+      if (!produtos || produtos.length === 0) break;
+
+      for (const produto of produtos) {
+        cursor = produto.id;
+        const allUrls: string[] = [
+          ...(Array.isArray(produto.imagem_urls) ? produto.imagem_urls.filter(Boolean) : []),
+          ...(Array.isArray(produto.imagem_urls_feminina) ? produto.imagem_urls_feminina.filter(Boolean) : []),
+        ];
+        if (allUrls.length === 0) { totalSkipped++; continue; }
+
+        const sizes: ('small' | 'medium' | 'large')[] = ['small', 'medium', 'large'];
+        const cachedImageUrls: { small?: string; medium?: string; large?: string }[] = [];
+
+        for (const url of allUrls) {
+          const entry: { small?: string; medium?: string; large?: string } = {};
+          for (const size of sizes) {
+            const variantUrl = toSizeVariant(url, size);
+            try {
+              const urlObj = new URL(variantUrl);
+              if (!ALLOWED_DOMAINS.some(d => urlObj.hostname === d || urlObj.hostname.endsWith('.' + d))) continue;
+            } catch { continue; }
+            const result = await cacheImage(variantUrl);
+            if (result) entry[size] = result.publicUrl;
+          }
+          cachedImageUrls.push(entry);
+        }
+
+        await supabase.from('produtos').update({ cached_image_urls: cachedImageUrls }).eq('id', produto.id);
+        totalCached++;
+      }
+    }
+
+    res.json({ totalCached, totalSkipped });
+    return;
+  }
+
+  // Single product mode
   if (!produtoId || typeof produtoId !== 'string') {
     res.status(400).json({ error: 'Missing produtoId' });
     return;
   }
 
-  // Fetch product image URLs
   const { data: produto, error: fetchError } = await supabase
     .from('produtos')
     .select('id, imagem_urls, imagem_urls_feminina, cached_image_urls')
@@ -157,60 +204,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const imagemUrls: string[] = Array.isArray(produto.imagem_urls)
-    ? produto.imagem_urls.filter(Boolean)
-    : [];
-  const femininaUrls: string[] = Array.isArray(produto.imagem_urls_feminina)
-    ? produto.imagem_urls_feminina.filter(Boolean)
-    : [];
-
-  // Combine both masculine and feminine image URLs for caching
-  const allUrls = [...imagemUrls, ...femininaUrls];
+  const allUrls: string[] = [
+    ...(Array.isArray(produto.imagem_urls) ? produto.imagem_urls.filter(Boolean) : []),
+    ...(Array.isArray(produto.imagem_urls_feminina) ? produto.imagem_urls_feminina.filter(Boolean) : []),
+  ];
 
   if (allUrls.length === 0) {
     res.json({ cached_image_urls: [] });
     return;
   }
 
-  // Build cached_image_urls for each image, for each size variant
   const sizes: ('small' | 'medium' | 'large')[] = ['small', 'medium', 'large'];
   const cachedImageUrls: { small?: string; medium?: string; large?: string }[] = [];
 
-  // Process images sequentially to avoid overwhelming Yupoo
-  for (let i = 0; i < allUrls.length; i++) {
-    const originalUrl = allUrls[i];
+  for (const url of allUrls) {
     const entry: { small?: string; medium?: string; large?: string } = {};
-
     for (const size of sizes) {
-      const variantUrl = toSizeVariant(originalUrl, size);
-
-      // Validate domain
+      const variantUrl = toSizeVariant(url, size);
       try {
         const urlObj = new URL(variantUrl);
-        const isAllowed = ALLOWED_DOMAINS.some(d => urlObj.hostname === d || urlObj.hostname.endsWith('.' + d));
-        if (!isAllowed) continue;
-      } catch {
-        continue;
-      }
-
+        if (!ALLOWED_DOMAINS.some(d => urlObj.hostname === d || urlObj.hostname.endsWith('.' + d))) continue;
+      } catch { continue; }
       const result = await cacheImage(variantUrl);
-      if (result) {
-        entry[size] = result.publicUrl;
-      }
+      if (result) entry[size] = result.publicUrl;
     }
-
     cachedImageUrls.push(entry);
   }
 
-  // Update product with cached URLs
-  const { error: updateError } = await supabase
-    .from('produtos')
-    .update({ cached_image_urls: cachedImageUrls })
-    .eq('id', produtoId);
-
-  if (updateError) {
-    console.error('[api/precache] Update error:', updateError.message);
-  }
-
+  await supabase.from('produtos').update({ cached_image_urls: cachedImageUrls }).eq('id', produtoId);
   res.json({ cached_image_urls: cachedImageUrls });
 }

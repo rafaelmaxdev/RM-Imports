@@ -213,6 +213,7 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
       precoBase: priceInfo.base + adicionalTam + adicionalPers,
       prontaEntrega: true,
       peMarkup,
+      cachedImageUrls: product.cachedImageUrls,
     };
 
     addToCart(item);
@@ -412,8 +413,7 @@ export default function ProntaEntrega() {
   const [filtroBusca, setFiltroBusca] = useState("");
   const [filtroTime, setFiltroTime] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
-  const [filtroPrecoMin, setFiltroPrecoMin] = useState("");
-  const [filtroPrecoMax, setFiltroPrecoMax] = useState("");
+
   const ITENS_POR_PAGINA = 20;
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [produtoSelecionado, setProdutoSelecionado] = useState<GroupedProduct | null>(null);
@@ -500,33 +500,11 @@ export default function ProntaEntrega() {
       result = result.filter((p) => p.tipo === filtroTipo);
     }
 
-    if (filtroPrecoMin) {
-      const min = parseFloat(filtroPrecoMin);
-      if (!isNaN(min)) {
-        result = result.filter((p) => {
-          const priceInfo = getPrecoProduto(p.tipo, config!, p.precoCustomizado, p.promocaoTipo, p.promocaoValor, p.time);
-          const precoFinal = priceInfo.promo ?? priceInfo.base;
-          return precoFinal >= min;
-        });
-      }
-    }
-
-    if (filtroPrecoMax) {
-      const max = parseFloat(filtroPrecoMax);
-      if (!isNaN(max)) {
-        result = result.filter((p) => {
-          const priceInfo = getPrecoProduto(p.tipo, config!, p.precoCustomizado, p.promocaoTipo, p.promocaoValor, p.time);
-          const precoFinal = priceInfo.promo ?? priceInfo.base;
-          return precoFinal <= max;
-        });
-      }
-    }
-
     return result;
-  }, [grouped, filtroBusca, filtroTime, filtroTipo, filtroPrecoMin, filtroPrecoMax, config]);
+  }, [grouped, filtroBusca, filtroTime, filtroTipo, config]);
 
   // Reset to page 1 when filters change
-  const filtrosKey = JSON.stringify({ filtroBusca, filtroTime, filtroTipo, filtroPrecoMin, filtroPrecoMax });
+  const filtrosKey = JSON.stringify({ filtroBusca, filtroTime, filtroTipo });
   useEffect(() => { setPaginaAtual(1); }, [filtrosKey]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtered.length / ITENS_POR_PAGINA));
@@ -650,27 +628,7 @@ export default function ProntaEntrega() {
               ))}
             </select>
 
-            <div className="flex items-center gap-1 flex-1 min-w-[180px]">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={filtroPrecoMin}
-                onChange={(e) => setFiltroPrecoMin(e.target.value)}
-                placeholder="Preço min"
-                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
-              />
-              <span className="text-text-muted text-xs">—</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={filtroPrecoMax}
-                onChange={(e) => setFiltroPrecoMax(e.target.value)}
-                placeholder="Preço max"
-                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
-              />
-            </div>
+
           </div>
         </div>
 

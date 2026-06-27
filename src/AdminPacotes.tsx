@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { getPedidos, updatePedidoStatus, getPacotes, createPacote, updatePacoteStatus, updatePacoteFinanceiro, removePedidoFromPacote, deletePacote, getProdutos } from "./lib/db";
 import type { Order, OrderItem } from "./types";
 import type { Pacote, DbProduto } from "./lib/db";
-import { montarMensagemItem, formatarMoeda, TAMANHO_FORNECEDOR, yupooThumbnailUrl } from "./types";
+import { montarMensagemItem, formatarMoeda, TAMANHO_FORNECEDOR, yupooThumbnailUrl, getCachedImageUrl } from "./types";
 import type { LojaConfig } from "./types";
 import { PAYMENT_LABELS_SHORT, TIPO_ENGLISH, PACKAGE_STATUS_PIPELINE, PACKAGE_STATUS_LABELS, PACKAGE_NEXT_STATUS, PACKAGE_PREV_STATUS, PACKAGE_PREV_ACTION_LABELS, PACKAGE_STATUS_ACTION_LABELS, getMPFeeRate } from "./lib/status";
 
@@ -86,29 +86,32 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
   }
 
   const orderMap = useMemo(() => new Map(allOrders.map((o) => [o.id, o])), [allOrders]);
-  const productMap = useMemo(() => new Map(produtos.map((p) => [p.yupoo_url, p])), [produtos]);
+  const productMap = useMemo(() => {
+    const map = new Map<string, DbProduto>();
+    for (const p of produtos) {
+      if (p.yupoo_url) map.set(p.yupoo_url, p);
+      map.set(p.nome, p);
+    }
+    return map;
+  }, [produtos]);
 
   function getOrderById(id: string): Order | undefined {
     return orderMap.get(id);
   }
 
-  function getProductImage(yupooUrl: string, feminino?: boolean): string {
-    if (!yupooUrl) return "";
-    const prod = productMap.get(yupooUrl);
+  function getProductImage(yupooUrl: string, nome: string, feminino?: boolean): string {
+    const prod = productMap.get(yupooUrl) || productMap.get(nome);
     if (!prod) return "";
-    if (feminino && prod.imagem_urls_feminina && prod.imagem_urls_feminina.length > 0) {
-      return yupooThumbnailUrl(prod.imagem_urls_feminina[0], "medium");
-    }
-    if (prod.imagem_urls?.length > 0) {
-      return yupooThumbnailUrl(prod.imagem_urls[0], "medium");
-    }
-    return "";
+    const urls = feminino ? prod.imagem_urls_feminina : prod.imagem_urls;
+    if (!urls || urls.length === 0) return "";
+    const cached = getCachedImageUrl(urls[0], prod.cached_image_urls, 0, "medium");
+    return cached || yupooThumbnailUrl(urls[0], "medium");
   }
 
   // Share single item via Web Share API (mobile) or clipboard (desktop)
   async function shareItem(item: OrderItem) {
     const msg = montarMensagemItem(item);
-    const img = getProductImage(item.yupooUrl, item.feminino && item.genero === "Feminino");
+    const img = getProductImage(item.yupooUrl, item.nome, item.feminino && item.genero === "Feminino");
     const imageUrls = img ? [img] : [];
 
     // Try Web Share API with files first (image + text)
@@ -361,7 +364,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                   {order.itens.map((item, i) => {
                     const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
                     const version = item.feminino && item.genero === "Feminino" ? `${tipoEn} WOMENS` : `${tipoEn}`;
-                    const img = getProductImage(item.yupooUrl, item.feminino && item.genero === "Feminino");
+                    const img = getProductImage(item.yupooUrl, item.nome, item.feminino && item.genero === "Feminino");
                     return (
                       <div key={i} className="p-3 bg-bg-base rounded-md">
                         <div className="flex gap-3">
@@ -680,13 +683,13 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                                 </div>
                                 <div className="flex flex-wrap gap-2 mt-2">
                                   {order.itens.map((item, i) => {
-                                    const img = getProductImage(item.yupooUrl, item.feminino && item.genero === "Feminino");
+                                    const img = getProductImage(item.yupooUrl, item.nome, item.feminino && item.genero === "Feminino");
                                     return (
 <div key={i} className="flex items-center gap-2 bg-white px-2 py-1 rounded border border-border">
                                           {img && (
                                             <img src={img} alt={item.nome} width={32} height={32} className="w-8 h-8 object-cover rounded flex-shrink-0" />
                                           )}
-                                          <span className="text-xs">{item.nome} ({item.tamanho})</span>
+                                          <span className="text-xs">{item.nome} ({item.tamanho}){item.feminino && <span className="ml-1 text-[9px] font-extrabold px-1 py-0.5 bg-pink-100 text-pink-700 rounded-sm uppercase">Fem</span>}</span>
                                           <button
                                             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-text-muted hover:bg-accent hover:text-white transition-colors cursor-pointer"
                                             title="Copiar informações do item"
@@ -766,7 +769,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
         const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
         const version = item.feminino && item.genero === "Feminino" ? `${tipoEn} WOMENS` : `${tipoEn}`;
         const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
-        const img = getProductImage(item.yupooUrl, item.feminino && item.genero === "Feminino");
+        const img = getProductImage(item.yupooUrl, item.nome, item.feminino && item.genero === "Feminino");
         return (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSharing(null)}>
             <div className="bg-card-bg rounded-xl shadow-2xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
@@ -920,8 +923,9 @@ function CustosForm({
   const custoCalculadoBRL = custoCalculadoUSD * dolarRate;
 
   async function save() {
+    const custoFinal = localCusto ? parseFloat(localCusto) : (custoCalculadoBRL > 0 ? Math.round(custoCalculadoBRL * 100) / 100 : null);
     await onSaveAll(pacote, {
-      custo: localCusto ? parseFloat(localCusto) : (custoCalculadoBRL > 0 ? custoCalculadoBRL : null),
+      custo: custoFinal,
       frete: localFrete ? parseFloat(localFrete) : null,
       taxa_importacao: localTaxa ? parseFloat(localTaxa) : null,
       dolar_rate: localDolar ? parseFloat(localDolar) : null,
@@ -1306,7 +1310,7 @@ function DeliveredPacoteCard({
                       return (
                         <div key={`${o.id}-${i}`} className="flex justify-between text-xs text-green-600 border-b border-green-100 pb-1 last:border-b-0">
                           <span className="truncate max-w-[200px]">
-                            {o.admin_order ? "👤 " : ""}{item.nome} ({item.tamanho})
+                            {o.admin_order ? "👤 " : ""}{item.nome} ({item.tamanho}){item.feminino && <span className="ml-1 text-[9px] font-extrabold px-1 py-0.5 bg-pink-100 text-pink-700 rounded-sm uppercase">Fem</span>}
                           </span>
                           <span className="whitespace-nowrap">
                             Taxa: {formatarMoeda(taxaCamisa)} | Custo: {formatarMoeda(custoCamisa)} | Frete: {formatarMoeda(freteCamisa)}

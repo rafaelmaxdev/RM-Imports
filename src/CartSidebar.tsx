@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useCart } from "./CartContext";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import type { OrderAddress, PaymentMethod, Cupom } from "./types";
-import { formatarMoeda, yupooThumbnailUrl } from "./types";
+import { formatarMoeda, yupooThumbnailUrl, getCachedImageUrl } from "./types";
 import { validarCupom, aplicarCupom, validarCupomPorTelefone } from "./lib/db";
 
 interface CartSidebarProps {
@@ -352,6 +352,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                 <div key={i} className="flex gap-3 py-3 border-b border-border">
                   <img
                     src={
+                      getCachedImageUrl(item.imagemUrl, item.cachedImageUrls, 0, "small") ||
                       yupooThumbnailUrl(item.imagemUrl, "small") ||
                       "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Crect width='50' height='50' fill='%23eee'/%3E%3C/svg%3E"
                     }

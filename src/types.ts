@@ -15,6 +15,7 @@ export interface CartItem {
   feminino: boolean;
   prontaEntrega?: boolean; // True when buying from stock
   peMarkup?: number;       // PE markup value used when added to cart
+  cachedImageUrls?: CachedImageMap | null;
 }
 
 export interface OrderItem {

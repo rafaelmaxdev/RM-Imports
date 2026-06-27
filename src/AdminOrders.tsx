@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder, updatePedidoProntaEntrega, addOrderItemsToEstoque, autoCancelExpiredOrders } from "./lib/db";
 import { clearCache } from "./lib/cache";
 import type { Order } from "./types";
@@ -16,7 +16,7 @@ function montarMensagemCliente(order: Order): string {
 
   msg += `*Itens:*\n`;
   order.itens.forEach((item, i) => {
-    msg += `${i + 1}. ${item.nome} (${item.tamanho})\n`;
+    msg += `${i + 1}. ${item.nome} (${item.tamanho})${item.feminino ? ' ♀' : ''}\n`;
   });
   msg += `\n*Total: ${formatarMoeda(order.total)}*\n`;
 
@@ -43,6 +43,8 @@ export default function AdminOrders() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [peFilter, setPeFilter] = useState(false);
+  const [novosPedidos, setNovosPedidos] = useState(0);
+  const ultimoTotalRef = useRef(0);
 
   const loadOrders = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -65,6 +67,23 @@ export default function AdminOrders() {
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
+  // Poll for new orders every 30s
+  useEffect(() => {
+    if (loading) return;
+    const interval = setInterval(async () => {
+      try {
+        const all = await getPedidos();
+        const ativos = all.filter((o) => !["entregue", "cancelado", "reembolsado"].includes(o.status));
+        const total = ativos.length;
+        if (ultimoTotalRef.current > 0 && total > ultimoTotalRef.current) {
+          setNovosPedidos((p) => p + (total - ultimoTotalRef.current));
+        }
+        ultimoTotalRef.current = total;
+      } catch {}
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [loading]);
 
   const filteredOrders = useMemo(() => orders.filter((order) => {
     if (statusFilter !== "all" && order.status !== statusFilter) return false;
@@ -231,6 +250,18 @@ export default function AdminOrders() {
           />
         </div>
       </div>
+
+      {novosPedidos > 0 && (
+        <div className="mb-4 p-3 bg-green-100 border border-green-300 rounded-md flex items-center justify-between">
+          <span className="text-sm font-semibold text-green-800">🆕 {novosPedidos} novo{novosPedidos > 1 ? 's' : ''} pedido{novosPedidos > 1 ? 's' : ''}!</span>
+          <button
+            className="px-3 py-1.5 text-xs font-semibold bg-green-600 text-white rounded cursor-pointer hover:opacity-90"
+            onClick={() => { loadOrders(true); setNovosPedidos(0); }}
+          >
+            Recarregar
+          </button>
+        </div>
+      )}
 
       {filteredOrders.length === 0 ? (
         <p className="text-center text-text-muted py-8">Nenhum pedido encontrado.</p>

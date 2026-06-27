@@ -27,6 +27,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
   const [pacotes, setPacotes] = useState<Pacote[]>([]);
   const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
   const [showAllHistorico, setShowAllHistorico] = useState(false);
+  const [custosPacote, setCustosPacote] = useState<Pacote | null>(null);
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState<SharingState | null>(null);
 
@@ -65,8 +66,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
   const totalShirts = selectedOrders.reduce((sum, o) => sum + o.itens.length, 0);
 
   // Split pacotes into active (not entregue) and delivered
-  const activePacotes = pacotes.filter((p) => p.status !== "entregue" && p.status !== "em_estoque" && p.status !== "a_caminho");
-  const aCaminhoPacotes = pacotes.filter((p) => p.status === "a_caminho");
+  const activePacotes = pacotes.filter((p) => p.status !== "entregue");
   const deliveredPacotes = pacotes.filter((p) => p.status === "entregue");
 
   const wouldExceed = (order: Order): boolean => {
@@ -627,6 +627,13 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                             </div>
                           );
                         })}
+                        <button
+                          className="ml-auto px-2 py-1 text-[11px] font-semibold bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors cursor-pointer"
+                          onClick={(e) => { e.stopPropagation(); setCustosPacote(pacote); }}
+                          title="Preencher custos do pacote"
+                        >
+                          💰 Custos
+                        </button>
                       </div>
                     </div>
 
@@ -693,28 +700,6 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
             </div>
           )}
 
-          {/* Packages a caminho — show finance form */}
-          {aCaminhoPacotes.length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-lg font-bold text-primary mb-4">
-                🚚 Pacotes a Caminho
-                <span className="ml-2 inline-block px-1.5 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800">{aCaminhoPacotes.length}</span>
-              </h3>
-              <div className="flex flex-col gap-4">
-                {aCaminhoPacotes.map((pacote) => (
-                  <DeliveredPacoteCard
-                    key={pacote.id}
-                    pacote={pacote}
-                    allOrders={allOrders}
-                    config={config}
-                    onSaveFinanceiro={handleSaveFinanceiro}
-                    onRemovePedido={handleRemovePedido}
-                    onDeletePacote={handleDeletePacote}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
         </>
       )}
 
@@ -847,6 +832,140 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
           ✓ Mensagem copiada!
         </div>
       )}
+
+      {/* Custos modal */}
+      {custosPacote && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4" onClick={() => setCustosPacote(null)}>
+          <div className="bg-card-bg rounded-md p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-primary">💰 Custos do Pacote {custosPacote.id.slice(0, 8)}</h3>
+              <button className="text-text-muted hover:text-primary cursor-pointer bg-transparent border-none text-xl" onClick={() => setCustosPacote(null)}>✕</button>
+            </div>
+
+            <CustosForm
+              pacote={custosPacote}
+              allOrders={allOrders}
+              config={config}
+              onSaveFinanceiro={handleSaveFinanceiro}
+            />
+
+            <button className="mt-4 w-full py-2.5 text-sm font-semibold bg-primary text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setCustosPacote(null)}>
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CustosForm({
+  pacote,
+  allOrders,
+  config,
+  onSaveFinanceiro,
+}: {
+  pacote: Pacote;
+  allOrders: Order[];
+  config: LojaConfig;
+  onSaveFinanceiro: (pacote: Pacote, field: "custo" | "frete" | "taxa_importacao", value: string) => void;
+}) {
+  const [localCusto, setLocalCusto] = useState(pacote.custo?.toString() ?? "");
+  const [localFrete, setLocalFrete] = useState(pacote.frete?.toString() ?? "");
+  const [localTaxa, setLocalTaxa] = useState(pacote.taxa_importacao?.toString() ?? "");
+  const [localDolar, setLocalDolar] = useState("");
+
+  const orders = pacote.pedido_ids
+    .map((id) => allOrders.find((o) => o.id === id))
+    .filter((o): o is Order => !!o);
+
+  const custoCalculadoUSD = orders.reduce((sum, o) => {
+    return sum + o.itens.reduce((s, item) => {
+      const custoCat = config.custo_base[item.tipo] ?? 0;
+      const custoPers = item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0;
+      return s + custoCat + custoPers;
+    }, 0);
+  }, 0);
+  const dolarRate = parseFloat(localDolar) || 0;
+  const custoCalculadoBRL = custoCalculadoUSD * dolarRate;
+
+  function save() {
+    onSaveFinanceiro(pacote, "custo", localCusto || (custoCalculadoBRL > 0 ? custoCalculadoBRL.toString() : "0"));
+    onSaveFinanceiro(pacote, "frete", localFrete);
+    onSaveFinanceiro(pacote, "taxa_importacao", localTaxa);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="p-3 bg-green-50 rounded-md border border-green-200">
+        <label className="block text-xs font-semibold text-green-700 mb-1">Cotação do dólar (R$)</label>
+        <input
+          type="number" step="0.01" min="0"
+          value={localDolar}
+          onChange={(e) => setLocalDolar(e.target.value)}
+          placeholder="Ex: 5.20"
+          className="w-full max-w-[200px] px-3 py-2 text-sm border border-green-300 rounded-md bg-white"
+        />
+        <p className="text-xs text-green-600 mt-1">
+          Custo calculado: <strong>${custoCalculadoUSD.toFixed(2)} USD</strong>
+          {dolarRate > 0 && <> → <strong>R$ {custoCalculadoBRL.toFixed(2)}</strong></>}
+        </p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-bg-base">
+              <th className="text-left px-2 py-1.5">Item</th>
+              <th className="text-right px-2 py-1.5">Custo USD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map((o) =>
+              o.itens.map((item, i) => {
+                const custoCat = config.custo_base[item.tipo] ?? 0;
+                const custoPers = item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0;
+                return (
+                  <tr key={`${o.id}-${i}`} className="border-b border-border">
+                    <td className="px-2 py-1.5">
+                      <span className="font-medium">{item.nome}</span>
+                      <span className="text-text-muted ml-1">({item.tamanho})</span>
+                      {item.personalizado && <span className="text-accent ml-1">✦</span>}
+                    </td>
+                    <td className="text-right px-2 py-1.5">${(custoCat + custoPers).toFixed(2)}</td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+          <tfoot>
+            <tr className="font-bold">
+              <td className="px-2 py-1.5">Total</td>
+              <td className="text-right px-2 py-1.5">${custoCalculadoUSD.toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-text-muted mb-1">Custo total (R$)</label>
+          <input type="number" step="0.01" value={localCusto} onChange={(e) => setLocalCusto(e.target.value)} onBlur={save}
+            placeholder={custoCalculadoBRL > 0 ? custoCalculadoBRL.toFixed(2) : "0.00"}
+            className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg" />
+          {custoCalculadoBRL > 0 && !localCusto && <p className="text-[10px] text-green-600 mt-0.5">Auto: R$ {custoCalculadoBRL.toFixed(2)}</p>}
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-text-muted mb-1">Frete (R$)</label>
+          <input type="number" step="0.01" value={localFrete} onChange={(e) => setLocalFrete(e.target.value)} onBlur={save}
+            placeholder="0.00" className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-text-muted mb-1">Taxa de importação (R$)</label>
+          <input type="number" step="0.01" value={localTaxa} onChange={(e) => setLocalTaxa(e.target.value)} onBlur={save}
+            placeholder="0.00" className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -1193,6 +1312,7 @@ function DeliveredPacoteCard({
           </div>
         </div>
       )}
+
     </div>
   );
 }

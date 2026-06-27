@@ -361,9 +361,6 @@ export function precoPersonalizacao(tipo: string): number {
   return PRECO_PERSONALIZACAO_BASE;
 }
 
-/** @deprecated Use precoPersonalizacao(tipo) instead */
-export const PRECO_PERSONALIZACAO = PRECO_PERSONALIZACAO_BASE;
-
 export interface Cupom {
   id: string;
   codigo: string;

@@ -84,7 +84,8 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
     // Monthly revenue for filtered year
     const monthMap: Record<string, { revenue: number; count: number; itens: number }> = {};
-    for (let m = 1; m <= 12; m++) {
+    const ateMes = anoFiltro === now.getFullYear() ? now.getMonth() + 1 : 12;
+    for (let m = 1; m <= ateMes; m++) {
       const key = `${anoFiltro}-${String(m).padStart(2, "0")}`;
       monthMap[key] = { revenue: 0, count: 0, itens: 0 };
     }
@@ -163,7 +164,8 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     };
   }, [orders]);
 
-  const maxRevenue = Math.max(...monthlyData.map((m) => m.revenue), 1);
+  const chartData = mesFiltro ? monthlyData.filter((m) => parseInt(m.mes.split("-")[1]) === mesFiltro) : monthlyData;
+  const maxRevenue = Math.max(...chartData.map((m) => m.revenue), 1);
 
   if (loading) {
     return (
@@ -224,26 +226,25 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
       {/* Monthly Revenue Chart */}
       <div className="bg-card-bg rounded-lg border border-border p-4">
-        <h3 className="text-sm font-semibold text-primary mb-4">Receita Mensal</h3>
-        <div className="flex items-end gap-3 h-48">
-          {monthlyData.map((m) => {
+        <h3 className="text-sm font-semibold text-primary mb-4">Receita {mesFiltro ? `${MESES[mesFiltro]}/${anoFiltro}` : `Mensal ${anoFiltro}`}</h3>
+        <div className="overflow-x-auto pt-6 pb-2">
+        <div className="flex items-end gap-3 h-48 min-w-[400px]">
+          {chartData.map((m) => {
             const pct = maxRevenue > 0 ? (m.revenue / maxRevenue) * 100 : 0;
             const [ano, mesNum] = m.mes.split("-");
             const label = `${["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"][parseInt(mesNum) - 1]}/${ano}`;
             return (
               <div key={m.mes} className="flex-1 flex flex-col items-center h-full justify-end group">
-                <span className="text-[10px] text-text-muted whitespace-nowrap mb-0.5 opacity-0 group-hover:opacity-100 transition-opacity">{formatarMoeda(m.revenue)}</span>
                 <div className="w-full bg-accent/20 rounded-t relative" style={{ height: `${Math.max(pct, 3)}%` }}>
                   <div className="w-full h-full bg-accent rounded-t opacity-70 group-hover:opacity-100 transition-opacity" />
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-lg z-10">
-                    {formatarMoeda(m.revenue)} — {m.count} {m.count === 1 ? 'pedido' : 'pedidos'} ({m.itens} camisas)
-                  </div>
                 </div>
-                <span className="text-[9px] text-text-muted mt-0.5">{label}</span>
-                <span className="text-[8px] text-text-muted font-semibold">{m.count} {m.count === 1 ? 'pedido' : 'pedidos'} ({m.itens} camisas)</span>
+                <span className="text-[10px] text-text-muted font-semibold mt-0.5">{formatarMoeda(m.revenue)}</span>
+                <span className="text-[9px] text-text-muted">{label}</span>
+                <span className="text-[8px] text-text-muted">{m.count} {m.count === 1 ? 'pedido' : 'pedidos'} ({m.itens} camisas)</span>
               </div>
             );
           })}
+        </div>
         </div>
       </div>
 

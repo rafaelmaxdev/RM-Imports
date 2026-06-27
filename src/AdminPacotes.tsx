@@ -65,8 +65,8 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
   const totalShirts = selectedOrders.reduce((sum, o) => sum + o.itens.length, 0);
 
   // Split pacotes into active (not entregue) and delivered
-  const activePacotes = pacotes.filter((p) => p.status !== "entregue" && p.status !== "a_caminho");
-  const estoquePacotes = pacotes.filter((p) => p.status === "a_caminho");
+  const activePacotes = pacotes.filter((p) => p.status !== "entregue" && p.status !== "em_estoque" && p.status !== "a_caminho");
+  const aCaminhoPacotes = pacotes.filter((p) => p.status === "a_caminho");
   const deliveredPacotes = pacotes.filter((p) => p.status === "entregue");
 
   const wouldExceed = (order: Order): boolean => {
@@ -693,15 +693,15 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
             </div>
           )}
 
-          {/* Packages in stock — show finance form */}
-          {estoquePacotes.length > 0 && (
+          {/* Packages a caminho — show finance form */}
+          {aCaminhoPacotes.length > 0 && (
             <div className="mt-8">
               <h3 className="text-lg font-bold text-primary mb-4">
-                📦 Pacotes em Estoque
-                <span className="ml-2 inline-block px-1.5 py-0.5 rounded-full text-xs bg-teal-100 text-teal-800">{estoquePacotes.length}</span>
+                🚚 Pacotes a Caminho
+                <span className="ml-2 inline-block px-1.5 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800">{aCaminhoPacotes.length}</span>
               </h3>
               <div className="flex flex-col gap-4">
-                {estoquePacotes.map((pacote) => (
+                {aCaminhoPacotes.map((pacote) => (
                   <DeliveredPacoteCard
                     key={pacote.id}
                     pacote={pacote}

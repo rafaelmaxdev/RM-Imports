@@ -118,8 +118,6 @@ export default function AdminFinanceiro() {
 
   const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega);
   const peVendas: Order[] = [];
-  const cancelados = orders.filter((o) => o.status === "cancelado" || o.status === "reembolsado");
-
   const pedidosEmPacotes = new Set<string>();
   // Prorate costs by non-admin orders only
   function prorateCost(cost: number, totalShirts: number, nonAdminShirts: number): number {
@@ -144,8 +142,7 @@ export default function AdminFinanceiro() {
   const extraTotal = extras.reduce((s, e) => s + e.quantidade * e.preco, 0);
   const receitaBruta = ativos.reduce((s, o) => s + o.total, 0);
   const receitaPE = peVendas.reduce((s, o) => s + o.total, 0);
-  const receitaCancelados = cancelados.reduce((s, o) => s + o.total, 0);
-  const receitaEmPacotes = [...ativos, ...peVendas].filter((o) => pedidosEmPacotes.has(o.id)).reduce((s, o) => s + o.total, 0);
+  const receitaEmPacotes = ativos.filter((o) => pedidosEmPacotes.has(o.id)).reduce((s, o) => s + o.total, 0);
   const custosTotais = custoPacote + freteTotal + taxaTotal + extraTotal;
   const lucro = receitaEmPacotes - custoPacote - freteTotal - taxaTotal - extraTotal;
 
@@ -222,17 +219,16 @@ export default function AdminFinanceiro() {
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
         <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center" title="Pedidos de clientes (exclui admin e pronta entrega)">
-          <div className="text-2xl font-bold text-green-700">{ativos.length + peVendas.length}</div>
+          <div className="text-2xl font-bold text-green-700">{ativos.length}</div>
           <div className="text-xs text-green-600 mt-0.5">Vendas</div>
         </div>
-        <div className="p-4 bg-accent/10 border border-accent/30 rounded-lg text-center" title="Soma total de todos os pedidos pagos">
-          <div className="text-xl sm:text-2xl font-bold text-accent whitespace-nowrap">{formatarMoeda(receitaBruta + receitaPE)}</div>
-          <div className="text-xs text-text-muted mt-0.5">Receita total</div>
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-center" title="Total de camisas vendidas (exclui admin e pronta entrega)">
+          <div className="text-2xl font-bold text-blue-700">{ativos.reduce((s, o) => s + o.itens.length, 0)}</div>
+          <div className="text-xs text-blue-600 mt-0.5">Camisas Vendidas</div>
         </div>
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-center" title="Pedidos cancelados ou reembolsados">
-          <div className="text-2xl font-bold text-red-600">{cancelados.length}</div>
-          <div className="text-xs text-red-600 mt-0.5">Cancelados</div>
-          <div className="text-xs text-red-500 mt-0.5">{formatarMoeda(receitaCancelados)}</div>
+        <div className="p-4 bg-accent/10 border border-accent/30 rounded-lg text-center" title="Soma total de todos os pedidos pagos">
+          <div className="text-xl sm:text-2xl font-bold text-accent whitespace-nowrap">{formatarMoeda(receitaBruta)}</div>
+          <div className="text-xs text-text-muted mt-0.5">Receita total</div>
         </div>
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-center" title="Custos totais: produtos + frete + taxa + estoque + extras">
           <div className="text-xl sm:text-2xl font-bold text-yellow-700 whitespace-nowrap">{formatarMoeda(custosTotais)}</div>

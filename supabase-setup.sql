@@ -253,10 +253,15 @@ BEGIN
     'pago→cancelado',
     'pago→enviado_fornecedor',
     'enviado_fornecedor→em_producao',
+    'enviado_fornecedor→cancelado',
     'em_producao→a_caminho',
+    'em_producao→cancelado',
     'a_caminho→em_estoque',
+    'a_caminho→cancelado',
     'em_estoque→em_entrega',
-    'em_entrega→entregue'
+    'em_estoque→cancelado',
+    'em_entrega→entregue',
+    'em_entrega→cancelado'
   ];
 
   IF TG_OP = 'INSERT' THEN

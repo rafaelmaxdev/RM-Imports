@@ -180,7 +180,7 @@ export default function AdminOrders() {
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
         <h2 className="text-xl text-primary m-0">Pedidos ({filteredOrders.length})</h2>
-        <div className="flex gap-2 items-center w-full sm:w-auto">
+        <div className="flex gap-2 items-center w-full sm:w-auto flex-wrap">
           <button
             className={`px-3 py-2 text-sm font-semibold rounded-md cursor-pointer transition-all whitespace-nowrap ${
               refreshing
@@ -442,6 +442,18 @@ export default function AdminOrders() {
                         {order.pronta_entrega ? "📦 Pronta Entrega" : "📦 Marcar p/ Estoque"}
                       </button>
                     </div>
+
+                    {/* Cancel button — available for any non-final status */}
+                    {!["entregue", "cancelado", "reembolsado"].includes(order.status) && (
+                      <div className="pt-3 mt-3 border-t border-border">
+                        <button
+                          className="w-full py-2.5 text-sm font-semibold bg-red-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => handleStatusChange(order.id, "cancelado")}
+                        >
+                          ✕ Cancelar Pedido
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

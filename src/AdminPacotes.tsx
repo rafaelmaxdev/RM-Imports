@@ -28,6 +28,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
   const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
   const [showAllHistorico, setShowAllHistorico] = useState(false);
   const [custosPacote, setCustosPacote] = useState<Pacote | null>(null);
+  const [mensagem, setMensagem] = useState("");
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState<SharingState | null>(null);
 
@@ -256,14 +257,25 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
 
   async function handleSaveFinanceiro(pacote: Pacote, field: "custo" | "frete" | "taxa_importacao", value: string) {
     const numValue = value === "" ? null : parseFloat(value);
-    const update = { custo: pacote.custo, frete: pacote.frete, taxa_importacao: pacote.taxa_importacao };
-    update[field] = numValue;
-
     try {
+      const update = { custo: pacote.custo ?? null, frete: pacote.frete ?? null, taxa_importacao: pacote.taxa_importacao ?? null, [field]: numValue };
       await updatePacoteFinanceiro(pacote.id, update);
       setPacotes((prev) =>
         prev.map((p) => p.id === pacote.id ? { ...p, ...update } : p)
       );
+    } catch (err) {
+      console.error("Erro ao salvar financeiro:", err);
+    }
+  }
+
+  async function handleSaveAllFinanceiro(pacote: Pacote, values: { custo: number | null; frete: number | null; taxa_importacao: number | null; dolar_rate?: number | null }) {
+    try {
+      await updatePacoteFinanceiro(pacote.id, values);
+      setPacotes((prev) =>
+        prev.map((p) => p.id === pacote.id ? { ...p, ...values } : p)
+      );
+      setMensagem("Custos salvos com sucesso!");
+      setTimeout(() => setMensagem(""), 3000);
     } catch (err) {
       console.error("Erro ao salvar financeiro:", err);
     }
@@ -833,6 +845,12 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
         </div>
       )}
 
+      {mensagem && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-semibold z-50 animate-toast-in">
+          ✓ {mensagem}
+        </div>
+      )}
+
       {/* Custos modal */}
       {custosPacote && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4" onClick={() => setCustosPacote(null)}>
@@ -846,7 +864,8 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
               pacote={custosPacote}
               allOrders={allOrders}
               config={config}
-              onSaveFinanceiro={handleSaveFinanceiro}
+              onSaveAll={handleSaveAllFinanceiro}
+              onClose={() => setCustosPacote(null)}
             />
 
             <button className="mt-4 w-full py-2.5 text-sm font-semibold bg-primary text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setCustosPacote(null)}>
@@ -863,36 +882,51 @@ function CustosForm({
   pacote,
   allOrders,
   config,
-  onSaveFinanceiro,
+  onSaveAll,
+  onClose,
 }: {
   pacote: Pacote;
   allOrders: Order[];
   config: LojaConfig;
-  onSaveFinanceiro: (pacote: Pacote, field: "custo" | "frete" | "taxa_importacao", value: string) => void;
+  onSaveAll: (pacote: Pacote, values: { custo: number | null; frete: number | null; taxa_importacao: number | null; dolar_rate?: number | null }) => void;
+  onClose: () => void;
 }) {
   const [localCusto, setLocalCusto] = useState(pacote.custo?.toString() ?? "");
   const [localFrete, setLocalFrete] = useState(pacote.frete?.toString() ?? "");
   const [localTaxa, setLocalTaxa] = useState(pacote.taxa_importacao?.toString() ?? "");
-  const [localDolar, setLocalDolar] = useState("");
+  const [localDolar, setLocalDolar] = useState(pacote.dolar_rate?.toString() ?? "");
 
   const orders = pacote.pedido_ids
     .map((id) => allOrders.find((o) => o.id === id))
     .filter((o): o is Order => !!o);
 
+  // Per-item cost overrides: key = `${orderId}-${itemIndex}` -> USD value
+  const [itemCosts, setItemCosts] = useState<Record<string, string>>({});
+
+  function getItemKey(o: Order, i: number) { return `${o.id}-${i}`; }
+
+  function getItemCost(o: Order, item: OrderItem, i: number): number {
+    const override = itemCosts[getItemKey(o, i)];
+    if (override !== undefined && override !== "") return parseFloat(override) || 0;
+    const custoCat = config.custo_base[item.tipo] ?? 0;
+    const custoPers = item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0;
+    return custoCat + custoPers;
+  }
+
   const custoCalculadoUSD = orders.reduce((sum, o) => {
-    return sum + o.itens.reduce((s, item) => {
-      const custoCat = config.custo_base[item.tipo] ?? 0;
-      const custoPers = item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0;
-      return s + custoCat + custoPers;
-    }, 0);
+    return sum + o.itens.reduce((s, item, i) => s + getItemCost(o, item, i), 0);
   }, 0);
   const dolarRate = parseFloat(localDolar) || 0;
   const custoCalculadoBRL = custoCalculadoUSD * dolarRate;
 
-  function save() {
-    onSaveFinanceiro(pacote, "custo", localCusto || (custoCalculadoBRL > 0 ? custoCalculadoBRL.toString() : "0"));
-    onSaveFinanceiro(pacote, "frete", localFrete);
-    onSaveFinanceiro(pacote, "taxa_importacao", localTaxa);
+  async function save() {
+    await onSaveAll(pacote, {
+      custo: localCusto ? parseFloat(localCusto) : (custoCalculadoBRL > 0 ? custoCalculadoBRL : null),
+      frete: localFrete ? parseFloat(localFrete) : null,
+      taxa_importacao: localTaxa ? parseFloat(localTaxa) : null,
+      dolar_rate: localDolar ? parseFloat(localDolar) : null,
+    });
+    onClose();
   }
 
   return (
@@ -923,16 +957,27 @@ function CustosForm({
           <tbody>
             {orders.map((o) =>
               o.itens.map((item, i) => {
-                const custoCat = config.custo_base[item.tipo] ?? 0;
-                const custoPers = item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0;
+                const key = getItemKey(o, i);
+                const val = itemCosts[key] ?? "";
+                const defaultCost = (config.custo_base[item.tipo] ?? 0) + (item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0);
                 return (
-                  <tr key={`${o.id}-${i}`} className="border-b border-border">
+                  <tr key={key} className="border-b border-border">
                     <td className="px-2 py-1.5">
                       <span className="font-medium">{item.nome}</span>
                       <span className="text-text-muted ml-1">({item.tamanho})</span>
                       {item.personalizado && <span className="text-accent ml-1">✦</span>}
                     </td>
-                    <td className="text-right px-2 py-1.5">${(custoCat + custoPers).toFixed(2)}</td>
+                    <td className="text-right px-2 py-1.5">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={val}
+                        onChange={(e) => setItemCosts((prev) => ({ ...prev, [key]: e.target.value }))}
+                        placeholder={defaultCost.toFixed(2)}
+                        className="w-20 px-2 py-1 text-sm text-right border border-border rounded-md bg-card-bg"
+                      />
+                    </td>
                   </tr>
                 );
               })
@@ -966,6 +1011,13 @@ function CustosForm({
             placeholder="0.00" className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg" />
         </div>
       </div>
+
+      <button
+        className="w-full py-2.5 text-sm font-semibold bg-green-600 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+        onClick={save}
+      >
+        Salvar Custos
+      </button>
     </div>
   );
 }

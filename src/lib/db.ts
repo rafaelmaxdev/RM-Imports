@@ -513,6 +513,7 @@ export interface DbPacote {
   custo: number | null;
   frete: number | null;
   taxa_importacao: number | null;
+  dolar_rate: number | null;
   pedido_ids: string; // JSONB stored as string from Supabase
   created_at: string;
 }
@@ -523,6 +524,7 @@ export interface Pacote {
   custo: number | null;
   frete: number | null;
   taxa_importacao: number | null;
+  dolar_rate: number | null;
   pedido_ids: string[];
   created_at: string;
 }
@@ -534,6 +536,7 @@ function dbPacoteToPacote(db: DbPacote): Pacote {
     custo: db.custo,
     frete: db.frete,
     taxa_importacao: db.taxa_importacao,
+    dolar_rate: db.dolar_rate,
     pedido_ids: typeof db.pedido_ids === "string" ? JSON.parse(db.pedido_ids) : db.pedido_ids,
     created_at: db.created_at,
   };
@@ -545,6 +548,7 @@ export async function createPacote(pedido_ids: string[]): Promise<Pacote> {
     custo: null,
     frete: null,
     taxa_importacao: null,
+    dolar_rate: null,
     pedido_ids: JSON.stringify(pedido_ids),
   };
 
@@ -580,7 +584,7 @@ export async function updatePacoteStatus(id: string, status: string): Promise<vo
 
 export async function updatePacoteFinanceiro(
   id: string,
-  financeiro: { custo: number | null; frete: number | null; taxa_importacao: number | null }
+  financeiro: { custo: number | null; frete: number | null; taxa_importacao: number | null; dolar_rate?: number | null }
 ): Promise<void> {
   const { error } = await supabase
     .from("pacotes")

@@ -1293,6 +1293,31 @@ function DeliveredPacoteCard({
                 <span className="text-green-700">Custo do pacote:</span>
                 <span>{formatarMoeda(custoValue)}</span>
               </div>
+
+              {/* Per-shirt cost + tax/frete breakdown */}
+              {orders.length > 0 && (
+                <div className="pt-2 space-y-2">
+                  <span className="text-xs font-semibold text-green-700 block">Rateio por camisa:</span>
+                  {orders.map((o) =>
+                    o.itens.map((item, i) => {
+                      const taxaCamisa = taxaValue > 0 ? (taxaValue / totalCamisas) : 0;
+                      const custoCamisa = custoValue > 0 ? (custoValue / totalCamisas) : 0;
+                      const freteCamisa = freteValue > 0 ? (freteValue / totalCamisas) : 0;
+                      return (
+                        <div key={`${o.id}-${i}`} className="flex justify-between text-xs text-green-600 border-b border-green-100 pb-1 last:border-b-0">
+                          <span className="truncate max-w-[200px]">
+                            {o.admin_order ? "👤 " : ""}{item.nome} ({item.tamanho})
+                          </span>
+                          <span className="whitespace-nowrap">
+                            Taxa: {formatarMoeda(taxaCamisa)} | Custo: {formatarMoeda(custoCamisa)} | Frete: {formatarMoeda(freteCamisa)}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
               <div className="flex justify-between">
                 <span className="text-green-700">Taxas Mercado Pago:</span>
                 <span>{formatarMoeda(totalTaxas)}</span>

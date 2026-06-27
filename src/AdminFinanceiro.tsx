@@ -117,13 +117,25 @@ export default function AdminFinanceiro() {
   if (loading) return <div className="text-center py-8 text-text-muted">Carregando...</div>;
 
   const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega);
-  const peVendas = orders.filter((o) => o.pronta_entrega && !o.admin_order && o.status !== "cancelado" && o.status !== "reembolsado");
+  const peVendas: Order[] = [];
   const cancelados = orders.filter((o) => o.status === "cancelado" || o.status === "reembolsado");
 
   const pedidosEmPacotes = new Set<string>();
-  const custoPacote = pacotes.reduce((s, p) => s + (p.custo || 0), 0);
-  const freteTotal = pacotes.reduce((s, p) => s + (p.frete || 0), 0);
-  const taxaTotal = pacotes.reduce((s, p) => s + (p.taxa_importacao || 0), 0);
+  // Prorate costs by non-admin orders only
+  function prorateCost(cost: number, totalShirts: number, nonAdminShirts: number): number {
+    if (totalShirts <= 0 || nonAdminShirts <= 0) return 0;
+    return (cost / totalShirts) * nonAdminShirts;
+  }
+
+  let custoPacote = 0, freteTotal = 0, taxaTotal = 0;
+  for (const p of pacotes) {
+    const pkgOrders = p.pedido_ids.map((id) => orders.find((o) => o.id === id)).filter((o): o is Order => !!o);
+    const totalShirts = pkgOrders.reduce((s, o) => s + o.itens.length, 0);
+    const nonAdminShirts = pkgOrders.filter((o) => !o.admin_order).reduce((s, o) => s + o.itens.length, 0);
+    custoPacote += prorateCost(p.custo || 0, totalShirts, nonAdminShirts);
+    freteTotal += prorateCost(p.frete || 0, totalShirts, nonAdminShirts);
+    taxaTotal += prorateCost(p.taxa_importacao || 0, totalShirts, nonAdminShirts);
+  }
 
   for (const p of pacotes) {
     for (const id of p.pedido_ids) pedidosEmPacotes.add(id);

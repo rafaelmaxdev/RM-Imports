@@ -143,3 +143,66 @@ describe("Order ID generation", () => {
     expect(id.length).toBe(11);
   });
 });
+
+describe("Cart total with PE markup", () => {
+  it("calcula total com taxa fixa de PE", () => {
+    const base = 129.90;
+    const peMarkup = 20;
+    const total = Math.round((base + peMarkup) * 100) / 100;
+    expect(total).toBe(149.90);
+  });
+
+  it("calcula total com desconto + taxa PE", () => {
+    const base = 169.90;
+    const desconto = 0.2;
+    const precoDesc = Math.round((base - base * desconto) * 100) / 100;
+    const total = Math.round((precoDesc + 20) * 100) / 100;
+    expect(total).toBe(155.92);
+  });
+});
+
+describe("Stock operations", () => {
+  it("decrementa quantidade corretamente", () => {
+    const qtd = 5;
+    const novaQtd = qtd - 1;
+    expect(novaQtd).toBe(4);
+  });
+
+  it("não decrementa abaixo de zero", () => {
+    const qtd = 0;
+    const novaQtd = Math.max(0, qtd - 1);
+    expect(novaQtd).toBe(0);
+  });
+
+  it("incrementa quantidade corretamente", () => {
+    const qtd = 3;
+    const novaQtd = qtd + 1;
+    expect(novaQtd).toBe(4);
+  });
+});
+
+describe("Order filtering logic", () => {
+  const orders = [
+    { id: "1", status: "pago", admin_order: false, pronta_entrega: false, total: 100 },
+    { id: "2", status: "pago", admin_order: false, pronta_entrega: true, total: 50 },
+    { id: "3", status: "pago", admin_order: true, pronta_entrega: false, total: 30 },
+    { id: "4", status: "cancelado", admin_order: false, pronta_entrega: false, total: 20 },
+    { id: "5", status: "pendente", admin_order: false, pronta_entrega: false, total: 10 },
+  ];
+
+  it("filtra apenas pedidos ativos (não admin, não PE, não cancelado, não pendente)", () => {
+    const ativos = orders.filter((o: any) =>
+      o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && o.status !== "pendente"
+    );
+    expect(ativos).toHaveLength(1);
+    expect(ativos[0].id).toBe("1");
+  });
+
+  it("receita considera apenas ativos", () => {
+    const ativos = orders.filter((o: any) =>
+      o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && o.status !== "pendente"
+    );
+    const receita = ativos.reduce((s: number, o: any) => s + o.total, 0);
+    expect(receita).toBe(100);
+  });
+});

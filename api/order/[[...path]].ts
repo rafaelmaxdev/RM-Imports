@@ -50,10 +50,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const last8 = digits.slice(-8);
     const filtered = (orders || []).filter((o: any) => {
       if (!o.endereco) return false;
-      if (o.reposicao) return false; // skip internal stock replenishment orders
+      if (o.reposicao) return false;
       try {
         const addr = typeof o.endereco === "string" ? JSON.parse(o.endereco) : o.endereco;
         const clean = (addr.telefone || "").replace(/\D/g, "");
+        if (!clean) return false;
         return clean.includes(digits) || digits.includes(clean) || clean.endsWith(last8) || last8.endsWith(clean);
       } catch { return false; }
     });

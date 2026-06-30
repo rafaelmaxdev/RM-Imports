@@ -1082,3 +1082,16 @@ export async function incrementarUsoCupom(id: string): Promise<void> {
     }
   }
 }
+
+export async function getCupomRevenue(codigo: string): Promise<{ total: number; pedidos: number }> {
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select("total, cupom_desconto")
+    .eq("cupom_codigo", codigo.toUpperCase().trim())
+    .not("status", "in", `("cancelado","reembolsado")`);
+  if (error) return { total: 0, pedidos: 0 };
+  return {
+    total: (data as any[]).reduce((s, p) => s + (p.cupom_desconto ?? 0), 0),
+    pedidos: data?.length ?? 0,
+  };
+}

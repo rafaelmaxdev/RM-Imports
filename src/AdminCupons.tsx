@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
-import { getCupons, createCupom, updateCupom, deleteCupom } from "./lib/db";
+import { getCupons, createCupom, updateCupom, deleteCupom, getCupomRevenue } from "./lib/db";
 import type { Cupom } from "./types";
+import { formatarMoeda } from "./types";
 
 export default function AdminCupons() {
   const [cupons, setCupons] = useState<Cupom[]>([]);
+  const [revenue, setRevenue] = useState<Record<string, { total: number; pedidos: number }>>({});
   const [loading, setLoading] = useState(true);
   const [codigo, setCodigo] = useState("");
   const [tipo, setTipo] = useState<"porcentagem" | "fixo">("porcentagem");
@@ -23,6 +25,12 @@ export default function AdminCupons() {
     try {
       const data = await getCupons();
       setCupons(data);
+      const revMap: Record<string, { total: number; pedidos: number }> = {};
+      await Promise.all(data.map(async (c) => {
+        try { revMap[c.codigo] = await getCupomRevenue(c.codigo); }
+        catch { revMap[c.codigo] = { total: 0, pedidos: 0 }; }
+      }));
+      setRevenue(revMap);
     } catch (err) {
       console.error("Erro ao carregar cupons:", err);
     } finally {
@@ -204,6 +212,14 @@ export default function AdminCupons() {
                       ? ` • Expira em ${new Date(c.data_expiracao).toLocaleDateString("pt-BR")}`
                       : ` • Sem data de expiração`}
                   </div>
+                  {revenue[c.codigo] && revenue[c.codigo].pedidos > 0 && (
+                    <div className="text-xs text-text-muted mt-1.5">
+                      <span className="font-semibold text-green-700">{revenue[c.codigo].pedidos} pedido(s)</span> com este cupom
+                      {revenue[c.codigo].total > 0 && (
+                        <span> — <span className="font-semibold">{formatarMoeda(revenue[c.codigo].total)}</span> em descontos concedidos</span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <button

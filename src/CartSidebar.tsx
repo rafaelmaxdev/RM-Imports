@@ -456,16 +456,38 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                 {cupomErro && <p className="text-xs text-accent mt-1">{cupomErro}</p>}
               </div>
 
-              <div className="flex justify-between font-bold text-lg mb-1">
-                <span>Total:</span>
-                <span>{formatarMoeda(totalComDesconto)}</span>
-              </div>
-              {cupomAplicado && (
-                <div className="flex justify-between text-xs text-text-muted mb-4">
-                  <span>Desconto do cupom</span>
-                  <span className="text-green-600">-{formatarMoeda(total - totalComDesconto)}</span>
+              <div className="flex flex-col gap-0.5 mb-4">
+                {(() => {
+                  const subTotalBase = cart.reduce((s, i) => s + (i.precoBase ?? i.preco), 0);
+                  const promoSavings = subTotalBase - total;
+                  return (
+                    <>
+                      {promoSavings > 0.01 && (
+                        <div className="flex justify-between text-xs text-text-muted">
+                          <span>Subtotal (sem promo)</span>
+                          <span>{formatarMoeda(subTotalBase)}</span>
+                        </div>
+                      )}
+                      {promoSavings > 0.01 && (
+                        <div className="flex justify-between text-xs text-green-600">
+                          <span>Desconto de promoções</span>
+                          <span>-{formatarMoeda(promoSavings)}</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+                {cupomAplicado && (
+                  <div className="flex justify-between text-xs text-green-600">
+                    <span>Desconto do cupom {cupomAplicado.codigo}</span>
+                    <span>-{formatarMoeda(total - totalComDesconto)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-lg mt-1">
+                  <span>Total:</span>
+                  <span>{formatarMoeda(totalComDesconto)}</span>
                 </div>
-              )}
+              </div>
               <button
                 className="w-full py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"
                 onClick={handleNext}
@@ -678,16 +700,38 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
             {erro && <div className="text-accent text-sm text-center px-4">{erro}</div>}
 
             <div className="px-6 py-4 border-t border-border">
-              <div className="flex justify-between font-bold text-lg mb-1">
-                <span>Total:</span>
-                <span>{formatarMoeda(totalComDesconto)}</span>
-              </div>
-              {cupomAplicado && (
-                <div className="flex justify-between text-xs text-text-muted mb-4">
-                  <span>Desconto do cupom</span>
-                  <span className="text-green-600">-{formatarMoeda(total - totalComDesconto)}</span>
+              <div className="flex flex-col gap-0.5 mb-3">
+                {(() => {
+                  const subTotalBase = cart.reduce((s, i) => s + (i.precoBase ?? i.preco), 0);
+                  const promoSavings = subTotalBase - total;
+                  return (
+                    <>
+                      {promoSavings > 0.01 && (
+                        <div className="flex justify-between text-xs text-text-muted">
+                          <span>Subtotal (sem promo)</span>
+                          <span>{formatarMoeda(subTotalBase)}</span>
+                        </div>
+                      )}
+                      {promoSavings > 0.01 && (
+                        <div className="flex justify-between text-xs text-green-600">
+                          <span>Desconto de promoções</span>
+                          <span>-{formatarMoeda(promoSavings)}</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+                {cupomAplicado && (
+                  <div className="flex justify-between text-xs text-green-600">
+                    <span>Desconto do cupom {cupomAplicado.codigo}</span>
+                    <span>-{formatarMoeda(total - totalComDesconto)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-lg mt-1">
+                  <span>Total:</span>
+                  <span>{formatarMoeda(totalComDesconto)}</span>
                 </div>
-              )}
+              </div>
               <div className="flex gap-2">
                 <button
                   className="flex-1 py-3 text-sm font-semibold bg-border text-text-main rounded-md cursor-pointer transition-colors hover:bg-gray-300"
@@ -770,16 +814,38 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
             </div>
 
             <div className="px-6 py-4 border-t border-border">
-              <div className="flex justify-between font-bold text-lg mb-1">
-                <span>Total:</span>
-                <span>{formatarMoeda(totalComDesconto)}</span>
-              </div>
-              {cupomAplicado && (
-                <div className="flex justify-between text-xs text-text-muted mb-4">
-                  <span>Desconto do cupom</span>
-                  <span className="text-green-600">-{formatarMoeda(total - totalComDesconto)}</span>
+              <div className="flex flex-col gap-0.5 mb-3">
+                {(() => {
+                  const subTotalBase = cart.reduce((s, i) => s + (i.precoBase ?? i.preco), 0);
+                  const promoSavings = subTotalBase - total;
+                  return (
+                    <>
+                      {promoSavings > 0.01 && (
+                        <div className="flex justify-between text-xs text-text-muted">
+                          <span>Subtotal (sem promo)</span>
+                          <span>{formatarMoeda(subTotalBase)}</span>
+                        </div>
+                      )}
+                      {promoSavings > 0.01 && (
+                        <div className="flex justify-between text-xs text-green-600">
+                          <span>Desconto de promoções</span>
+                          <span>-{formatarMoeda(promoSavings)}</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+                {cupomAplicado && (
+                  <div className="flex justify-between text-xs text-green-600">
+                    <span>Desconto do cupom {cupomAplicado.codigo}</span>
+                    <span>-{formatarMoeda(total - totalComDesconto)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-lg mt-1">
+                  <span>Total:</span>
+                  <span>{formatarMoeda(totalComDesconto)}</span>
                 </div>
-              )}
+              </div>
               <div className="flex gap-2">
                 <button
                   className="flex-1 py-3 text-sm font-semibold bg-border text-text-main rounded-md cursor-pointer transition-colors hover:bg-gray-300"

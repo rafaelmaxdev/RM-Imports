@@ -707,13 +707,31 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                                   {PACKAGE_NEXT_STATUS[order.status] && order.status !== "entregue" && (
                                     <button
                                       className="px-2 py-1 text-[11px] font-semibold bg-accent text-white rounded cursor-pointer hover:opacity-85 transition-opacity border-none"
-                                      onClick={async () => {
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
                                         const next = PACKAGE_NEXT_STATUS[order.status];
-                                        if (!next || !confirm(`Avançar pedido ${order.id} para "${PACKAGE_STATUS_ACTION_LABELS[order.status] || next}"?`)) return;
+                                        if (!next) return;
+                                        const label = PACKAGE_STATUS_ACTION_LABELS[order.status] || "próximo status";
+                                        if (!confirm(`Avançar pedido ${order.id} para "${label}"?`)) return;
                                         try {
                                           await updatePedidoStatus(order.id, next);
-                                          loadOrders(); // refresh
-                                        } catch { alert("Erro ao atualizar status."); }
+                                          // Also update the package status if this order is the last to advance
+                                          const pkgIdx = pacotes.findIndex((p) => p.pedido_ids.includes(order.id));
+                                          if (pkgIdx >= 0) {
+                                            const pkg = pacotes[pkgIdx];
+                                            const allAdvanced = pkg.pedido_ids.every((id) => {
+                                              const o = allOrders.find((o2) => o2.id === id);
+                                              return !o || o.id === order.id || PACKAGE_NEXT_STATUS[o.status] !== next;
+                                            });
+                                            if (allAdvanced && PACKAGE_NEXT_STATUS[pkg.status] === next) {
+                                              await updatePacoteStatus(pkg.id, next);
+                                            }
+                                          }
+                                          loadOrders();
+                                        } catch (err) {
+                                          console.error("Erro ao avançar pedido:", err);
+                                          alert("Erro ao atualizar status.");
+                                        }
                                       }}
                                     >
                                       → {PACKAGE_STATUS_ACTION_LABELS[order.status] || PACKAGE_NEXT_STATUS[order.status]}

@@ -272,7 +272,7 @@ export default function OrderConfirmation() {
         {/* Actions */}
         <div className="flex flex-col gap-2">
           <button className="w-full py-3 bg-accent text-white rounded-md font-semibold cursor-pointer transition-opacity hover:opacity-90 text-sm" onClick={() => navigate("/")}>← Continuar Comprando</button>
-          <a href={`https://wa.me/${import.meta.env.VITE_WHATSAPP_NUMBER || "5511999999999"}?text=${encodeURIComponent("Olá! Pedido " + order.id + " confirmado.")}`} target="_blank" rel="noreferrer" className="block w-full py-3 bg-green-600 text-white rounded-md text-sm font-semibold text-center no-underline hover:opacity-90 transition-opacity">📱 Fale Conosco</a>
+          <a href={`https://wa.me/${import.meta.env.VITE_WHATSAPP_SUPPORT || "5511999999999"}?text=${encodeURIComponent("Olá! Pedido " + order.id + " confirmado.")}`} target="_blank" rel="noreferrer" className="block w-full py-3 bg-green-600 text-white rounded-md text-sm font-semibold text-center no-underline hover:opacity-90 transition-opacity">📱 Fale Conosco</a>
           <button className="w-full py-3 border border-border bg-card-bg text-text-main rounded-md font-semibold cursor-pointer transition-colors hover:border-accent text-sm" onClick={() => navigate("/meu-pedido")}>🔍 Acompanhar Pedido</button>
         </div>
       </div>

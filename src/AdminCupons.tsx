@@ -206,7 +206,9 @@ export default function AdminCupons() {
                   <div className="text-sm text-text-muted mt-1">
                     {c.tipo === "porcentagem" ? `${c.valor}% OFF` : `R$ ${c.valor.toFixed(2)} OFF`}
                     {c.tipo === "porcentagem" && c.desconto_maximo !== null && ` (máx. R$ ${c.desconto_maximo.toFixed(2)})`}
-                    {c.uso_maximo !== null ? ` • ${c.usos_atuais}/${c.uso_maximo} usos` : ` • ${c.usos_atuais} uso(s)`}
+                    {c.uso_maximo !== null
+                      ? ` • ${c.usos_atuais}/${c.uso_maximo} usos (${c.uso_maximo - c.usos_atuais} restantes)`
+                      : ` • ${c.usos_atuais} uso(s)`}
                     {c.valor_minimo_pedido !== null && ` • Mín: R$ ${c.valor_minimo_pedido.toFixed(2)}`}
                     {c.data_expiracao
                       ? ` • Expira em ${new Date(c.data_expiracao).toLocaleDateString("pt-BR")}`

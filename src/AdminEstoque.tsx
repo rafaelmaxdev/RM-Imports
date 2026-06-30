@@ -311,8 +311,10 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
       {grouped.size > 0 && (
         <div className="mb-8 space-y-4">
           {Array.from(grouped.entries()).map(([produtoId, items]) => {
+            const available = items.filter(i => i.quantidade > 0);
+            if (available.length === 0) return null;
             const first = items[0];
-            const totalQty = items.reduce((s, i) => s + i.quantidade, 0);
+            const totalQty = available.reduce((s, i) => s + i.quantidade, 0);
             const imgs = parseImageUrls(
               first.produto_imagem ? [first.produto_imagem] : []
             );
@@ -364,7 +366,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
 
                 {/* Sizes / rows */}
                 <div>
-                  {items.map((item) => (
+                  {items.filter(i => i.quantidade > 0).map((item) => (
                     <div
                       key={item.id}
                       className={`flex items-center gap-3 px-3 py-2 border-b border-border last:border-b-0 hover:bg-bg-base/50 transition-colors ${

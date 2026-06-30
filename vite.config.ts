@@ -224,12 +224,6 @@ export default defineConfig({
   build: {
     rollupOptions: {
       external: ['mercadopago'],
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router')) return 'vendor';
-          if (id.includes('node_modules/@supabase')) return 'supabase';
-        },
-      },
     },
   },
   test: {

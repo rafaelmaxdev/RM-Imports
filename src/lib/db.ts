@@ -918,6 +918,7 @@ export async function decrementEstoqueItem(
 export async function criarVendaDireta(
   items: { produtoId: string; nome: string; tipo: string; temporada: string; tamanho: string; preco: number; personalizado: boolean; nomePersonalizado?: string; numeroPersonalizado?: string; feminino?: boolean }[],
   nomeCliente: string,
+  paymentMethod?: string,
 ): Promise<import("../types").Order> {
   const now = new Date();
   const data = now.toLocaleDateString("pt-BR");
@@ -962,8 +963,8 @@ export async function criarVendaDireta(
       telefone: "",
       deliveryMethod: "retirada",
     },
-    admin_order: true,
     pronta_entrega: true,
+    payment_method: paymentMethod as any,
   };
 
   // Create the order (status = "pago")

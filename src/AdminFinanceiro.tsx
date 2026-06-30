@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { getPedidos, getPacotes } from "./lib/db";
-import type { Pacote } from "./lib/db";
-import type { Order } from "./types";
+import { getPedidos, getPacotes, getEstoque, getProdutos } from "./lib/db";
+import type { Pacote, DbProduto } from "./lib/db";
+import type { Order, EstoqueItem } from "./types";
 import { formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
 
@@ -43,6 +43,8 @@ function filtrarPorData(o: Order, ano: number, mes: number | null): boolean {
 export default function AdminFinanceiro() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [pacotes, setPacotes] = useState<Pacote[]>([]);
+  const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
+  const [produtos, setProdutos] = useState<DbProduto[]>([]);
   const [loading, setLoading] = useState(true);
   const [extras, setExtras] = useState<ExtraCusto[]>([]);
 
@@ -61,14 +63,18 @@ export default function AdminFinanceiro() {
   const [extraData, setExtraData] = useState(new Date().toISOString().slice(0, 10));
   const CORES_PALETA = ["#F4A261", "#E76F51", "#D4A373", "#B5838D", "#6D597A", "#B56576", "#E5989B", "#FFB4A2", "#A8D5BA", "#7EC8E3", "#95D5B2", "#74C69D"];
   const [extraCor, setExtraCor] = useState(CORES_PALETA[extras.length % CORES_PALETA.length]);
+  const [buscaPedido, setBuscaPedido] = useState("");
+  const [maxPedidos, setMaxPedidos] = useState(20);
 
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getPedidos(), getPacotes()]).then(([o, p]) => {
+    Promise.all([getPedidos(), getPacotes(), getEstoque(), getProdutos()]).then(([o, p, e, pr]) => {
       if (cancelled) return;
       setOrders(o);
       setPacotes(p);
+      setEstoque(e);
+      setProdutos(pr);
     }).catch((err) => {
       if (!cancelled) console.error("[Financeiro]", err);
     }).finally(() => {
@@ -124,7 +130,7 @@ export default function AdminFinanceiro() {
       rows.push([mes, String(qtde), formatarMoeda(total), formatarMoeda(custoM), formatarMoeda(total - custoM)]);
     }
     rows.push([]);
-    rows.push(["Total", String(porMes.reduce((s, [, v]) => s + v.qtde, 0)), formatarMoeda(receitaBruta + receitaPE), formatarMoeda(custosTotais), formatarMoeda(lucro)]);
+    rows.push(["Total", String(porMes.reduce((s, [, v]) => s + v.qtde, 0)), formatarMoeda(receitaTotal), formatarMoeda(custosTotais), formatarMoeda(lucro)]);
     const csv = rows.map((r) => r.join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
@@ -143,7 +149,7 @@ export default function AdminFinanceiro() {
   if (!anosDisponiveis.includes(anoFiltro) && anosDisponiveis.length > 0) setAnoFiltro(anosDisponiveis[0]);
 
   const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && filtrarPorData(o, anoFiltro, mesFiltro));
-  const peVendas: Order[] = [];
+  const peVendas = orders.filter((o) => o.pronta_entrega && o.status === "entregue" && filtrarPorData(o, anoFiltro, mesFiltro));
   const pedidosEmPacotes = new Set<string>();
   // Prorate costs by non-admin orders only
   function prorateCost(cost: number, totalShirts: number, nonAdminShirts: number): number {
@@ -168,15 +174,36 @@ export default function AdminFinanceiro() {
   const extraTotal = extras.reduce((s, e) => s + e.quantidade * e.preco, 0);
   const receitaBruta = ativos.reduce((s, o) => s + o.total, 0);
   const receitaPE = peVendas.reduce((s, o) => s + o.total, 0);
+  const receitaTotal = receitaBruta + receitaPE;
   const receitaEmPacotes = ativos.filter((o) => pedidosEmPacotes.has(o.id)).reduce((s, o) => s + o.total, 0);
-  const custosTotais = custoPacote + freteTotal + taxaTotal + extraTotal;
-  const lucro = receitaEmPacotes - custoPacote - freteTotal - taxaTotal - extraTotal;
+
+  const produtoNomeMap = new Map(produtos.map((p) => [p.nome, p.id]));
+  const custoLookup = new Map<string, number>();
+  for (const item of estoque) {
+    const key = `${item.produto_id}-${item.tamanho}-${!!item.personalizado}-${!!item.feminino}`;
+    const custo = item.custo ?? 0;
+    if (custo > 0 && (!custoLookup.has(key) || custo < custoLookup.get(key)!)) {
+      custoLookup.set(key, custo);
+    }
+  }
+  let custoPE = 0;
+  for (const venda of peVendas) {
+    for (const item of venda.itens) {
+      const produtoId = produtoNomeMap.get(item.nome);
+      if (!produtoId) continue;
+      const key = `${produtoId}-${item.tamanho}-${!!item.personalizado}-${!!item.feminino}`;
+      custoPE += custoLookup.get(key) ?? 0;
+    }
+  }
+
+  const custosTotais = custoPacote + freteTotal + taxaTotal + extraTotal + custoPE;
+  const lucro = receitaEmPacotes + receitaPE - custoPacote - freteTotal - taxaTotal - extraTotal - custoPE;
 
   const pieData = [
     { label: "Produtos", value: custoPacote, color: "#E63946" },
     { label: "Frete", value: freteTotal, color: "#457B9D" },
     { label: "Taxa", value: taxaTotal, color: "#2A9D8F" },
-
+    ...(custoPE > 0 ? [{ label: "Custo PE", value: custoPE, color: "#8B5CF6" }] : []),
     ...extras.map((e) => ({
       label: e.nome + (e.quantidade > 1 ? ` (${e.quantidade}x)` : ""),
       value: e.quantidade * e.preco,
@@ -221,7 +248,7 @@ export default function AdminFinanceiro() {
   const totalRevenue = mesesComReceita.reduce((s, [, v]) => s + v.total, 0) || 1;
   for (const [mes, { total }] of mesesComReceita) {
     const share = total / totalRevenue;
-    const pkgCost = (custoPacote + freteTotal + taxaTotal) * share;
+    const pkgCost = (custoPacote + freteTotal + taxaTotal + custoPE) * share;
     custoPorMes.set(mes, (custoPorMes.get(mes) || 0) + pkgCost);
   }
 
@@ -258,23 +285,23 @@ export default function AdminFinanceiro() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-        <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center" title="Pedidos de clientes (exclui admin e pronta entrega)">
-          <div className="text-2xl font-bold text-green-700">{ativos.length}</div>
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center" title="Total de pedidos (loja + vendas diretas)">
+          <div className="text-2xl font-bold text-green-700">{ativos.length + peVendas.length}</div>
           <div className="text-xs text-green-600 mt-0.5">Vendas</div>
         </div>
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-center" title="Total de camisas vendidas (exclui admin e pronta entrega)">
-          <div className="text-2xl font-bold text-blue-700">{ativos.reduce((s, o) => s + o.itens.length, 0)}</div>
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-center" title="Total de camisas vendidas">
+          <div className="text-2xl font-bold text-blue-700">{ativos.reduce((s, o) => s + o.itens.length, 0) + peVendas.reduce((s, o) => s + o.itens.length, 0)}</div>
           <div className="text-xs text-blue-600 mt-0.5">Camisas Vendidas</div>
         </div>
-        <div className="p-4 bg-accent/10 border border-accent/30 rounded-lg text-center" title="Soma total de todos os pedidos pagos">
-          <div className="text-xl sm:text-2xl font-bold text-accent whitespace-nowrap">{formatarMoeda(receitaBruta)}</div>
+        <div className="p-4 bg-accent/10 border border-accent/30 rounded-lg text-center" title="Soma total de todos os pedidos pagos (inclui vendas diretas/PE)">
+          <div className="text-xl sm:text-2xl font-bold text-accent whitespace-nowrap">{formatarMoeda(receitaTotal)}</div>
           <div className="text-xs text-text-muted mt-0.5">Receita total</div>
         </div>
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-center" title="Custos totais: produtos + frete + taxa + estoque + extras">
           <div className="text-xl sm:text-2xl font-bold text-yellow-700 whitespace-nowrap">{formatarMoeda(custosTotais)}</div>
           <div className="text-xs text-yellow-600 mt-0.5">Custos</div>
         </div>
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-center" title="Receita em pacotes - custos totais">
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-center" title="Receita (pacotes + PE) - custos totais (inclui custo de itens PE vendidos)">
           <div className="text-xl sm:text-2xl font-bold text-blue-700 whitespace-nowrap">{formatarMoeda(lucro)}</div>
           <div className="text-xs text-blue-600 mt-0.5">Lucro</div>
         </div>
@@ -282,7 +309,7 @@ export default function AdminFinanceiro() {
 
       {custosTotais > 0 && (
         <div className="p-3 bg-bg-base rounded-md border border-border text-xs text-text-muted mb-6 space-y-1">
-          <p>Produtos: {formatarMoeda(custoPacote)} | Frete: {formatarMoeda(freteTotal)} | Taxa: {formatarMoeda(taxaTotal)} | Extras: {formatarMoeda(extraTotal)}</p>
+          <p>Produtos: {formatarMoeda(custoPacote)} | Frete: {formatarMoeda(freteTotal)} | Taxa: {formatarMoeda(taxaTotal)} | Extras: {formatarMoeda(extraTotal)}{custoPE > 0 ? ` | Custo PE: ${formatarMoeda(custoPE)}` : ""}</p>
         </div>
       )}
 
@@ -422,6 +449,74 @@ export default function AdminFinanceiro() {
             ))}
           </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Order listing */}
+      <div className="mb-6 p-4 bg-card-bg rounded-lg border border-border">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h4 className="text-sm font-semibold text-text-muted">
+            Pedidos ({ativos.length + peVendas.length})
+            {peVendas.length > 0 && <span className="text-xs font-normal text-text-muted ml-2">({peVendas.length} diretas)</span>}
+          </h4>
+          <input
+            type="text"
+            value={buscaPedido}
+            onChange={(e) => setBuscaPedido(e.target.value)}
+            placeholder="Buscar pedido..."
+            className="px-3 py-1.5 text-xs border border-border rounded-md bg-bg-base w-48"
+          />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-left py-2 px-3 font-semibold text-text-muted text-xs">ID</th>
+                <th className="text-left py-2 px-3 font-semibold text-text-muted text-xs">Cliente</th>
+                <th className="text-left py-2 px-3 font-semibold text-text-muted text-xs">Itens</th>
+                <th className="text-right py-2 px-3 font-semibold text-text-muted text-xs">Total</th>
+                <th className="text-left py-2 px-3 font-semibold text-text-muted text-xs">Tipo</th>
+                <th className="py-2 px-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {[...ativos, ...peVendas].filter((o) => {
+                if (!buscaPedido.trim()) return true;
+                const q = buscaPedido.toLowerCase();
+                return o.id.toLowerCase().includes(q) || (o.endereco as any)?.nome?.toLowerCase().includes(q) || o.itens.some(i => i.nome.toLowerCase().includes(q));
+              }).slice(0, maxPedidos).map((o) => {
+                const itemCounts = o.itens.reduce((acc, i) => {
+                  const key = `${i.nome} (${i.tamanho})${i.feminino ? " Fem" : ""}`;
+                  acc.set(key, (acc.get(key) || 0) + 1);
+                  return acc;
+                }, new Map<string, number>());
+                return (
+                <tr key={o.id} className="border-b border-border hover:bg-bg-base">
+                  <td className="py-2 px-3 text-xs font-mono text-text-muted">{o.id}</td>
+                  <td className="py-2 px-3">{(o.endereco as any)?.nome || "-"}</td>
+                  <td className="py-2 px-3 text-xs">{[...itemCounts.entries()].map(([item, count]) => <div key={item}>{count}x {item}</div>)}</td>
+                  <td className="py-2 px-3 text-right font-medium">{formatarMoeda(o.total)}</td>
+                  <td className="py-2 px-3">{o.pronta_entrega ? "Direta" : "Loja"}</td>
+                  <td className="py-2 px-3 text-right">
+                    <a href={`/pedido/${o.id}`} target="_blank" className="text-text-muted hover:text-accent text-sm no-underline" title="Ver detalhes">↗</a>
+                  </td>
+                </tr>
+                );
+              })}
+              {ativos.length + peVendas.length === 0 && (
+                <tr><td colSpan={6} className="py-4 text-center text-text-muted text-xs">Nenhum pedido no período.</td></tr>
+              )}
+            </tbody>
+          </table>
+          {[...ativos, ...peVendas].filter((o) => {
+            if (!buscaPedido.trim()) return true;
+            const q = buscaPedido.toLowerCase();
+            return o.id.toLowerCase().includes(q) || (o.endereco as any)?.nome?.toLowerCase().includes(q) || o.itens.some(i => i.nome.toLowerCase().includes(q));
+          }).length > maxPedidos && (
+            <button onClick={() => setMaxPedidos(p => p + 20)} className="mt-3 w-full py-2 text-xs text-accent font-semibold bg-accent/5 border border-border rounded-md cursor-pointer hover:bg-accent/10 transition-colors">
+              Mostrar mais ({maxPedidos} de {[...ativos, ...peVendas].length})
+            </button>
+          )}
         </div>
       </div>
     </div>

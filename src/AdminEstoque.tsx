@@ -3,7 +3,7 @@ import type { DbProduto } from "./lib/db";
 import { getEstoque, addEstoqueItem, updateEstoqueItem, deleteEstoqueItem, criarVendaDireta } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
 import { getCachedImageUrl, TAMANHOS_POR_TIPO, TIPOS_SEM_PERSONALIZACAO, getPrecoProduto, ADICIONAL_TAMANHO } from "./types";
-import type { EstoqueItem, LojaConfig } from "./types";
+import type { EstoqueItem, LojaConfig, PaymentMethod } from "./types";
 import { buscaPorPalavras } from "./lib/utils";
 import type { PromocaoTipo } from "./types";
 
@@ -34,6 +34,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
   const [vendaItem, setVendaItem] = useState<EstoqueItem | null>(null);
   const [vendaNomeCliente, setVendaNomeCliente] = useState("");
   const [vendaValor, setVendaValor] = useState("");
+  const [vendaPagamento, setVendaPagamento] = useState<PaymentMethod>("pix");
   const [vendaSaving, setVendaSaving] = useState(false);
 
   // Inline editing state
@@ -225,6 +226,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
           feminino: vendaItem.feminino,
         }],
         vendaNomeCliente.trim(),
+        vendaPagamento,
       );
 
       // Update local state
@@ -393,7 +395,25 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                             <span className="text-xs text-text-muted">
                               Enter para salvar, Esc para cancelar
                             </span>
-                          </div>
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-text-muted mb-1">Forma de pagamento</label>
+              <div className="flex gap-2">
+                {(["pix", "credit_card", "debit_card"] as PaymentMethod[]).map((metodo) => (
+                  <button
+                    key={metodo}
+                    onClick={() => setVendaPagamento(metodo)}
+                    className={`flex-1 py-2 text-sm font-semibold rounded-md cursor-pointer transition-colors border ${
+                      vendaPagamento === metodo
+                        ? "bg-accent text-white border-accent"
+                        : "bg-card-bg text-text-muted border-border hover:border-accent/50"
+                    }`}
+                  >
+                    {metodo === "pix" ? "Pix" : metodo === "credit_card" ? "Crédito" : "Débito"}
+                  </button>
+                ))}
+              </div>
+            </div>
                         ) : (
                           <button
                             className="text-sm font-medium text-text-main hover:text-accent transition-colors cursor-pointer bg-transparent border-none"
@@ -810,6 +830,24 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                 placeholder="Deixe em branco para usar o preço calculado"
                 className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
               />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-text-muted mb-1">Forma de pagamento</label>
+              <div className="flex gap-2">
+                {(["pix", "credit_card", "debit_card"] as PaymentMethod[]).map((metodo) => (
+                  <button
+                    key={metodo}
+                    onClick={() => setVendaPagamento(metodo)}
+                    className={`flex-1 py-2 text-sm font-semibold rounded-md cursor-pointer transition-colors border ${
+                      vendaPagamento === metodo
+                        ? "bg-accent text-white border-accent"
+                        : "bg-card-bg text-text-muted border-border hover:border-accent/50"
+                    }`}
+                  >
+                    {metodo === "pix" ? "Pix" : metodo === "credit_card" ? "Crédito" : "Débito"}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <p className="text-xs text-text-muted mb-4">

@@ -77,9 +77,9 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     statusCount,
   } = useMemo(() => {
     const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && o.status !== "pendente" && filtrarPorData(o));
-    const peVendas = orders.filter((o) => o.pronta_entrega && !o.admin_order && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente" && filtrarPorData(o));
-    const adminOrders = orders.filter((o) => o.admin_order && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente" && filtrarPorData(o));
-    const revenue = ativos.reduce((s, o) => s + o.total, 0);
+    const peVendas = orders.filter((o) => o.pronta_entrega && o.status === "entregue" && filtrarPorData(o));
+    const adminOrders = orders.filter((o) => o.admin_order && !o.pronta_entrega && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente" && filtrarPorData(o));
+    const revenue = ativos.reduce((s, o) => s + o.total, 0) + peVendas.reduce((s, o) => s + o.total, 0);
     const pending = orders.filter((o) => o.status === "pendente").length;
 
     // Monthly revenue for filtered year
@@ -89,7 +89,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
       const key = `${anoFiltro}-${String(m).padStart(2, "0")}`;
       monthMap[key] = { revenue: 0, count: 0, itens: 0 };
     }
-    for (const o of ativos) {
+    for (const o of [...ativos, ...peVendas]) {
       if (!filtrarPorData(o)) continue;
       const d = o.created_at ? new Date(o.created_at) : null;
       if (!d && o.data) {
@@ -115,7 +115,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
     // Top 10 products
     const productCount: Record<string, { count: number; revenue: number }> = {};
-    for (const o of ativos) {
+    for (const o of [...ativos, ...peVendas]) {
       for (const item of o.itens) {
         if (!productCount[item.nome]) productCount[item.nome] = { count: 0, revenue: 0 };
         productCount[item.nome].count += 1;
@@ -129,19 +129,22 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
     // Payment method distribution
     const payCount: Record<string, number> = {};
-    for (const o of ativos) {
+    for (const o of [...ativos, ...peVendas]) {
       const method = o.payment_method || "unknown";
       payCount[method] = (payCount[method] || 0) + 1;
     }
 
     // Status distribution (separate regular vs PE vs admin)
-    const statCount: Record<string, { regular: number; pe: number; admin: number; itens_regular: number; itens_pe: number; itens_admin: number }> = {};
+    const statCount: Record<string, { regular: number; pe: number; admin: number; itens_regular: number; itens_pe: number; itens_admin: number; pe_entregue: number; itens_pe_entregue: number }> = {};
     for (const o of orders) {
-      if (!statCount[o.status]) statCount[o.status] = { regular: 0, pe: 0, admin: 0, itens_regular: 0, itens_pe: 0, itens_admin: 0 };
+      if (!statCount[o.status]) statCount[o.status] = { regular: 0, pe: 0, admin: 0, itens_regular: 0, itens_pe: 0, itens_admin: 0, pe_entregue: 0, itens_pe_entregue: 0 };
       const qtd = o.itens.length;
       if (o.admin_order) {
         statCount[o.status].admin += 1;
         statCount[o.status].itens_admin += qtd;
+      } else if (o.pronta_entrega && o.status === "entregue") {
+        statCount[o.status].pe_entregue += 1;
+        statCount[o.status].itens_pe_entregue += qtd;
       } else if (o.pronta_entrega) {
         statCount[o.status].pe += 1;
         statCount[o.status].itens_pe += qtd;
@@ -338,6 +341,12 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
                         <div className="flex justify-between text-[11px] text-teal-600 mt-0.5">
                           <span>  └ Estoque</span>
                           <span className="font-semibold">{data.pe} ({data.itens_pe} camisas)</span>
+                        </div>
+                      )}
+                      {data.pe_entregue > 0 && (
+                        <div className="flex justify-between text-[11px] text-teal-600 mt-0.5">
+                          <span>  └ Venda Direta</span>
+                          <span className="font-semibold">{data.pe_entregue} ({data.itens_pe_entregue} camisas)</span>
                         </div>
                       )}
                       {data.admin > 0 && (

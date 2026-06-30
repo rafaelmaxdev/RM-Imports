@@ -135,6 +135,7 @@ function orderApiPlugin(): Plugin {
               const addr = typeof o.endereco === "string" ? JSON.parse(o.endereco) : o.endereco;
               const raw = addr.telefone || "";
               const clean = raw.replace(/\D/g, "");
+              if (!clean) return false;
               return clean.includes(digits) || digits.includes(clean) || clean.endsWith(last8) || last8.endsWith(clean);
             });
             const parsed = filtered.map((o: any) => ({ ...o, itens: typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens }));

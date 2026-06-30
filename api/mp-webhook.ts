@@ -31,9 +31,9 @@ function mapPaymentType(mpType: string | undefined): string | undefined {
     case "debit_card":
       return "debit_card";
     case "bank_transfer":
-      return "pix"; // Pix in Brazil
+      return "pix"; // Pix via bank transfer (Pix in Brazil)
     case "ticket":
-      return "pix"; // Boleto — treated as Pix for our purposes
+      return "pix"; // Boleto — mapped to Pix since we don't distinguish payment methods for reporting
     case "prepaid_card":
       return "credit_card";
     default:

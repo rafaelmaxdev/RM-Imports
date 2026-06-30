@@ -115,6 +115,8 @@ export const PAYMENT_LABELS_SHORT: Record<string, string> = {
   debit_card: "Débito",
 };
 
+export const MESES = ["Todos", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
 // ── Type translations ──
 
 export const TIPO_ENGLISH: Record<string, string> = {

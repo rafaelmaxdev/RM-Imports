@@ -1,16 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { getPedidos } from "./lib/db";
 import { clearCache } from "./lib/cache";
-import type { Order } from "./types";
+import type { Order, PaymentMethod } from "./types";
 import { formatarMoeda } from "./types";
-
-type PaymentMethod = "pix" | "credit_card" | "debit_card";
-
-const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  pix: "Pix",
-  credit_card: "Cartão de Crédito",
-  debit_card: "Cartão de Débito",
-};
+import { PAYMENT_LABELS } from "./lib/status";
 
 interface AdminDashboardProps {
   onNavigate?: (tab: "pedidos" | "financeiro" | "estoque") => void;

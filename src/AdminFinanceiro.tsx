@@ -4,6 +4,7 @@ import type { Pacote, DbProduto } from "./lib/db";
 import type { Order, EstoqueItem } from "./types";
 import { formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
+import { MESES } from "./lib/status";
 
 interface ExtraCusto {
   id: number;
@@ -25,7 +26,7 @@ function saveExtras(extras: ExtraCusto[]) {
   localStorage.setItem(EXTRA_KEY, JSON.stringify(extras));
 }
 
-const MESES = ["Todos", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
 
 function filtrarPorData(o: Order, ano: number, mes: number | null): boolean {
   let data: Date | null = null;
@@ -483,7 +484,7 @@ export default function AdminFinanceiro() {
               {[...ativos, ...peVendas].filter((o) => {
                 if (!buscaPedido.trim()) return true;
                 const q = buscaPedido.toLowerCase();
-                return o.id.toLowerCase().includes(q) || (o.endereco as any)?.nome?.toLowerCase().includes(q) || o.itens.some(i => i.nome.toLowerCase().includes(q));
+                return o.id.toLowerCase().includes(q) || o.endereco?.nome?.toLowerCase().includes(q) || o.itens.some(i => i.nome.toLowerCase().includes(q));
               }).slice(0, maxPedidos).map((o) => {
                 const itemCounts = o.itens.reduce((acc, i) => {
                   const key = `${i.nome} (${i.tamanho})${i.feminino ? " Fem" : ""}`;
@@ -493,7 +494,7 @@ export default function AdminFinanceiro() {
                 return (
                 <tr key={o.id} className="border-b border-border hover:bg-bg-base">
                   <td className="py-2 px-3 text-xs font-mono text-text-muted">{o.id}</td>
-                  <td className="py-2 px-3">{(o.endereco as any)?.nome || "-"}</td>
+                  <td className="py-2 px-3">{o.endereco?.nome || "-"}</td>
                   <td className="py-2 px-3 text-xs">{[...itemCounts.entries()].map(([item, count]) => <div key={item}>{count}x {item}</div>)}</td>
                   <td className="py-2 px-3 text-right font-medium">{formatarMoeda(o.total)}</td>
                   <td className="py-2 px-3">{o.pronta_entrega ? "Direta" : "Loja"}</td>
@@ -511,7 +512,7 @@ export default function AdminFinanceiro() {
           {[...ativos, ...peVendas].filter((o) => {
             if (!buscaPedido.trim()) return true;
             const q = buscaPedido.toLowerCase();
-            return o.id.toLowerCase().includes(q) || (o.endereco as any)?.nome?.toLowerCase().includes(q) || o.itens.some(i => i.nome.toLowerCase().includes(q));
+            return o.id.toLowerCase().includes(q) || o.endereco?.nome?.toLowerCase().includes(q) || o.itens.some(i => i.nome.toLowerCase().includes(q));
           }).length > maxPedidos && (
             <button onClick={() => setMaxPedidos(p => p + 20)} className="mt-3 w-full py-2 text-xs text-accent font-semibold bg-accent/5 border border-border rounded-md cursor-pointer hover:bg-accent/10 transition-colors">
               Mostrar mais ({maxPedidos} de {[...ativos, ...peVendas].length})

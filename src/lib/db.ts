@@ -40,7 +40,7 @@ export async function getProdutos(): Promise<DbProduto[]> {
   if (cached) {
     // Stale-while-revalidate: serve cached data immediately, refresh in background if stale
     if (isCacheStale(CACHE_KEY, CACHE_TTL)) {
-      fetchProdutosFromDb().then((data) => setCache(CACHE_KEY, data)).catch(() => {});
+      fetchProdutosFromDb().then((data) => setCache(CACHE_KEY, data)).catch((err) => console.warn("[db] background refresh produtos failed:", err));
     }
     return cached;
   }
@@ -136,7 +136,7 @@ export async function getLojaConfig(): Promise<LojaConfig> {
   if (cached) {
     // Stale-while-revalidate
     if (isCacheStale(CACHE_KEY, CACHE_TTL)) {
-      fetchLojaConfigFromDb().then((data) => setCache(CACHE_KEY, data)).catch(() => {});
+      fetchLojaConfigFromDb().then((data) => setCache(CACHE_KEY, data)).catch((err) => console.warn("[db] background refresh config failed:", err));
     }
     return cached;
   }
@@ -352,7 +352,7 @@ export async function getPedidos(): Promise<import("../types").Order[]> {
   const cached = getCached<import("../types").Order[]>(CACHE_KEY);
   if (cached) {
     if (isCacheStale(CACHE_KEY, CACHE_TTL)) {
-      fetchPedidosFromDb().then((data) => setCache(CACHE_KEY, data)).catch(() => {});
+      fetchPedidosFromDb().then((data) => setCache(CACHE_KEY, data)).catch((err) => console.warn("[db] background refresh pedidos failed:", err));
     }
     return cached;
   }
@@ -659,10 +659,11 @@ export interface DbEstoqueItem {
   nome_personalizado: string | null;
   numero_personalizado: string | null;
   feminino: boolean;
+  custo: number | null;
   created_at: string;
 }
 
-function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; imagem_urls: string[] | string; imagem_urls_feminina?: string[] | string | null; tipo: string; time: string; liga: string; temporada: string } | null }): EstoqueItem {
+function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; imagem_urls: string[] | string; imagem_urls_feminina?: string[] | string | null; tipo: string; time: string; liga: string; temporada: string } | null; custo?: number | null }): EstoqueItem {
   const produto = db.produtos;
   const feminineImages = produto?.imagem_urls_feminina ? parseImageUrls(produto.imagem_urls_feminina) : [];
   const masculineImages = produto ? parseImageUrls(produto.imagem_urls as string[] | string) : [];
@@ -675,7 +676,7 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
     nome_personalizado: db.nome_personalizado ?? undefined,
     numero_personalizado: db.numero_personalizado ?? undefined,
     feminino: db.feminino,
-    custo: (db as any).custo ?? undefined,
+    custo: db.custo ?? undefined,
     created_at: db.created_at,
     produto_nome: produto?.nome ?? undefined,
     produto_imagem: db.feminino && feminineImages.length > 0 ? feminineImages[0] : (masculineImages[0] ?? undefined),

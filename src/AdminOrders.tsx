@@ -55,7 +55,7 @@ export default function AdminOrders() {
         console.log(`Auto-cancelados ${cancelled} pedido(s) expirado(s)`);
       }
       const all = await getPedidos();
-      setOrders(all.filter((o) => !["entregue", "cancelado", "reembolsado"].includes(o.status)));
+      setOrders(all.filter((o) => !["entregue", "cancelado", "reembolsado"].includes(o.status) && !(o.pronta_entrega && ["em_estoque", "em_entrega"].includes(o.status))));
     } catch (err) {
       console.error("Erro ao carregar pedidos:", err);
     } finally {
@@ -74,7 +74,7 @@ export default function AdminOrders() {
     const interval = setInterval(async () => {
       try {
         const all = await getPedidos();
-        const ativos = all.filter((o) => !["entregue", "cancelado", "reembolsado"].includes(o.status));
+        const ativos = all.filter((o) => !["entregue", "cancelado", "reembolsado"].includes(o.status) && !(o.pronta_entrega && ["em_estoque", "em_entrega"].includes(o.status)));
         const total = ativos.length;
         if (ultimoTotalRef.current > 0 && total > ultimoTotalRef.current) {
           setNovosPedidos((p) => p + (total - ultimoTotalRef.current));
@@ -166,9 +166,21 @@ export default function AdminOrders() {
       }
     }
 
+    if (newStatus === "em_estoque" && currentOrder?.pronta_entrega) {
+      // Auto-add to PE stock when a replenishment order reaches em_estoque
+      try {
+        await addOrderItemsToEstoque(currentOrder);
+      } catch (err) {
+        console.error("Erro ao adicionar ao estoque:", err);
+      }
+    }
+
     clearCache("pedidos");
 
-    if (["entregue", "cancelado", "reembolsado"].includes(newStatus)) {
+    // Remove from active orders: entregue/cancelado/reembolsado, OR PE orders that went to stock
+    const isFinalStatus = ["entregue", "cancelado", "reembolsado"].includes(newStatus);
+    const isPEStock = currentOrder?.pronta_entrega && ["em_estoque", "em_entrega", "entregue"].includes(newStatus);
+    if (isFinalStatus || isPEStock) {
       setOrders((prev) => prev.filter((o) => o.id !== id));
     } else {
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: newStatus as Order["status"] } : o)));
@@ -473,6 +485,27 @@ export default function AdminOrders() {
                         {order.pronta_entrega ? "📦 Pronta Entrega" : "📦 Marcar p/ Estoque"}
                       </button>
                     </div>
+
+                    {/* Add to PE stock button (for stock replenishment orders) */}
+                    {order.pronta_entrega && ["entregue", "a_caminho", "em_estoque", "em_entrega"].includes(order.status) && (
+                      <div className="pt-3 mt-3 border-t border-border">
+                        <button
+                          className="w-full py-2.5 text-sm font-semibold bg-teal-600 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={async () => {
+                            if (!confirm(`Adicionar itens do pedido ${order.id} ao estoque de pronta entrega?`)) return;
+                            try {
+                              await addOrderItemsToEstoque(order);
+                              alert("Itens adicionados ao estoque!");
+                            } catch (err) {
+                              console.error("Erro ao adicionar ao estoque:", err);
+                              alert("Erro ao adicionar ao estoque.");
+                            }
+                          }}
+                        >
+                          📦 Adicionar ao Estoque PE
+                        </button>
+                      </div>
+                    )}
 
                     {/* Cancel button — available for any non-final status */}
                     {!["entregue", "cancelado", "reembolsado"].includes(order.status) && (

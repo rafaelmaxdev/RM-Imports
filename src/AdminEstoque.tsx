@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import type { DbProduto } from "./lib/db";
-import { getEstoque, addEstoqueItem, updateEstoqueItem, deleteEstoqueItem, criarVendaDireta } from "./lib/db";
+import { getEstoque, addEstoqueItem, updateEstoqueItem, deleteEstoqueItem, criarVendaDireta, getPedidos } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
-import { getCachedImageUrl, TAMANHOS_POR_TIPO, TIPOS_SEM_PERSONALIZACAO, getPrecoProduto, ADICIONAL_TAMANHO } from "./types";
+import { getCachedImageUrl, TAMANHOS_POR_TIPO, TIPOS_SEM_PERSONALIZACAO, getPrecoProduto, ADICIONAL_TAMANHO, formatarMoeda } from "./types";
 import type { EstoqueItem, LojaConfig, PaymentMethod } from "./types";
 import { buscaPorPalavras } from "./lib/utils";
 import type { PromocaoTipo } from "./types";
@@ -14,6 +14,7 @@ interface AdminEstoqueProps {
 
 export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
+  const [reposicoes, setReposicoes] = useState<import("./types").Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -44,8 +45,9 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
   async function loadEstoque() {
     try {
       setLoading(true);
-      const data = await getEstoque();
+      const [data, allOrders] = await Promise.all([getEstoque(), getPedidos()]);
       setEstoque(data);
+      setReposicoes(allOrders.filter((o) => o.pronta_entrega && !o.admin_order && ["em_estoque", "em_entrega", "entregue"].includes(o.status)));
     } catch (err) {
       console.error("Erro ao carregar estoque:", err);
     } finally {
@@ -281,10 +283,10 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
         <div>
           <h2 className="text-xl text-primary m-0">Estoque - Pronta Entrega</h2>
           <p className="text-sm text-text-muted mt-1">
-            {estoque.length} item(ns) em estoque
-            {estoque.filter(i => i.quantidade <= 2).length > 0 && (
+            {estoque.filter(i => i.quantidade > 0).length} item(ns) em estoque
+            {estoque.filter(i => i.quantidade > 0 && i.quantidade <= 2).length > 0 && (
               <span className="ml-2 text-red-600 font-semibold">
-                ⚠ {estoque.filter(i => i.quantidade <= 2).length} com estoque baixo
+                ⚠ {estoque.filter(i => i.quantidade > 0 && i.quantidade <= 2).length} com estoque baixo
               </span>
             )}
           </p>
@@ -320,7 +322,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
             );
             const imgSrc =
               imgs.length > 0
-                ? getCachedImageUrl(imgs[0], null, 0, "small")
+                ? getCachedImageUrl(imgs[0], first.produto_cached_image_urls ?? null, 0, "small")
                 : "";
 
             return (
@@ -444,6 +446,47 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Reposições — PE orders that went to stock */}
+      {reposicoes.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-primary mb-3">Reposições de Estoque</h3>
+          <div className="flex flex-col gap-3">
+            {reposicoes.map((rep) => {
+              const totalItens = rep.itens.length;
+              const statusLabel: Record<string, string> = {
+                em_estoque: "📦 No estoque",
+                em_entrega: "🚚 Em entrega",
+                entregue: "✅ Vendido",
+              };
+              return (
+                <div key={rep.id} className="p-4 bg-card-bg rounded-md border border-border">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-sm">{rep.id}</span>
+                      <span className="text-xs text-text-muted ml-2">{rep.data}</span>
+                      <span className={`ml-2 text-xs font-semibold ${rep.status === "entregue" ? "text-green-600" : "text-teal-600"}`}>
+                        {statusLabel[rep.status] || rep.status}
+                      </span>
+                    </div>
+                    <span className="font-semibold text-sm">{formatarMoeda(rep.total)}</span>
+                  </div>
+                  <div className="text-xs text-text-muted mt-1">
+                    {rep.endereco?.nome} • {totalItens} {totalItens === 1 ? "item" : "itens"}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {rep.itens.map((item, i) => (
+                      <span key={i} className="text-xs bg-bg-base px-2 py-0.5 rounded">
+                        {item.nome} ({item.tamanho}){item.feminino && " Fem"}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -784,6 +827,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
               <div className="font-semibold text-sm">{vendaItem.produto_nome}</div>
               <div className="text-xs text-text-muted mt-1">
                 Tamanho: <strong>{vendaItem.tamanho}</strong> • Disponível: <strong>{vendaItem.quantidade}</strong>
+                {vendaItem.custo ? ` • Custo: R$ ${Number(vendaItem.custo).toFixed(2)}` : ""}
               </div>
               {vendaItem.personalizado && vendaItem.nome_personalizado && (
                 <div className="text-xs text-accent font-semibold mt-1">

@@ -663,10 +663,11 @@ export interface DbEstoqueItem {
   created_at: string;
 }
 
-function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; imagem_urls: string[] | string; imagem_urls_feminina?: string[] | string | null; tipo: string; time: string; liga: string; temporada: string } | null; custo?: number | null }): EstoqueItem {
+function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; imagem_urls: string[] | string; imagem_urls_feminina?: string[] | string | null; cached_image_urls?: any; tipo: string; time: string; liga: string; temporada: string } | null; custo?: number | null }): EstoqueItem {
   const produto = db.produtos;
   const feminineImages = produto?.imagem_urls_feminina ? parseImageUrls(produto.imagem_urls_feminina) : [];
   const masculineImages = produto ? parseImageUrls(produto.imagem_urls as string[] | string) : [];
+  const cachedUrls = produto?.cached_image_urls as import("../types").CachedImageMap | null | undefined;
   return {
     id: db.id,
     produto_id: db.produto_id,
@@ -685,10 +686,11 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
     produto_time: produto?.time ?? undefined,
     produto_liga: produto?.liga ?? undefined,
     produto_temporada: produto?.temporada ?? undefined,
+    produto_cached_image_urls: cachedUrls ?? undefined,
   };
 }
 
-const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, custo, created_at, produtos(nome, imagem_urls, imagem_urls_feminina, tipo, time, liga, temporada)";
+const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, custo, created_at, produtos(nome, imagem_urls, imagem_urls_feminina, cached_image_urls, tipo, time, liga, temporada)";
 
 export async function getEstoque(): Promise<EstoqueItem[]> {
   const { data, error } = await supabase

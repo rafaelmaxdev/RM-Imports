@@ -88,6 +88,7 @@ export interface EstoqueItem {
   produto_time?: string;
   produto_liga?: string;
   produto_temporada?: string;
+  produto_cached_image_urls?: CachedImageMap | null;
 }
 
 export const PRECOS_BASE: Record<string, number> = {

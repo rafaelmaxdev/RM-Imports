@@ -154,7 +154,7 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
         const fem = Array.isArray(data.imagem_urls_feminina) ? data.imagem_urls_feminina.filter(Boolean) : [];
         setFeminineImages(fem);
       }
-    }).catch(() => {});
+    }).catch((err) => console.warn("[ProntaEntrega] feminine images fetch failed:", err));
   }, [product.produto_id]);
   const isFeminineMode = genero === "Feminino" && feminineImages.length > 0;
 
@@ -501,7 +501,7 @@ export default function ProntaEntrega() {
     }
 
     return result;
-  }, [grouped, filtroBusca, filtroTime, filtroTipo, config]);
+  }, [grouped, filtroBusca, filtroTime, filtroTipo]);
 
   // Reset to page 1 when filters change
   const filtrosKey = JSON.stringify({ filtroBusca, filtroTime, filtroTipo });
@@ -848,7 +848,7 @@ export default function ProntaEntrega() {
       {/* Toast notification */}
       <div
         className={`fixed bottom-8 left-1/2 bg-primary text-white px-6 py-3 rounded-md shadow-lg text-sm font-semibold z-[2000] pointer-events-none transition-all duration-300 ${
-          toastVisible ? "animate-toast opacity-100" : "opacity-0 translate-y-25"
+          toastVisible ? "animate-toast opacity-100" : "opacity-0 translate-y-[25px]"
         }`}
       >
         ✓ {toastProduto} adicionado ao carrinho

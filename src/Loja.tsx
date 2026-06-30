@@ -414,7 +414,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
       <div
         className={`fixed bottom-8 left-1/2 bg-primary text-white px-6 py-3 rounded-md shadow-lg text-sm font-semibold z-[2000] pointer-events-none transition-all duration-300 ${
-          toastVisible ? "animate-toast opacity-100" : "opacity-0 translate-y-25"
+          toastVisible ? "animate-toast opacity-100" : "opacity-0 translate-y-[25px]"
         }`}
       >
         ✓ {toastProduto} adicionado ao carrinho

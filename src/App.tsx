@@ -221,9 +221,9 @@ function AdminPanel({
       const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado");
       const rows = [["ID", "Data", "Hora", "Status", "Total", "Pagamento", "Cliente", "Telefone", "Itens"]];
       for (const o of ativos) {
-        const nome = o.endereco && typeof o.endereco === "object" ? (o.endereco as any).nome || "" : "";
-        const tel = o.endereco && typeof o.endereco === "object" ? (o.endereco as any).telefone || "" : "";
-        const itens = o.itens.map((i: any) => `${i.nome} (${i.tamanho})`).join("; ");
+        const nome = o.endereco && typeof o.endereco === "object" ? (o.endereco as { nome?: string }).nome || "" : "";
+        const tel = o.endereco && typeof o.endereco === "object" ? (o.endereco as { telefone?: string }).telefone || "" : "";
+        const itens = o.itens.map((i) => `${i.nome} (${i.tamanho})`).join("; ");
         rows.push([o.id, o.data, o.hora, o.status, String(o.total), o.payment_method || "", nome, tel, itens]);
       }
       const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");

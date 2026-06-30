@@ -62,7 +62,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
         const imgs = Array.isArray(data.imagem_urls_feminina) ? data.imagem_urls_feminina.filter(Boolean) : [];
         setFeminineImages(imgs);
       }
-    }).catch(() => {});
+    }).catch((err) => console.warn("[CartModal] feminine images fetch failed:", err));
   }, [produto.id]);
 
   const allImages = genero === "Feminino" && feminineImages.length > 0

@@ -216,7 +216,7 @@ export default function MeusPedidos() {
             <div className="p-3 sm:p-4 border-b border-border">
               <h4 className="text-xs sm:text-sm font-semibold text-text-muted mb-2">Itens</h4>
               <div className="flex flex-col gap-1.5">
-                {order.itens.map((item: any, i: number) => (
+                {order.itens.map((item, i: number) => (
                   <div key={i} className="flex items-start gap-2.5 p-2 sm:p-2.5 bg-bg-base rounded-md">
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-xs sm:text-sm leading-tight">{item.nome}</div>

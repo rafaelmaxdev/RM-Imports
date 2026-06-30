@@ -703,6 +703,23 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                                     );
                                   })}
                                 </div>
+                                <div className="flex gap-1.5 mt-2">
+                                  {PACKAGE_NEXT_STATUS[order.status] && order.status !== "entregue" && (
+                                    <button
+                                      className="px-2 py-1 text-[11px] font-semibold bg-accent text-white rounded cursor-pointer hover:opacity-85 transition-opacity border-none"
+                                      onClick={async () => {
+                                        const next = PACKAGE_NEXT_STATUS[order.status];
+                                        if (!next || !confirm(`Avançar pedido ${order.id} para "${PACKAGE_STATUS_ACTION_LABELS[order.status] || next}"?`)) return;
+                                        try {
+                                          await updatePedidoStatus(order.id, next);
+                                          loadOrders(); // refresh
+                                        } catch { alert("Erro ao atualizar status."); }
+                                      }}
+                                    >
+                                      → {PACKAGE_STATUS_ACTION_LABELS[order.status] || PACKAGE_NEXT_STATUS[order.status]}
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}

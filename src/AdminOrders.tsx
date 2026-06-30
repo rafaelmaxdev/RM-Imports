@@ -325,11 +325,11 @@ export default function AdminOrders() {
                       <div className="font-bold text-lg text-accent">{formatarMoeda(order.total)}</div>
                       {order.status === "cancelado" && (
                         <button
-                          className="bg-none border-none text-text-muted cursor-pointer text-lg leading-none hover:text-red-500 transition-colors"
-                          onClick={(e) => { e.stopPropagation(); handleDelete(order.id); }}
-                          title="Excluir pedido (apenas cancelados)"
+                          className="px-2 py-1 text-xs font-semibold bg-red-100 text-red-700 rounded cursor-pointer hover:bg-red-200 transition-colors border-none"
+                          onClick={(e) => { e.stopPropagation(); if (confirm(`Excluir pedido ${order.id} permanentemente?`)) handleDelete(order.id); }}
+                          title="Excluir pedido cancelado"
                         >
-                          ✕
+                          Excluir
                         </button>
                       )}
                       <span className={`text-text-muted text-sm transition-transform ${isExpanded ? "rotate-180" : ""}`}>▼</span>
@@ -431,7 +431,7 @@ export default function AdminOrders() {
                         })}
                         {order.endereco?.telefone && (
                           <a
-                            href={`https://wa.me/${order.endereco.telefone.replace(/\D/g, "")}?text=${encodeURIComponent(montarMensagemCliente(order))}`}
+                            href={`https://wa.me/55${order.endereco.telefone.replace(/\D/g, "").replace(/^55/, "")}?text=${encodeURIComponent(montarMensagemCliente(order))}`}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center justify-center px-4 py-2.5 rounded-md border-none text-sm font-semibold cursor-pointer transition-opacity hover:opacity-85 text-white bg-green-600 min-h-9 whitespace-nowrap no-underline"

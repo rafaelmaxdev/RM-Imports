@@ -395,25 +395,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
                             <span className="text-xs text-text-muted">
                               Enter para salvar, Esc para cancelar
                             </span>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-text-muted mb-1">Forma de pagamento</label>
-              <div className="flex gap-2">
-                {(["pix", "credit_card", "debit_card"] as PaymentMethod[]).map((metodo) => (
-                  <button
-                    key={metodo}
-                    onClick={() => setVendaPagamento(metodo)}
-                    className={`flex-1 py-2 text-sm font-semibold rounded-md cursor-pointer transition-colors border ${
-                      vendaPagamento === metodo
-                        ? "bg-accent text-white border-accent"
-                        : "bg-card-bg text-text-muted border-border hover:border-accent/50"
-                    }`}
-                  >
-                    {metodo === "pix" ? "Pix" : metodo === "credit_card" ? "Crédito" : "Débito"}
-                  </button>
-                ))}
-              </div>
-            </div>
+                          </div>
                         ) : (
                           <button
                             className="text-sm font-medium text-text-main hover:text-accent transition-colors cursor-pointer bg-transparent border-none"

@@ -285,6 +285,7 @@ export interface DbPedido {
   mp_payment_id: string | null;
   admin_order: boolean | null;
   pronta_entrega: boolean | null;
+  reposicao: boolean | null;
   credit_release_period?: "immediate" | "14_days" | "30_days" | null;
   created_at: string;
 }
@@ -305,6 +306,7 @@ function dbPedidoToOrder(db: DbPedido): import("../types").Order {
     mp_payment_id: db.mp_payment_id || undefined,
     admin_order: db.admin_order ?? false,
     pronta_entrega: db.pronta_entrega ?? false,
+    reposicao: db.reposicao ?? false,
     created_at: db.created_at,
   };
 }
@@ -333,6 +335,7 @@ const row = {
     mp_payment_id: order.mp_payment_id || null,
     admin_order: order.admin_order || null,
     pronta_entrega: order.pronta_entrega || null,
+    reposicao: order.reposicao || null,
   };
 
   const { data, error } = await supabase
@@ -660,6 +663,7 @@ export interface DbEstoqueItem {
   numero_personalizado: string | null;
   feminino: boolean;
   custo: number | null;
+  pedido_reposicao_id: string | null;
   created_at: string;
 }
 
@@ -679,6 +683,7 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
     feminino: db.feminino,
     custo: db.custo ?? undefined,
     created_at: db.created_at,
+    pedido_reposicao_id: db.pedido_reposicao_id ?? undefined,
     produto_nome: produto?.nome ?? undefined,
     produto_imagem: db.feminino && feminineImages.length > 0 ? feminineImages[0] : (masculineImages[0] ?? undefined),
     produto_imagens_femininas: feminineImages.length > 0 ? feminineImages : undefined,
@@ -690,7 +695,7 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
   };
 }
 
-const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, custo, created_at, produtos(nome, imagem_urls, imagem_urls_feminina, cached_image_urls, tipo, time, liga, temporada)";
+const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, custo, pedido_reposicao_id, created_at, produtos(nome, imagem_urls, imagem_urls_feminina, cached_image_urls, tipo, time, liga, temporada)";
 
 export async function getEstoque(): Promise<EstoqueItem[]> {
   const { data, error } = await supabase
@@ -827,7 +832,7 @@ export async function deleteEstoqueItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function addOrderItemsToEstoque(order: import("../types").Order): Promise<void> {
+export async function addOrderItemsToEstoque(order: import("../types").Order, pedidoReposicaoId?: string): Promise<void> {
   const nomes = [...new Set(order.itens.map((i) => i.nome))];
   const { data: batch } = await supabase.from("produtos").select("id, nome").in("nome", nomes);
   const produtoMap = new Map((batch || []).map((p: any) => [p.nome, p.id]));
@@ -840,15 +845,24 @@ export async function addOrderItemsToEstoque(order: import("../types").Order): P
     const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
     const isFeminino = item.feminino ?? false;
 
-    let query = supabase.from("estoque_pronta_entrega").select("id, quantidade").eq("produto_id", produtoId).eq("tamanho", item.tamanho).eq("personalizado", isPersonalizado).eq("feminino", isFeminino);
-    if (nomePessoal) query = query.eq("nome_personalizado", nomePessoal); else query = query.is("nome_personalizado", null);
-    if (numeroPessoal) query = query.eq("numero_personalizado", numeroPessoal); else query = query.is("numero_personalizado", null);
-
-    const { data: existing } = await query.maybeSingle();
-    if (existing) {
-      await supabase.from("estoque_pronta_entrega").update({ quantidade: existing.quantidade + 1 }).eq("id", existing.id);
+    if (pedidoReposicaoId) {
+      await supabase.from("estoque_pronta_entrega").insert({
+        produto_id: produtoId, tamanho: item.tamanho, quantidade: 1,
+        personalizado: isPersonalizado, nome_personalizado: nomePessoal,
+        numero_personalizado: numeroPessoal, feminino: isFeminino,
+        custo: null, pedido_reposicao_id: pedidoReposicaoId,
+      });
     } else {
-      await supabase.from("estoque_pronta_entrega").insert({ produto_id: produtoId, tamanho: item.tamanho, quantidade: 1, personalizado: isPersonalizado, nome_personalizado: nomePessoal, numero_personalizado: numeroPessoal, feminino: isFeminino });
+      let query = supabase.from("estoque_pronta_entrega").select("id, quantidade").eq("produto_id", produtoId).eq("tamanho", item.tamanho).eq("personalizado", isPersonalizado).eq("feminino", isFeminino);
+      if (nomePessoal) query = query.eq("nome_personalizado", nomePessoal); else query = query.is("nome_personalizado", null);
+      if (numeroPessoal) query = query.eq("numero_personalizado", numeroPessoal); else query = query.is("numero_personalizado", null);
+
+      const { data: existing } = await query.maybeSingle();
+      if (existing) {
+        await supabase.from("estoque_pronta_entrega").update({ quantidade: existing.quantidade + 1 }).eq("id", existing.id);
+      } else {
+        await supabase.from("estoque_pronta_entrega").insert({ produto_id: produtoId, tamanho: item.tamanho, quantidade: 1, personalizado: isPersonalizado, nome_personalizado: nomePessoal, numero_personalizado: numeroPessoal, feminino: isFeminino });
+      }
     }
   }
 }
@@ -964,7 +978,7 @@ export async function criarVendaDireta(
       estado: "",
       cep: "",
       telefone: "",
-      deliveryMethod: "retirada",
+      deliveryMethod: "venda_direta",
     },
     pronta_entrega: true,
     payment_method: paymentMethod as any,

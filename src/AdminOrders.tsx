@@ -169,7 +169,8 @@ export default function AdminOrders() {
     if (newStatus === "em_estoque" && currentOrder?.pronta_entrega) {
       // Auto-add to PE stock when a replenishment order reaches em_estoque
       try {
-        await addOrderItemsToEstoque(currentOrder);
+        await addOrderItemsToEstoque(currentOrder, id);
+        await supabase.from("pedidos").update({ reposicao: true }).eq("id", id);
       } catch (err) {
         console.error("Erro ao adicionar ao estoque:", err);
       }

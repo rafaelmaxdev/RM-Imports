@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import type { DbProduto } from "./lib/db";
-import { getEstoque, addEstoqueItem, updateEstoqueItem, deleteEstoqueItem, criarVendaDireta, getPedidos } from "./lib/db";
+import { getEstoque, addEstoqueItem, updateEstoqueItem, deleteEstoqueItem, criarVendaDireta, getPedidos, getPacotes } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
+import { clearCache } from "./lib/cache";
 import { getCachedImageUrl, TAMANHOS_POR_TIPO, TIPOS_SEM_PERSONALIZACAO, getPrecoProduto, ADICIONAL_TAMANHO, formatarMoeda } from "./types";
 import type { EstoqueItem, LojaConfig, PaymentMethod } from "./types";
 import { buscaPorPalavras } from "./lib/utils";
@@ -15,6 +16,8 @@ interface AdminEstoqueProps {
 export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [reposicoes, setReposicoes] = useState<import("./types").Order[]>([]);
+  const [allOrders, setAllOrders] = useState<import("./types").Order[]>([]);
+  const [pacotes, setPacotes] = useState<import("./lib/db").Pacote[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -44,10 +47,13 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
 
   async function loadEstoque() {
     try {
+      clearCache("pedidos");
       setLoading(true);
-      const [data, allOrders] = await Promise.all([getEstoque(), getPedidos()]);
+      const [data, allOrders, pacotesData] = await Promise.all([getEstoque(), getPedidos(), getPacotes()]);
       setEstoque(data);
-      setReposicoes(allOrders.filter((o) => o.pronta_entrega && !o.admin_order && ["em_estoque", "em_entrega", "entregue"].includes(o.status)));
+      setAllOrders(allOrders);
+      setReposicoes(allOrders.filter((o) => o.reposicao));
+      setPacotes(pacotesData);
     } catch (err) {
       console.error("Erro ao carregar estoque:", err);
     } finally {
@@ -449,47 +455,6 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
         </div>
       )}
 
-      {/* Reposições — PE orders that went to stock */}
-      {reposicoes.length > 0 && (
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold text-primary mb-3">Reposições de Estoque</h3>
-          <div className="flex flex-col gap-3">
-            {reposicoes.map((rep) => {
-              const totalItens = rep.itens.length;
-              const statusLabel: Record<string, string> = {
-                em_estoque: "📦 No estoque",
-                em_entrega: "🚚 Em entrega",
-                entregue: "✅ Vendido",
-              };
-              return (
-                <div key={rep.id} className="p-4 bg-card-bg rounded-md border border-border">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-sm">{rep.id}</span>
-                      <span className="text-xs text-text-muted ml-2">{rep.data}</span>
-                      <span className={`ml-2 text-xs font-semibold ${rep.status === "entregue" ? "text-green-600" : "text-teal-600"}`}>
-                        {statusLabel[rep.status] || rep.status}
-                      </span>
-                    </div>
-                    <span className="font-semibold text-sm">{formatarMoeda(rep.total)}</span>
-                  </div>
-                  <div className="text-xs text-text-muted mt-1">
-                    {rep.endereco?.nome} • {totalItens} {totalItens === 1 ? "item" : "itens"}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {rep.itens.map((item, i) => (
-                      <span key={i} className="text-xs bg-bg-base px-2 py-0.5 rounded">
-                        {item.nome} ({item.tamanho}){item.feminino && " Fem"}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Add Item Form */}
       <div className="border-t border-border pt-6">
         <h3 className="text-lg font-semibold text-primary mb-2">
@@ -803,6 +768,100 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
           </div>
         )}
       </div>
+
+      {/* Reposições — PE orders that went to stock */}
+      {reposicoes.length > 0 && (
+        <div className="mb-8 mt-6">
+          <h3 className="text-lg font-semibold text-primary mb-3">Reposições de Estoque</h3>
+          <div className="flex flex-col gap-3">
+            {reposicoes.map((rep) => {
+              const totalItens = rep.itens.length;
+              const pacoteOrigem = pacotes.find((p) => p.pedido_ids.includes(rep.id));
+              return (
+                <div key={rep.id} className="p-4 bg-card-bg rounded-md border border-border">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-sm">{rep.id}</span>
+                      <a href={`/pedido/${rep.id}`} target="_blank" className="text-text-muted hover:text-accent text-xs ml-1 no-underline" title="Ver pedido">↗</a>
+                      <span className="text-xs text-text-muted ml-1">{rep.data}</span>
+                      {pacoteOrigem && (
+                        <span className="text-xs text-text-muted ml-2">
+                          • Pacote {pacoteOrigem.id.slice(0, 8)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="font-semibold text-sm">Custo do pacote: {formatarMoeda(
+                        (() => {
+                          const custoEstoque = rep.itens.reduce((sum, item) => {
+                            const e = estoque.find((e) =>
+                              e.pedido_reposicao_id === rep.id && e.produto_nome === item.nome && e.tamanho === item.tamanho && (e.feminino ?? false) === (item.feminino ?? false)
+                            );
+                            return sum + (e?.custo ?? 0);
+                          }, 0);
+                          if (custoEstoque > 0) return custoEstoque;
+                          if (!pacoteOrigem) return 0;
+                          const totalPacote = (pacoteOrigem.custo ?? 0) + (pacoteOrigem.frete ?? 0) + (pacoteOrigem.taxa_importacao ?? 0);
+                          if (totalPacote <= 0) return 0;
+                          return pacoteOrigem.pedido_ids.length > 0 ? totalPacote / pacoteOrigem.pedido_ids.length : 0;
+                        })()
+                      )}</span>
+                      {(() => {
+                        const lucroTotal = rep.itens.reduce((sum, item) => {
+                          const e = estoque.find((e) =>
+                            e.pedido_reposicao_id === rep.id && e.produto_nome === item.nome && e.tamanho === item.tamanho && (e.feminino ?? false) === (item.feminino ?? false)
+                          );
+                          if (!e || e.quantidade > 0) return sum;
+                          const venda = allOrders.find((o) =>
+                            o.id !== rep.id && o.pronta_entrega && o.status === "entregue" &&
+                            o.itens.some((i) => i.nome === item.nome && i.tamanho === item.tamanho && (i.feminino ?? false) === (item.feminino ?? false))
+                          );
+                          return sum + ((venda?.total ?? 0) - (e.custo ?? 0));
+                        }, 0);
+                        const algumVendido = rep.itens.some((item) => {
+                          const e = estoque.find((e) =>
+                            e.pedido_reposicao_id === rep.id && e.produto_nome === item.nome && e.tamanho === item.tamanho && (e.feminino ?? false) === (item.feminino ?? false)
+                          );
+                          return !e || e.quantidade <= 0;
+                        });
+                        if (!algumVendido) return null;
+                        return <div className="text-xs text-green-600 font-semibold mt-0.5">Lucro do pacote: {formatarMoeda(lucroTotal)}</div>;
+                      })()}
+                    </div>
+                  </div>
+                  <div className="text-xs text-text-muted mt-1">
+                    {rep.endereco?.nome} • {totalItens} {totalItens === 1 ? "item" : "itens"}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {rep.itens.map((item, i) => {
+                      const noEstoque = estoque.find((e) =>
+                        e.pedido_reposicao_id === rep.id && e.produto_nome === item.nome && e.tamanho === item.tamanho && (e.feminino ?? false) === (item.feminino ?? false)
+                      );
+                      const vendido = !noEstoque || noEstoque.quantidade <= 0;
+                      const vendaPedido = vendido ? allOrders.find((o) =>
+                        o.id !== rep.id && o.pronta_entrega && o.status === "entregue" &&
+                        o.itens.some((i) => i.nome === item.nome && i.tamanho === item.tamanho && (i.feminino ?? false) === (item.feminino ?? false))
+                      ) : null;
+                      return (
+                        <span key={i}>
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${vendido ? "bg-green-100" : "bg-bg-base"}`}>
+                            {item.nome} ({item.tamanho}){item.feminino && " Fem"}
+                          </span>
+                          {vendido && vendaPedido && (
+                            <span className="text-xs text-green-700 ml-1">
+                              ✅ {formatarMoeda(vendaPedido.total)} (custo: {formatarMoeda(noEstoque?.custo ?? 0)} • lucro: {formatarMoeda(vendaPedido.total - (noEstoque?.custo ?? 0))}) <a href={`/pedido/${vendaPedido.id}`} target="_blank" className="text-accent hover:underline no-underline" title="Ver venda">↗</a>
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Venda Direta Modal */}
       {showVendaDireta && vendaItem && (

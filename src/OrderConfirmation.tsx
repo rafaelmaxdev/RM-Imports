@@ -246,6 +246,11 @@ export default function OrderConfirmation() {
                   <span className="font-medium text-text-main block mb-1">📍 Retirada em Caruaru</span>
                   <span>{order.endereco.nome} &middot; {order.endereco.telefone}</span>
                 </div>
+              ) : order.endereco.deliveryMethod === "venda_direta" ? (
+                <div className="text-xs text-text-muted leading-relaxed">
+                  <span className="font-medium text-green-600 block mb-1">✅ Venda direta (boca a boca)</span>
+                  <span>{order.endereco.nome}</span>
+                </div>
               ) : (
                 <div className="text-xs text-text-muted leading-relaxed">
                   <span className="font-medium text-text-main block mb-1">🚚 Entrega em Bezerros</span>

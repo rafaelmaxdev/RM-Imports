@@ -956,6 +956,8 @@ function CustosForm({
   }, 0);
   const dolarRate = parseFloat(localDolar) || 0;
   const custoCalculadoBRL = custoCalculadoUSD * dolarRate;
+  const freteValue = parseFloat(localFrete) || 0;
+  const taxaValue = parseFloat(localTaxa) || 0;
 
   async function save() {
     const custoFinal = localCusto ? parseFloat(localCusto) : (custoCalculadoBRL > 0 ? Math.round(custoCalculadoBRL * 100) / 100 : null);
@@ -991,6 +993,9 @@ function CustosForm({
             <tr className="bg-bg-base">
               <th className="text-left px-2 py-1.5">Item</th>
               <th className="text-right px-2 py-1.5">Custo USD</th>
+              <th className="text-right px-2 py-1.5">Taxa</th>
+              <th className="text-right px-2 py-1.5">Frete</th>
+              <th className="text-right px-2 py-1.5">Final R$</th>
             </tr>
           </thead>
           <tbody>
@@ -999,11 +1004,17 @@ function CustosForm({
                 const key = getItemKey(o, i);
                 const val = itemCosts[key] ?? "";
                 const defaultCost = (config.custo_base[item.tipo] ?? 0) + (item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0);
+                const costUSD = parseFloat(val) || defaultCost;
+                const share = custoCalculadoUSD > 0 ? costUSD / custoCalculadoUSD : 0;
+                const taxaShare = taxaValue * share;
+                const freteShare = freteValue * share;
+                const finalBRL = dolarRate > 0 ? (costUSD * dolarRate) + taxaShare + freteShare : 0;
                 return (
                   <tr key={key} className="border-b border-border">
                     <td className="px-2 py-1.5">
                       <span className="font-medium">{item.nome}</span>
                       <span className="text-text-muted ml-1">({item.tamanho})</span>
+                      {item.feminino && <span className="ml-1 text-[10px] font-bold text-pink-600 bg-pink-100 px-1 py-0.5 rounded">Fem</span>}
                       {item.personalizado && <span className="text-accent ml-1">✦</span>}
                     </td>
                     <td className="text-right px-2 py-1.5">
@@ -1017,6 +1028,9 @@ function CustosForm({
                         className="w-20 px-2 py-1 text-sm text-right border border-border rounded-md bg-card-bg"
                       />
                     </td>
+                    <td className="text-right px-2 py-1.5 text-xs text-text-muted">{dolarRate > 0 ? `R$ ${taxaShare.toFixed(2)}` : "—"}</td>
+                    <td className="text-right px-2 py-1.5 text-xs text-text-muted">{dolarRate > 0 ? `R$ ${freteShare.toFixed(2)}` : "—"}</td>
+                    <td className="text-right px-2 py-1.5 font-medium">{dolarRate > 0 ? `R$ ${finalBRL.toFixed(2)}` : "—"}</td>
                   </tr>
                 );
               })
@@ -1026,6 +1040,9 @@ function CustosForm({
             <tr className="font-bold">
               <td className="px-2 py-1.5">Total</td>
               <td className="text-right px-2 py-1.5">${custoCalculadoUSD.toFixed(2)}</td>
+              <td className="text-right px-2 py-1.5">{dolarRate > 0 ? `R$ ${taxaValue.toFixed(2)}` : "—"}</td>
+              <td className="text-right px-2 py-1.5">{dolarRate > 0 ? `R$ ${freteValue.toFixed(2)}` : "—"}</td>
+              <td className="text-right px-2 py-1.5">{dolarRate > 0 ? `R$ ${custoCalculadoBRL.toFixed(2)}` : "—"}</td>
             </tr>
           </tfoot>
         </table>

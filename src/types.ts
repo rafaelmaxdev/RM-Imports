@@ -45,7 +45,7 @@ export interface OrderAddress {
   estado: string;
   cep: string;
   telefone: string;
-  deliveryMethod: "entrega" | "retirada";
+  deliveryMethod: "entrega" | "retirada" | "venda_direta";
 }
 
 export type PaymentMethod = "pix" | "credit_card" | "debit_card";
@@ -63,9 +63,10 @@ export interface Order {
   mp_payment_id?: string;
   admin_order?: boolean;
   pronta_entrega?: boolean;
-  credit_release_period?: "immediate" | "14_days" | "30_days";
+  reposicao?: boolean;
   cupom_codigo?: string;
   cupom_desconto?: number;
+  credit_release_period?: string;
   created_at?: string;
 }
 
@@ -80,6 +81,7 @@ export interface EstoqueItem {
   feminino: boolean;
   custo?: number | null;
   created_at: string;
+  pedido_reposicao_id?: string;
   // Joined from produtos
   produto_nome?: string;
   produto_imagem?: string;

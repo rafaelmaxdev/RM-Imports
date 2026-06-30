@@ -12,6 +12,10 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[ErrorBoundary]", error, info.componentStack);
+    // Auto-reload on chunk loading failure (new deployment with different hashes)
+    if (error.message.includes("Failed to fetch dynamically imported module") || error.message.includes("dynamically imported module")) {
+      window.location.reload();
+    }
   }
 
   render() {

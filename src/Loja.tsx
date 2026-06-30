@@ -80,6 +80,16 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     }));
   }, [produtos]);
 
+  // Cache prices per product — avoids recomputing on every filter/sort change
+  const priceCache = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of produtosNormalizados) {
+      const info = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time);
+      map.set(p.id, info.promo ?? info.base);
+    }
+    return map;
+  }, [produtosNormalizados, config]);
+
   const produtosFiltrados = useMemo(() => {
     let res = [...produtosNormalizados];
     if (categoriaSelecionada !== "Todas") {
@@ -104,10 +114,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     }
 
     // Pre-compute prices for sorting
-    const precos = new Map(res.map((p) => {
-      const info = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time);
-      return [p.id, info.promo ?? info.base];
-    }));
+    const precos = priceCache;
 
     switch (ordenacao) {
       case "time":

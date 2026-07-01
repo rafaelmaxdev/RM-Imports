@@ -69,8 +69,8 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     paymentCount,
     statusCount,
   } = useMemo(() => {
-    const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && !o.reposicao && o.status !== "pendente" && filtrarPorData(o));
-    const peVendas = orders.filter((o) => o.pronta_entrega && !o.reposicao && o.status === "entregue" && filtrarPorData(o));
+    const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && o.status !== "pendente" && filtrarPorData(o));
+    const peVendas = orders.filter((o) => o.pronta_entrega && o.status === "entregue" && filtrarPorData(o));
     const adminOrders = orders.filter((o) => o.admin_order && !o.pronta_entrega && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente" && filtrarPorData(o));
     const revenue = ativos.reduce((s, o) => s + o.total, 0) + peVendas.reduce((s, o) => s + o.total, 0);
     const pending = orders.filter((o) => o.status === "pendente").length;
@@ -151,7 +151,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
       totalOrders: orders.length,
       totalRevenue: revenue,
       totalPending: pending,
-      totalPE: peVendas.length,
+      totalPE: orders.filter((o) => o.reposicao).length,
       totalAdmin: adminOrders.length,
       monthlyData: Object.entries(monthMap).map(([mes, data]) => ({ mes, ...data })),
       topProducts: top,
@@ -179,7 +179,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           { value: totalOrders, label: "Total de Pedidos", tab: "pedidos" as const },
           { value: formatarMoeda(totalRevenue), label: "Receita", tab: "financeiro" as const },
           { value: totalPending, label: "Pendentes", tab: "pedidos" as const },
-          { value: totalPE, label: "Estoque", tab: "estoque" as const },
+          { value: totalPE, label: "Para estoque", tab: "estoque" as const },
           { value: totalAdmin, label: "Admin", tab: "pedidos" as const },
         ].map((card) => {
           const colors: Record<string, string> = {

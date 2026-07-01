@@ -149,8 +149,8 @@ export default function AdminFinanceiro() {
   }).filter((a): a is number => a !== null && !isNaN(a)))].sort((a, b) => b - a);
   if (!anosDisponiveis.includes(anoFiltro) && anosDisponiveis.length > 0) setAnoFiltro(anosDisponiveis[0]);
 
-  const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && filtrarPorData(o, anoFiltro, mesFiltro));
-  const peVendas = orders.filter((o) => o.pronta_entrega && o.status === "entregue" && filtrarPorData(o, anoFiltro, mesFiltro));
+  const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && !o.reposicao && filtrarPorData(o, anoFiltro, mesFiltro));
+  const peVendas = orders.filter((o) => o.pronta_entrega && !o.reposicao && o.status === "entregue" && filtrarPorData(o, anoFiltro, mesFiltro));
   const pedidosEmPacotes = new Set<string>();
   // Prorate costs by non-admin orders only
   function prorateCost(cost: number, totalShirts: number, nonAdminShirts: number): number {

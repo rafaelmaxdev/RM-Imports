@@ -69,8 +69,8 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     paymentCount,
     statusCount,
   } = useMemo(() => {
-    const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && o.status !== "pendente" && filtrarPorData(o));
-    const peVendas = orders.filter((o) => o.pronta_entrega && o.status === "entregue" && filtrarPorData(o));
+    const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && !o.reposicao && o.status !== "pendente" && filtrarPorData(o));
+    const peVendas = orders.filter((o) => o.pronta_entrega && !o.reposicao && o.status === "entregue" && filtrarPorData(o));
     const adminOrders = orders.filter((o) => o.admin_order && !o.pronta_entrega && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente" && filtrarPorData(o));
     const revenue = ativos.reduce((s, o) => s + o.total, 0) + peVendas.reduce((s, o) => s + o.total, 0);
     const pending = orders.filter((o) => o.status === "pendente").length;

@@ -8,7 +8,7 @@ import ImageCarousel from "./ImageCarousel";
 import ImageLightbox from "./ImageLightbox";
 import DestaqueCarousel from "./DestaqueCarousel";
 import type { LojaConfig, PromocaoTipo, CachedImageMap } from "./types";
-import { formatarMoeda, getPrecoProduto } from "./types";
+import { formatarPreco, getPrecoProduto } from "./types";
 import { normalizeNome, normalizarBusca } from "./lib/utils";
 import { TIPO_SHORT } from "./lib/status";
 
@@ -361,9 +361,9 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
                   <div className="mt-auto">
                     <div className="flex items-baseline gap-1 sm:gap-2 min-h-[1.25rem] sm:min-h-[1.75rem]">
-                      <span className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(promo ?? base)}</span>
-                      {promo !== null && (
-                        <span className="text-text-muted text-[10px] sm:text-sm line-through">{formatarMoeda(base)}</span>
+                        <span className="font-bold text-sm sm:text-lg text-accent">{formatarPreco(promo ?? base)}</span>
+                        {promo != null && (
+                          <span className="text-text-muted text-[10px] sm:text-sm line-through">{formatarPreco(base)}</span>
                       )}
                     </div>
                     <div className="min-h-[1rem] sm:min-h-[1.25rem]">

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { DbProduto } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
 import type { LojaConfig, PromocaoTipo } from "./types";
-import { getPrecoProduto, formatarMoeda, getCachedImageUrl } from "./types";
+import { getPrecoProduto, formatarPreco, getCachedImageUrl } from "./types";
 import { TIPO_SHORT } from "./lib/status";
 
 interface DestaqueCarouselProps {
@@ -267,8 +267,8 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
                       {promo !== null ? (
                         <div>
                           <div className="flex items-baseline gap-1 sm:gap-2">
-                            <span className="font-bold text-accent text-sm sm:text-base">{formatarMoeda(promo)}</span>
-                            <span className="text-text-muted text-[10px] sm:text-xs line-through">{formatarMoeda(base)}</span>
+                            <span className="font-bold text-accent text-sm sm:text-base">{formatarPreco(promo)}</span>
+                            <span className="text-text-muted text-[10px] sm:text-xs line-through">{formatarPreco(base)}</span>
                           </div>
                           {badge && (
                             <span className="inline-block mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">
@@ -277,7 +277,7 @@ export default function DestaqueCarousel({ produtos, config, onSelect }: Destaqu
                           )}
                         </div>
                       ) : (
-                        <div className="font-bold text-accent text-sm sm:text-base">{formatarMoeda(base)}</div>
+                        <div className="font-bold text-accent text-sm sm:text-base">{formatarPreco(base)}</div>
                       )}
                     </div>
                   </div>

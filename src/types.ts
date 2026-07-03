@@ -472,6 +472,12 @@ export function formatarMoeda(valor: number): string {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+/** Rounds down to .99 and formats as currency (for storefront display) */
+export function formatarPreco(valor: number): string {
+  const rounded = Math.floor(valor) + 0.99;
+  return rounded.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 export function montarMensagemPagamento(order: Order): string {
   let msg = `*RM Imports - Pedido ${order.id}*\n`;
   msg += `Data: ${order.data} às ${order.hora}\n\n`;

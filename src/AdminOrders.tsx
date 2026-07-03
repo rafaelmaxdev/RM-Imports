@@ -313,8 +313,8 @@ export default function AdminOrders() {
                           </span>
                         )}
                         {order.pronta_entrega && (
-                          <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-teal-100 text-teal-800">
-                            📦 Estoque
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${order.reposicao ? "bg-teal-100 text-teal-800" : "bg-amber-100 text-amber-800"}`}>
+                            {order.reposicao ? "📦 Estoque" : "💰 Pronta Entrega"}
                           </span>
                         )}
                       </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getPedidos, deletePedido, updatePedidoAdminOrder } from "./lib/db";
+import { getPedidos, deletePedido, updatePedidoAdminOrder, updatePedidoStatus, addOrderItemsToEstoque } from "./lib/db";
 import { clearCache } from "./lib/cache";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
@@ -134,6 +134,11 @@ export default function AdminHistory() {
                             👤 Admin
                           </span>
                         )}
+                        {order.pronta_entrega && (
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${order.reposicao ? "bg-teal-100 text-teal-800" : "bg-amber-100 text-amber-800"}`}>
+                            {order.reposicao ? "📦 Estoque" : "💰 Pronta Entrega"}
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-text-muted mt-1">
                         {order.data} às {order.hora} • {totalItens} {totalItens === 1 ? "item" : "itens"}
@@ -240,6 +245,29 @@ export default function AdminHistory() {
                         {order.admin_order ? "👤 Pedido do Admin" : "👤 Marcar como Admin"}
                       </button>
                     </div>
+
+                    {/* Return button — for delivered PE orders */}
+                    {order.pronta_entrega && order.status === "entregue" && (
+                      <div className="pt-3 mt-3 border-t border-border">
+                        <button
+                          className="w-full py-2.5 text-sm font-semibold bg-orange-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={async () => {
+                            if (!confirm(`Devolver itens do pedido ${order.id} ao estoque?`)) return;
+                            try {
+                              await addOrderItemsToEstoque(order);
+                              await updatePedidoStatus(order.id, "reembolsado");
+                              setHistory((prev) => prev.filter((o) => o.id !== order.id));
+                              alert("Itens devolvidos ao estoque!");
+                            } catch (err) {
+                              console.error("Erro ao devolver:", err);
+                              alert("Erro ao devolver itens.");
+                            }
+                          }}
+                        >
+                          🔄 Devolvido
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

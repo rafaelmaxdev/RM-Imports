@@ -194,7 +194,7 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
     const add = ADICIONAL_TAMANHO[s.tamanho] || 0;
     const pers = s.personalizado ? precoPersonalizacao(product.tipo) : 0;
     const pb = Math.round((base + add + pers + peMarkup) * 100) / 100;
-    const pf = promo !== null ? Math.round((promo + add + pers + peMarkup) * 100) / 100 : pb;
+    const pf = promo !== null ? Math.round((pb * promo / base)) : pb;
     return { precoBase: pb, precoFinal: pf };
   });
   const minPrecoBase = Math.min(...allPrices.map(p => p.precoBase));
@@ -208,7 +208,7 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
   const adicionalTam = ADICIONAL_TAMANHO[selectedTam] || 0;
   const adicionalPers = selectedSizeInfo?.personalizado ? precoPersonalizacao(product.tipo) : 0;
   const precoBaseMarcado = Math.round((base + adicionalTam + adicionalPers + peMarkup) * 100) / 100;
-  const precoPromoMarcado = promo !== null ? Math.round((promo + adicionalTam + adicionalPers + peMarkup) * 100) / 100 : null;
+  const precoPromoMarcado = promo !== null ? Math.round((precoBaseMarcado * promo / base)) : null;
   const prontaEntregaPrice = precoPromoMarcado ?? precoBaseMarcado;
   const prontaEntregaBasePrice = precoBaseMarcado;
 
@@ -404,14 +404,14 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
                     <span>+{formatarMoeda(adicionalPers)}</span>
                   </>
                 )}
+                <span className="text-green-600">Taxa Pronta Entrega:</span>
+                <span className="text-green-600">+{formatarMoeda(peMarkup)}</span>
                 {emPromocao && promo !== null && (
                   <>
                     <span className="text-accent font-semibold">Desconto:</span>
-                    <span className="text-accent font-semibold">-{formatarMoeda(base - promo)}</span>
+                    <span className="text-accent font-semibold">-{formatarMoeda(prontaEntregaBasePrice - prontaEntregaPrice)}</span>
                   </>
                 )}
-                <span className="text-green-600">Taxa Pronta Entrega:</span>
-                <span className="text-green-600">+{formatarMoeda(peMarkup)}</span>
                 <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">
                   <span>Total:</span>
                   <span>{formatarMoeda(prontaEntregaPrice)}</span>
@@ -421,14 +421,14 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
               <>
                 <span>Base:</span>
                 <span>{formatarMoeda(base)}</span>
+                <span className="text-green-600">Taxa Pronta Entrega:</span>
+                <span className="text-green-600">+{formatarMoeda(peMarkup)}</span>
                 {emPromocao && promo !== null && (
                   <>
                     <span className="text-accent font-semibold">Desconto:</span>
-                    <span className="text-accent font-semibold">-{formatarMoeda(base - promo)}</span>
+                    <span className="text-accent font-semibold">-{formatarMoeda(minPrecoBase - minPrecoFinal)}</span>
                   </>
                 )}
-                <span className="text-green-600">Taxa Pronta Entrega:</span>
-                <span className="text-green-600">+{formatarMoeda(peMarkup)}</span>
                 <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">
                   <span>Total a partir de:</span>
                   <span>{formatarMoeda(minPrecoFinal)}</span>
@@ -721,7 +721,7 @@ export default function ProntaEntrega() {
                 const adicionalTam = ADICIONAL_TAMANHO[s.tamanho] || 0;
                 const adicionalPers = s.personalizado ? precoPersonalizacao(p.tipo) : 0;
                 const precoBase = Math.round((base + adicionalTam + adicionalPers + peMarkup) * 100) / 100;
-                const precoFinal = promo !== null ? Math.round((promo + adicionalTam + adicionalPers + peMarkup) * 100) / 100 : precoBase;
+                const precoFinal = promo !== null ? Math.round((precoBase * promo / base)) : precoBase;
                 return { precoBase, precoFinal };
               });
               const minPrecoBase = Math.min(...prices.map(p => p.precoBase));

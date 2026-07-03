@@ -172,6 +172,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     updateData.payment_method = mappedPaymentMethod;
   }
 
+  const releaseDate = paymentInfo.money_release_date as string | undefined;
+  const dateApproved = paymentInfo.date_approved as string | undefined;
+  if (releaseDate && dateApproved && paymentType === "credit_card") {
+    const diffMs = new Date(releaseDate).getTime() - new Date(dateApproved).getTime();
+    const dias = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    if (dias <= 1) updateData.credit_release_period = "immediate";
+    else if (dias <= 14) updateData.credit_release_period = "14_days";
+    else updateData.credit_release_period = "30_days";
+  }
+
   const { data, error } = await supabase
     .from("pedidos")
     .update(updateData)

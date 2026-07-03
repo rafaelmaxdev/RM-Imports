@@ -154,14 +154,14 @@ export const MP_FEE_RATES: Record<string, number> = {
 };
 
 export const MP_CREDIT_CARD_RATES: Record<string, number> = {
-  immediate: 0.0499,
+  immediate: 0.0498,
   "14_days": 0.0449,
-  "30_days": 0.0399,
+  "30_days": 0.0398,
 };
 
 export function getMPFeeRate(paymentMethod: string | undefined, creditReleasePeriod: string | undefined): number {
   if (paymentMethod === "credit_card") {
-    return MP_CREDIT_CARD_RATES[creditReleasePeriod || "immediate"] ?? 0.0499;
+    return MP_CREDIT_CARD_RATES[creditReleasePeriod || "immediate"] ?? 0.0498;
   }
-  return MP_FEE_RATES[paymentMethod || ""] ?? 0.0499;
+  return MP_FEE_RATES[paymentMethod || ""] ?? 0.0498;
 }

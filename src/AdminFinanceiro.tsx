@@ -4,7 +4,7 @@ import type { Pacote, DbProduto } from "./lib/db";
 import type { Order, EstoqueItem } from "./types";
 import { formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
-import { MESES } from "./lib/status";
+import { MESES, getMPFeeRate } from "./lib/status";
 
 interface ExtraCusto {
   id: number;
@@ -178,6 +178,27 @@ export default function AdminFinanceiro() {
   const receitaTotal = receitaBruta + receitaPE;
   const receitaEmPacotes = ativos.filter((o) => pedidosEmPacotes.has(o.id)).reduce((s, o) => s + o.total, 0);
 
+  const totalTaxasMP = ativos.reduce((sum, o) => {
+    const rate = getMPFeeRate(o.payment_method, o.credit_release_period);
+    return sum + o.total * rate;
+  }, 0);
+
+  const taxasMPPorTipo = new Map<string, number>();
+  for (const o of ativos) {
+    const rate = getMPFeeRate(o.payment_method, o.credit_release_period);
+    const key = o.payment_method === "credit_card"
+      ? `credit_${o.credit_release_period || "immediate"}`
+      : o.payment_method || "unknown";
+    taxasMPPorTipo.set(key, (taxasMPPorTipo.get(key) || 0) + o.total * rate);
+  }
+
+  const taxasMPporMes = new Map<string, number>();
+  for (const o of ativos) {
+    const mes = o.data.slice(3);
+    const rate = getMPFeeRate(o.payment_method, o.credit_release_period);
+    taxasMPporMes.set(mes, (taxasMPporMes.get(mes) || 0) + o.total * rate);
+  }
+
   const produtoNomeMap = new Map(produtos.map((p) => [p.nome, p.id]));
   const custoLookup = new Map<string, number>();
   for (const item of estoque) {
@@ -197,10 +218,11 @@ export default function AdminFinanceiro() {
     }
   }
 
-  const custosTotais = custoPacote + freteTotal + taxaTotal + extraTotal + custoPE;
-  const lucro = receitaEmPacotes + receitaPE - custoPacote - freteTotal - taxaTotal - extraTotal - custoPE;
+  const custosTotais = custoPacote + freteTotal + taxaTotal + extraTotal + custoPE + totalTaxasMP;
+  const lucro = receitaEmPacotes + receitaPE - custoPacote - freteTotal - taxaTotal - extraTotal - custoPE - totalTaxasMP;
 
   const pieData = [
+    ...(totalTaxasMP > 0 ? [{ label: "Taxas MP", value: totalTaxasMP, color: "#14B8A6" }] : []),
     { label: "Produtos", value: custoPacote, color: "#E63946" },
     { label: "Frete", value: freteTotal, color: "#457B9D" },
     { label: "Taxa", value: taxaTotal, color: "#2A9D8F" },
@@ -250,7 +272,8 @@ export default function AdminFinanceiro() {
   for (const [mes, { total }] of mesesComReceita) {
     const share = total / totalRevenue;
     const pkgCost = (custoPacote + freteTotal + taxaTotal + custoPE) * share;
-    custoPorMes.set(mes, (custoPorMes.get(mes) || 0) + pkgCost);
+    const taxasMP = taxasMPporMes.get(mes) || 0;
+    custoPorMes.set(mes, (custoPorMes.get(mes) || 0) + pkgCost + taxasMP);
   }
 
   return (
@@ -310,7 +333,20 @@ export default function AdminFinanceiro() {
 
       {custosTotais > 0 && (
         <div className="p-3 bg-bg-base rounded-md border border-border text-xs text-text-muted mb-6 space-y-1">
-          <p>Produtos: {formatarMoeda(custoPacote)} | Frete: {formatarMoeda(freteTotal)} | Taxa: {formatarMoeda(taxaTotal)} | Extras: {formatarMoeda(extraTotal)}{custoPE > 0 ? ` | Custo PE: ${formatarMoeda(custoPE)}` : ""}</p>
+          <p>Taxas MP: {formatarMoeda(totalTaxasMP)} | Produtos: {formatarMoeda(custoPacote)} | Frete: {formatarMoeda(freteTotal)} | Taxa: {formatarMoeda(taxaTotal)} | Extras: {formatarMoeda(extraTotal)}{custoPE > 0 ? ` | Custo PE: ${formatarMoeda(custoPE)}` : ""}</p>
+          {taxasMPPorTipo.size > 0 && (
+            <div className="pl-3 space-y-0.5">
+              {[...taxasMPPorTipo.entries()].map(([key, value]) => {
+                const label = key === "pix" ? "Pix (0,99%)"
+                  : key === "debit_card" ? "Débito (3,99%)"
+                  : key === "credit_immediate" ? "Crédito à vista (4,98%)"
+                  : key === "credit_14_days" ? "Crédito 14 dias (4,49%)"
+                  : key === "credit_30_days" ? "Crédito 30 dias (3,98%)"
+                  : key;
+                return <p key={key}>└ {label}: {formatarMoeda(value)}</p>;
+              })}
+            </div>
+          )}
         </div>
       )}
 

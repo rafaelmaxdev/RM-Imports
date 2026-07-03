@@ -170,6 +170,14 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
     return genderMatch && sizeMatch;
   });
 
+  useEffect(() => {
+    if (availableSizes.length === 1) {
+      setSelectedIdx(0);
+    } else {
+      setSelectedIdx(null);
+    }
+  }, [availableSizes.length]);
+
   // Pricing
   const priceInfo = getPrecoProduto(
     product.tipo,
@@ -181,6 +189,20 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
   );
   const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
   const peMarkup = config.pronta_entrega_markup ?? 20;
+
+  const allPrices = availableSizes.map(s => {
+    const add = ADICIONAL_TAMANHO[s.tamanho] || 0;
+    const pers = s.personalizado ? precoPersonalizacao(product.tipo) : 0;
+    const pb = Math.round((base + add + pers + peMarkup) * 100) / 100;
+    const pf = promo !== null ? Math.round((promo + add + pers + peMarkup) * 100) / 100 : pb;
+    return { precoBase: pb, precoFinal: pf };
+  });
+  const minPrecoBase = Math.min(...allPrices.map(p => p.precoBase));
+  const maxPrecoBase = Math.max(...allPrices.map(p => p.precoBase));
+  const minPrecoFinal = Math.min(...allPrices.map(p => p.precoFinal));
+  const maxPrecoFinal = Math.max(...allPrices.map(p => p.precoFinal));
+  const showRange = maxPrecoFinal > minPrecoFinal;
+
   const selectedSizeInfo = selectedIdx !== null ? availableSizes[selectedIdx] ?? null : null;
   const selectedTam = selectedSizeInfo?.tamanho ?? "";
   const adicionalTam = ADICIONAL_TAMANHO[selectedTam] || 0;
@@ -270,9 +292,17 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
           <div className="mb-4 pb-4 border-b border-border">
             <div className="font-semibold">{product.nome}</div>
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-accent font-bold text-lg">{formatarMoeda(prontaEntregaPrice)}</span>
+              {selectedIdx !== null ? (
+                <span className="text-accent font-bold text-lg">{formatarMoeda(prontaEntregaPrice)}</span>
+              ) : (
+                <span className="text-accent font-bold text-lg">
+                  {showRange ? `${formatarMoeda(minPrecoFinal)} ~ ${formatarMoeda(maxPrecoFinal)}` : formatarMoeda(minPrecoFinal)}
+                </span>
+              )}
               {promo !== null && (
-                <span className="text-text-muted text-sm line-through">{formatarMoeda(prontaEntregaBasePrice)}</span>
+                <span className="text-text-muted text-sm line-through">
+                  {selectedIdx !== null ? formatarMoeda(prontaEntregaBasePrice) : (showRange ? `${formatarMoeda(minPrecoBase)} ~ ${formatarMoeda(maxPrecoBase)}` : formatarMoeda(minPrecoBase))}
+                </span>
               )}
               <span className="text-xs text-text-muted font-medium bg-accent/10 text-accent px-1.5 py-0.5 rounded-sm">Pronta Entrega</span>
             </div>
@@ -358,20 +388,53 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
 
           {/* Price breakdown */}
           <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 p-3 bg-bg-base rounded-md mb-3 text-sm">
-            <span>Base:</span>
-            <span>{formatarMoeda(base)}</span>
-            {emPromocao && promo !== null && (
+            {selectedIdx !== null ? (
               <>
-                <span className="text-accent font-semibold">Desconto:</span>
-                <span className="text-accent font-semibold">-{formatarMoeda(base - promo)}</span>
+                <span>Base:</span>
+                <span>{formatarMoeda(base)}</span>
+                {adicionalTam > 0 && (
+                  <>
+                    <span>Adicional ({selectedTam}):</span>
+                    <span>+{formatarMoeda(adicionalTam)}</span>
+                  </>
+                )}
+                {adicionalPers > 0 && (
+                  <>
+                    <span>Personalização:</span>
+                    <span>+{formatarMoeda(adicionalPers)}</span>
+                  </>
+                )}
+                {emPromocao && promo !== null && (
+                  <>
+                    <span className="text-accent font-semibold">Desconto:</span>
+                    <span className="text-accent font-semibold">-{formatarMoeda(base - promo)}</span>
+                  </>
+                )}
+                <span className="text-green-600">Taxa Pronta Entrega:</span>
+                <span className="text-green-600">+{formatarMoeda(peMarkup)}</span>
+                <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">
+                  <span>Total:</span>
+                  <span>{formatarMoeda(prontaEntregaPrice)}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <span>Base:</span>
+                <span>{formatarMoeda(base)}</span>
+                {emPromocao && promo !== null && (
+                  <>
+                    <span className="text-accent font-semibold">Desconto:</span>
+                    <span className="text-accent font-semibold">-{formatarMoeda(base - promo)}</span>
+                  </>
+                )}
+                <span className="text-green-600">Taxa Pronta Entrega:</span>
+                <span className="text-green-600">+{formatarMoeda(peMarkup)}</span>
+                <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">
+                  <span>Total a partir de:</span>
+                  <span>{formatarMoeda(minPrecoFinal)}</span>
+                </div>
               </>
             )}
-            <span className="text-green-600">Taxa Pronta Entrega:</span>
-            <span className="text-green-600">+{formatarMoeda(peMarkup)}</span>
-            <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">
-              <span>Total:</span>
-              <span>{formatarMoeda(prontaEntregaPrice)}</span>
-            </div>
           </div>
 
           <button
@@ -654,8 +717,18 @@ export default function ProntaEntrega() {
               );
               const peMarkup = config!.pronta_entrega_markup ?? 20;
               const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
-              const precoBaseMarcado = Math.round((base + peMarkup) * 100) / 100;
-              const pePrice = promo !== null ? Math.round((promo + peMarkup) * 100) / 100 : precoBaseMarcado;
+              const prices = p.sizes.map(s => {
+                const adicionalTam = ADICIONAL_TAMANHO[s.tamanho] || 0;
+                const adicionalPers = s.personalizado ? precoPersonalizacao(p.tipo) : 0;
+                const precoBase = Math.round((base + adicionalTam + adicionalPers + peMarkup) * 100) / 100;
+                const precoFinal = promo !== null ? Math.round((promo + adicionalTam + adicionalPers + peMarkup) * 100) / 100 : precoBase;
+                return { precoBase, precoFinal };
+              });
+              const minPrecoBase = Math.min(...prices.map(p => p.precoBase));
+              const maxPrecoBase = Math.max(...prices.map(p => p.precoBase));
+              const minPrecoFinal = Math.min(...prices.map(p => p.precoFinal));
+              const maxPrecoFinal = Math.max(...prices.map(p => p.precoFinal));
+              const showRange = maxPrecoFinal > minPrecoFinal;
 
               return (
                 <div
@@ -766,10 +839,12 @@ export default function ProntaEntrega() {
                     {/* Pricing */}
                     <div className="mt-auto mb-2 sm:mb-3">
                       <div className="flex items-baseline gap-1 sm:gap-2 min-h-[1.25rem] sm:min-h-[1.75rem]">
-                        <span className="font-bold text-sm sm:text-lg text-accent">{formatarMoeda(pePrice)}</span>
+                        <span className="font-bold text-sm sm:text-lg text-accent">
+                          {showRange ? `${formatarMoeda(minPrecoFinal)} ~ ${formatarMoeda(maxPrecoFinal)}` : formatarMoeda(minPrecoFinal)}
+                        </span>
                         {promo !== null && (
                           <span className="text-text-muted text-[10px] sm:text-sm line-through">
-                            {formatarMoeda(Math.round((base + peMarkup) * 100) / 100)}
+                            {showRange ? `${formatarMoeda(minPrecoBase)} ~ ${formatarMoeda(maxPrecoBase)}` : formatarMoeda(minPrecoBase)}
                           </span>
                         )}
                       </div>

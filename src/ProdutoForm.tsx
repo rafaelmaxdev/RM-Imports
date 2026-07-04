@@ -35,11 +35,17 @@ interface Liga {
 }
 
 const SELECOES = [
-  "Alemanha", "Arábia Saudita", "Argentina", "Austrália", "Áustria", "Bélgica", "Brasil",
-  "Camarões", "Canadá", "Colômbia", "Coreia do Sul", "Croácia", "Dinamarca", "Espanha",
-  "EUA", "França", "Gana", "Holanda", "Inglaterra", "Irã", "Itália", "Japão",
-  "Marrocos", "México", "Nigéria", "Polônia", "Portugal", "Qatar", "Senegal",
-  "Sérvia", "Suécia", "Suíça", "Tunísia", "Uruguai",
+  "Alemanha", "Arábia Saudita", "Argentina", "Argélia", "Austrália", "Áustria",
+  "Bélgica", "Bolívia", "Bósnia e Herzegovina", "Brasil", "Bulgária",
+  "Cabo Verde", "Camarões", "Canadá", "Chile", "China", "Colômbia",
+  "Coreia do Sul", "Costa do Marfim", "Costa Rica", "Croácia", "Dinamarca",
+  "Equador", "Egito", "Escócia", "Eslováquia", "Eslovênia", "Espanha", "EUA",
+  "Finlândia", "França", "Gana", "Grécia", "Guatemala", "Holanda",
+  "Honduras", "Inglaterra", "Irã", "Irlanda", "Islândia", "Itália",
+  "Jamaica", "Japão", "Mali", "Marrocos", "México", "Nigéria", "Noruega",
+  "Nova Zelândia", "País de Gales", "Panamá", "Paraguai", "Peru", "Polônia",
+  "Portugal", "Qatar", "República Tcheca", "Romênia", "Rússia", "Senegal",
+  "Sérvia", "Suécia", "Suíça", "Tunísia", "Turquia", "Ucrânia", "Uruguai",
 ].sort((a, b) => a.localeCompare(b));
 
 const NBA_FRANQUIAS = [

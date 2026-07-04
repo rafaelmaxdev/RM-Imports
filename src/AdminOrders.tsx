@@ -317,6 +317,11 @@ export default function AdminOrders() {
                             {order.reposicao ? "📦 Estoque" : "💰 Pronta Entrega"}
                           </span>
                         )}
+                        {order.cupom_codigo && (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-pink-100 text-pink-800">
+                            🏷️ {order.cupom_codigo}{order.cupom_desconto ? ` (-${formatarMoeda(order.cupom_desconto)})` : ""}
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-text-muted mt-1">
                         {order.data} às {order.hora} • {totalItens} {totalItens === 1 ? "item" : "itens"}

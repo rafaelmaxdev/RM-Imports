@@ -469,14 +469,16 @@ export function calcularPreco(
 }
 
 export function formatarMoeda(valor: number): string {
-  return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-/** Rounds down to .99 and formats as currency (for storefront display) */
-export function formatarPreco(valor: number): string {
+  const cents = Math.round((valor % 1) * 100);
+  if (cents === 0 || cents === 99) {
+    return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  }
   const rounded = Math.floor(valor) + 0.99;
   return rounded.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+
+/** @deprecated Use formatarMoeda instead (now includes .99 rounding) */
+export const formatarPreco = formatarMoeda;
 
 export function montarMensagemPagamento(order: Order): string {
   let msg = `*RM Imports - Pedido ${order.id}*\n`;

@@ -10,6 +10,7 @@ import type { DbProduto } from "./lib/db";
 import type { OrderAddress, LojaConfig, PaymentMethod } from "./types";
 import { DEFAULT_CONFIG } from "./types";
 import { clearCache } from "./lib/cache";
+import { supabase } from "./lib/supabase";
 import "./index.css";
 
 const OrderConfirmation = lazy(() => import("./OrderConfirmation"));
@@ -246,9 +247,15 @@ function AdminPanel({
     setPrecacheLoading(true);
     setPrecacheStatus("Cacheando imagens... Isso pode levar alguns minutos.");
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Não autenticado");
       const res = await fetch("/api/precache", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify({ batch: true }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

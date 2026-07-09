@@ -9,9 +9,15 @@ import { normalizeNome } from "./lib/utils";
 /** Pre-cache product images via the /api/precache endpoint, returns updated cached_image_urls */
 async function precacheProduto(produtoId: string): Promise<{ small?: string; medium?: string; large?: string }[] | null> {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return null;
     const res = await fetch("/api/precache", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
       body: JSON.stringify({ produtoId }),
     });
     if (!res.ok) return null;

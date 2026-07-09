@@ -250,6 +250,10 @@ export default defineConfig({
         target: "https://rm-imports.vercel.app",
         changeOrigin: true,
       },
+      "/api/precache": {
+        target: "https://rm-imports.vercel.app",
+        changeOrigin: true,
+      },
     },
     watch: {
       ignored: ["**/api/**"],

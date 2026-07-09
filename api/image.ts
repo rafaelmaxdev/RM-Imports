@@ -69,13 +69,18 @@ async function isAllowedImage(url: string): Promise<boolean> {
 
   // Second check: URL must belong to a product in our catalog
   if (!allowedUrlsCache || Date.now() - allowedUrlsCache.timestamp > CACHE_TTL) {
-    const { data } = await supabase
-      .from('produtos')
-      .select('imagem_urls, imagem_urls_feminina')
-      .limit(500);
-
     const urls = new Set<string>();
-    if (data) {
+    const PAGE_SIZE = 500;
+    let offset = 0;
+
+    while (true) {
+      const { data } = await supabase
+        .from('produtos')
+        .select('imagem_urls, imagem_urls_feminina')
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (!data || data.length === 0) break;
+
       for (const row of data) {
         for (const field of [row.imagem_urls, row.imagem_urls_feminina] as (string[] | string | null | undefined)[]) {
           const arr = field;
@@ -87,7 +92,11 @@ async function isAllowedImage(url: string): Promise<boolean> {
           }
         }
       }
+
+      if (data.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
     }
+
     allowedUrlsCache = { urls, timestamp: Date.now() };
   }
 

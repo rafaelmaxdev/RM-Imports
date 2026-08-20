@@ -75,6 +75,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).send("Unauthorized");
   }
 
+  const timestampValue = Number(ts);
+  const timestampMs = timestampValue > 1e12 ? timestampValue : timestampValue * 1000;
+  if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > 5 * 60 * 1000) {
+    console.error("Expired webhook signature");
+    return res.status(401).send("Unauthorized");
+  }
+
   // Build manifest per MP spec: "id:{data.id};request-id:{x-request-id};ts:{ts};"
   const body = req.body as {
     type?: string;
@@ -132,6 +139,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!externalReference) {
     console.log(`Payment ${paymentId}: no external_reference found — skipping`);
+    return res.status(200).send("OK");
+  }
+
+  if (!/^UL-[A-Z2-9]{8}$/.test(externalReference)) return res.status(200).send("OK");
+
+  const { data: existingOrder, error: orderLookupError } = await supabase
+    .from("pedidos")
+    .select("id,total")
+    .eq("id", externalReference)
+    .maybeSingle();
+  if (orderLookupError) return res.status(500).send("Error loading order");
+  if (!existingOrder) return res.status(200).send("OK");
+
+  const paidAmount = Number(paymentInfo.transaction_amount);
+  const expectedAmount = Number(existingOrder.total);
+  if (paymentInfo.currency_id !== "BRL" || !Number.isFinite(paidAmount) || Math.abs(paidAmount - expectedAmount) > 0.009) {
+    console.error(`Payment ${paymentId}: amount or currency mismatch`);
     return res.status(200).send("OK");
   }
 
@@ -203,82 +227,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.warn(`Order ${externalReference} not found — payment ${paymentId} has no matching order`);
   } else {
     console.log(`Order ${externalReference} updated to ${orderStatus}`);
+
+    if (orderStatus === "pago" || orderStatus === "cancelado") {
+      try {
+        const { error: couponError } = await supabase.rpc("finalizar_uso_cupom", {
+          p_pedido_id: externalReference,
+          p_status: orderStatus === "pago" ? "confirmado" : "liberado",
+        });
+        const errorMessage = couponError?.message ?? "";
+        const isMissingUsage = /(?:utiliza(?:ção|cao)|usage).*?(?:encontrad|not found)/i.test(errorMessage);
+        if (couponError && !isMissingUsage) {
+          console.warn("[mp-webhook] failed to finalize coupon reservation");
+        }
+      } catch {
+        console.warn("[mp-webhook] failed to finalize coupon reservation");
+      }
+    }
   }
 
-  // Update stock for pronta_entrega orders
-  // Stock is deducted at order creation time, so on "pago" we do nothing.
-  // On cancel/reject/refund we restore stock.
+  // Restore pronta-entrega stock transactionally and only once.
   if (orderStatus === "cancelado" || orderStatus === "reembolsado") {
-    try {
-      const { data: fullOrder } = await supabase
-        .from("pedidos")
-        .select("itens, pronta_entrega")
-        .eq("id", externalReference)
-        .single();
-
-      if (fullOrder?.pronta_entrega && fullOrder.itens) {
-        const itens = typeof fullOrder.itens === "string" ? JSON.parse(fullOrder.itens) : fullOrder.itens;
-
-        for (const item of itens) {
-          const { data: produtos } = await supabase
-            .from("produtos")
-            .select("id")
-            .eq("nome", item.nome)
-            .limit(1);
-
-          if (!produtos || produtos.length === 0) continue;
-
-          const produtoId = produtos[0].id;
-          const isPersonalizado = item.personalizado ?? false;
-          const nomePessoal = isPersonalizado ? (item.nomePersonalizado ?? null) : null;
-          const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
-          const isFeminino = item.feminino ?? false;
-
-          let query = supabase
-            .from("estoque_pronta_entrega")
-            .select("id, quantidade")
-            .eq("produto_id", produtoId)
-            .eq("tamanho", item.tamanho)
-            .eq("personalizado", isPersonalizado)
-            .eq("feminino", isFeminino);
-
-          if (nomePessoal) {
-            query = query.eq("nome_personalizado", nomePessoal);
-          } else {
-            query = query.is("nome_personalizado", null);
-          }
-          if (numeroPessoal) {
-            query = query.eq("numero_personalizado", numeroPessoal);
-          } else {
-            query = query.is("numero_personalizado", null);
-          }
-
-          const { data: existing } = await query.maybeSingle();
-
-          // Restore to stock on cancel/refund
-          if (existing) {
-            await supabase
-              .from("estoque_pronta_entrega")
-              .update({ quantidade: existing.quantidade + 1 })
-              .eq("id", existing.id);
-          } else {
-            await supabase
-              .from("estoque_pronta_entrega")
-              .insert({
-                produto_id: produtoId,
-                tamanho: item.tamanho,
-                quantidade: 1,
-                personalizado: isPersonalizado,
-                nome_personalizado: nomePessoal,
-                numero_personalizado: numeroPessoal,
-                feminino: isFeminino,
-              });
-          }
-        }
-      }
-    } catch (stockError) {
-      console.error(`Error updating stock for order ${externalReference}:`, stockError);
-    }
+    const { error: stockError } = await supabase.rpc("restore_order_stock_once", { p_order_id: externalReference });
+    if (stockError) console.error(`Error restoring stock for order ${externalReference}`);
   }
 
   return res.status(200).send("OK");

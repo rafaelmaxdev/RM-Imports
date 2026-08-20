@@ -117,8 +117,8 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4" onClick={onClose} role="presentation">
-        <div className="bg-card-bg rounded-md p-6 max-w-md w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Adicionar ${produto.nome} ao carrinho`}>
+      <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-primary/65 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose} role="presentation">
+        <div className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-card-bg p-5 shadow-2xl sm:rounded-3xl sm:p-7" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Adicionar ${produto.nome} ao carrinho`}>
           {showSizeChart ? (
             /* ── Size chart view ── */
             <>
@@ -189,9 +189,9 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
               >
                 ✕
               </button>
-              <h3 className="mb-4 text-primary font-semibold text-lg">Adicionar ao Carrinho</h3>
+              <h3 className="mb-4 text-lg font-black tracking-tight text-primary">Adicionar ao carrinho</h3>
 
-              <div className="mb-4 -mx-6 -mt-2">
+              <div className="-mx-5 -mt-2 mb-4 sm:-mx-7">
                 <ImageCarousel
                   images={allImages}
                   alt={produto.nome}
@@ -380,7 +380,7 @@ export default function CartModal({ produto, config, onClose, onAdded }: CartMod
               </div>
 
               <button
-                className="w-full py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="min-h-12 w-full cursor-pointer rounded-xl bg-accent text-sm font-bold text-white transition-colors hover:bg-[#d93648] disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={handleConfirm}
                 disabled={!tamanho}
               >

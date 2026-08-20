@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import type { LojaConfig, OrderItem, OrderAddress, CachedImageMap, EstoqueItem, Cupom } from "../types";
 import { DEFAULT_CONFIG } from "../types";
 import { getCached, setCache, isCacheStale } from "./cache";
+import { getOrderAccessToken, saveOrderAccessToken } from "./orderAccess";
 
 export interface DbProduto {
   id: string;
@@ -148,11 +149,16 @@ export async function getLojaConfig(): Promise<LojaConfig> {
 
 async function fetchLojaConfigFromDb(): Promise<LojaConfig> {
   const { data, error } = await supabase
-    .from("loja_config")
+    .from("loja_config_publico")
     .select("key, value");
 
   if (error) throw error;
   if (!data) return DEFAULT_CONFIG;
+
+  return configFromRows(data);
+}
+
+function configFromRows(data: { key: string; value: unknown }[]): LojaConfig {
 
   const config = { ...DEFAULT_CONFIG };
   for (const row of data) {
@@ -175,6 +181,12 @@ async function fetchLojaConfigFromDb(): Promise<LojaConfig> {
     }
   }
   return config;
+}
+
+export async function getAdminLojaConfig(): Promise<LojaConfig> {
+  const { data, error } = await supabase.from("loja_config").select("key, value");
+  if (error) throw error;
+  return data ? configFromRows(data) : DEFAULT_CONFIG;
 }
 
 export async function updateLojaConfig(
@@ -286,6 +298,14 @@ export interface DbPedido {
   admin_order: boolean | null;
   pronta_entrega: boolean | null;
   reposicao: boolean | null;
+  cupom_codigo?: string | null;
+  cupom_desconto?: number | null;
+  telefone_normalizado?: string | null;
+  cupom_id?: string | null;
+  influenciador_handle?: string | null;
+  rev_share_percentual?: number | null;
+  valor_base_comissao?: number | null;
+  comissao_calculada?: number | null;
   credit_release_period?: "immediate" | "14_days" | "30_days" | null;
   created_at: string;
 }
@@ -307,6 +327,14 @@ function dbPedidoToOrder(db: DbPedido): import("../types").Order {
     admin_order: db.admin_order ?? false,
     pronta_entrega: db.pronta_entrega ?? false,
     reposicao: db.reposicao ?? false,
+    cupom_codigo: db.cupom_codigo ?? undefined,
+    cupom_desconto: db.cupom_desconto ?? undefined,
+    telefone_normalizado: db.telefone_normalizado ?? undefined,
+    cupom_id: db.cupom_id ?? undefined,
+    influenciador_handle: db.influenciador_handle ?? undefined,
+    rev_share_percentual: db.rev_share_percentual ?? undefined,
+    valor_base_comissao: db.valor_base_comissao ?? undefined,
+    comissao_calculada: db.comissao_calculada ?? undefined,
     created_at: db.created_at,
   };
 }
@@ -336,6 +364,14 @@ const row = {
     admin_order: order.admin_order || null,
     pronta_entrega: order.pronta_entrega || null,
     reposicao: order.reposicao || null,
+    cupom_codigo: order.cupom_codigo ?? null,
+    cupom_desconto: order.cupom_desconto ?? null,
+    telefone_normalizado: order.telefone_normalizado ?? null,
+    cupom_id: order.cupom_id ?? null,
+    influenciador_handle: order.influenciador_handle ?? null,
+    rev_share_percentual: order.rev_share_percentual ?? null,
+    valor_base_comissao: order.valor_base_comissao ?? null,
+    comissao_calculada: order.comissao_calculada ?? null,
   };
 
   const { data, error } = await supabase
@@ -376,16 +412,22 @@ async function fetchPedidosFromDb(): Promise<import("../types").Order[]> {
   return (data as DbPedido[]).map(dbPedidoToOrder);
 }
 
-export async function getPedidoById(id: string): Promise<import("../types").Order | null> {
+export async function getPedidoById(id: string, phone?: string): Promise<import("../types").Order | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
-    const res = await fetch(`/api/order/${encodeURIComponent(id)}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    const orderAccessToken = getOrderAccessToken(id);
+    const query = phone ? `?phone=${encodeURIComponent(phone)}` : "";
+    const res = await fetch(`/api/order/${encodeURIComponent(id)}${query}`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(orderAccessToken ? { "X-Order-Token": orderAccessToken } : {}),
+      },
     });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`Failed to fetch order: ${res.status}`);
     const data = await res.json();
+    if (typeof data.orderAccessToken === "string") saveOrderAccessToken(id, data.orderAccessToken);
     return {
       ...data,
       itens: data.itens ? (typeof data.itens === "string" ? JSON.parse(data.itens) : data.itens) : [],
@@ -696,6 +738,7 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
 }
 
 const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, custo, pedido_reposicao_id, created_at, produtos(nome, imagem_urls, imagem_urls_feminina, cached_image_urls, tipo, time, liga, temporada)";
+const ESTOQUE_PUBLICO_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, created_at, produtos";
 
 export async function getEstoque(): Promise<EstoqueItem[]> {
   const { data, error } = await supabase
@@ -711,9 +754,8 @@ export async function getEstoque(): Promise<EstoqueItem[]> {
 
 export async function getEstoquePublico(): Promise<EstoqueItem[]> {
   const { data, error } = await supabase
-    .from("estoque_pronta_entrega")
-    .select(ESTOQUE_SELECT)
-    .gt("quantidade", 0)
+    .from("estoque_publico")
+    .select(ESTOQUE_PUBLICO_SELECT)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -1029,7 +1071,10 @@ export async function getCupons(): Promise<Cupom[]> {
   return (data as Cupom[]) ?? [];
 }
 
-export async function createCupom(cupom: Omit<Cupom, "id" | "usos_atuais" | "created_at">): Promise<Cupom> {
+type NovoCupom = Omit<Cupom, "id" | "usos_atuais" | "created_at"> &
+  Required<Pick<Cupom, "uso_unico_por_cliente" | "influenciador" | "influenciador_handle" | "rev_share_percentual" | "observacao_interna">>;
+
+export async function createCupom(cupom: NovoCupom): Promise<Cupom> {
   const { data, error } = await supabase
     .from("cupons")
     .insert({ ...cupom, usos_atuais: 0 })
@@ -1050,34 +1095,17 @@ export async function deleteCupom(id: string): Promise<void> {
 }
 
 export async function validarCupom(codigo: string, totalPedido: number): Promise<Cupom | null> {
-  const { data, error } = await supabase
-    .from("cupons")
-    .select("*")
-    .eq("codigo", codigo.toUpperCase().trim())
-    .eq("ativo", true)
-    .single();
-  if (error || !data) return null;
-  const cupom = data as Cupom;
-  if (cupom.uso_maximo !== null && cupom.usos_atuais >= cupom.uso_maximo) return null;
-  if (cupom.valor_minimo_pedido !== null && totalPedido < cupom.valor_minimo_pedido) return null;
-  if (cupom.data_expiracao && new Date(cupom.data_expiracao) < new Date()) return null;
-  return cupom;
-}
-
-export async function validarCupomPorTelefone(codigo: string, telefone: string): Promise<boolean> {
-  const digits = telefone.replace(/\D/g, "");
-  if (!digits) return true;
-  const { data, error } = await supabase
-    .from("pedidos")
-    .select("endereco, cupom_codigo")
-    .eq("cupom_codigo", codigo.toUpperCase().trim());
-  if (error || !data) return true;
-  const jaUsou = data.some((row: any) => {
-    if (!row.endereco) return false;
-    const addr = typeof row.endereco === "string" ? JSON.parse(row.endereco) : row.endereco;
-    return addr.telefone?.replace(/\D/g, "") === digits;
-  });
-  return !jaUsou;
+  try {
+    const res = await fetch("/api/coupon", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: codigo, total: totalPedido }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as Cupom;
+  } catch {
+    return null;
+  }
 }
 
 export function aplicarCupom(total: number, cupom: Cupom): number {
@@ -1089,25 +1117,23 @@ export function aplicarCupom(total: number, cupom: Cupom): number {
   return Math.max(0, Math.round((total - cupom.valor) * 100) / 100);
 }
 
-export async function incrementarUsoCupom(id: string): Promise<void> {
-  const { error } = await supabase.rpc("incrementar_uso_cupom", { cupom_id: id });
-  if (error) {
-    const { data } = await supabase.from("cupons").select("usos_atuais").eq("id", id).single();
-    if (data) {
-      await supabase.from("cupons").update({ usos_atuais: (data as Cupom).usos_atuais + 1 }).eq("id", id);
-    }
-  }
-}
-
-export async function getCupomRevenue(codigo: string): Promise<{ total: number; pedidos: number }> {
+export async function getCupomRevenue(codigo: string): Promise<{
+  descontos: number;
+  pedidos: number;
+  faturamento: number;
+  comissao: number;
+}> {
   const { data, error } = await supabase
     .from("pedidos")
-    .select("total, cupom_desconto")
+    .select("total,cupom_desconto,comissao_calculada")
     .eq("cupom_codigo", codigo.toUpperCase().trim())
-    .not("status", "in", `("cancelado","reembolsado")`);
-  if (error) return { total: 0, pedidos: 0 };
+    .not("status", "in", `("cancelado","reembolsado","pendente")`);
+  if (error) return { descontos: 0, pedidos: 0, faturamento: 0, comissao: 0 };
+  const pedidos = (data as any[]) ?? [];
   return {
-    total: (data as any[]).reduce((s, p) => s + (p.cupom_desconto ?? 0), 0),
-    pedidos: data?.length ?? 0,
+    descontos: pedidos.reduce((s, p) => s + Number(p.cupom_desconto ?? 0), 0),
+    pedidos: pedidos.length,
+    faturamento: pedidos.reduce((s, p) => s + Number(p.total ?? 0), 0),
+    comissao: pedidos.reduce((s, p) => s + Number(p.comissao_calculada ?? 0), 0),
   };
 }

@@ -2,11 +2,14 @@ import { useState, useMemo, useEffect } from "react";
 import { formatarMoeda } from "./types";
 import { STATUS_CONFIG } from "./lib/status";
 import type { Order } from "./types";
+import { getPedidoById } from "./lib/db";
+import { saveOrderAccessToken } from "./lib/orderAccess";
 
 const STATUS_PRIORITY: Record<string, number> = {
   pendente: 0, pago: 1, enviado_fornecedor: 2, em_producao: 3,
   a_caminho: 4, em_estoque: 5, em_entrega: 6, entregue: 7,
 };
+const CURRENT_TIME = Date.now();
 
 export default function MeusPedidos() {
   useEffect(() => {
@@ -14,6 +17,7 @@ export default function MeusPedidos() {
     document.querySelector('meta[name="description"]')?.setAttribute("content", "Acompanhe o status do seu pedido na RM Imports.");
   }, []);
   const [busca, setBusca] = useState("");
+  const [telefone, setTelefone] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -32,48 +36,40 @@ export default function MeusPedidos() {
 
   async function handleSearch() {
     const q = busca.trim();
-    if (!q) return;
+    const phone = telefone.trim();
+    if (!q || !phone) return;
     setLoading(true);
     setError("");
     setOrders([]);
     setFiltroStatus("");
 
     try {
-      const digits = q.replace(/\D/g, "");
       const up = q.toUpperCase();
 
       if (up.startsWith("UL-")) {
-        const res = await fetch(`/api/order/${encodeURIComponent(up)}`);
-        if (res.ok) {
-          const data = await res.json();
-          setOrders(Array.isArray(data) ? (data as Order[]) : [data as Order]);
-          setLoading(false);
+        const order = await getPedidoById(up, phone);
+        if (order) {
+          setOrders([order]);
           return;
         }
-      }
-
-      if (digits.length > 0 && digits.length < 10 && !up.startsWith("UL-")) {
-        setError("Telefone inválido ou incompleto. Informe o DDD + número (ex: 81999999999).");
-        setLoading(false);
+        setError("Pedido não encontrado. Confira o ID e o telefone informado na compra.");
         return;
       }
 
-      const params = new URLSearchParams();
-      if (digits.length >= 10) params.set("phone", digits);
-      else if (digits.length > 0) params.set("payment", digits);
-      if (params.toString()) {
-        const res = await fetch(`/api/order/search?${params.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            setOrders(data as Order[]);
-            setLoading(false);
-            return;
-          }
-        } else {
-          const errBody = await res.json().catch(() => ({}));
-          console.log("[MP] API error:", res.status, errBody);
-        }
+      if (!/^\d{6,30}$/.test(q)) {
+        setError("Informe um ID do pedido no formato UL-XXXXXXXX ou um ID de pagamento com 6 a 30 dígitos.");
+        return;
+      }
+
+      const res = await fetch(`/api/order/search?payment=${encodeURIComponent(q)}&phone=${encodeURIComponent(phone)}`);
+      if (res.ok) {
+        const data = await res.json() as Order;
+        if (data.orderAccessToken) saveOrderAccessToken(data.id, data.orderAccessToken);
+        setOrders([data]);
+        return;
+      } else {
+        const errBody = await res.json().catch(() => ({}));
+        console.log("[MP] API error:", res.status, errBody);
       }
 
       setError("Nenhum pedido encontrado.");
@@ -88,31 +84,41 @@ export default function MeusPedidos() {
   function podePagar(order: Order): boolean {
     if (order.status !== "pendente" || !order.mp_preference_id) return false;
     if (!order.created_at) return true;
-    const horas = (Date.now() - new Date(order.created_at).getTime()) / 36e5;
+    const horas = (CURRENT_TIME - new Date(order.created_at).getTime()) / 36e5;
     return horas < 24;
   }
 
   return (
-    <div className="max-w-xl mx-auto px-4 pt-6 pb-16">
-      <h2 className="text-xl font-bold text-primary mb-2">Meu Pedido</h2>
-      <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-700 mb-2 leading-relaxed">
-        🔍 Busque por ID do pedido, telefone com DDD (ex: 81999999999) ou ID do pagamento.<br />
-        💳 Se houver pedidos pendentes, aparece o botão "Pagar Agora".
+    <div className="mx-auto max-w-2xl px-4 pb-16 pt-10 sm:px-6 sm:pt-14">
+      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent">Acompanhe sua compra</p>
+      <h2 className="mb-3 mt-1 text-3xl font-black tracking-tight text-primary sm:text-4xl">Meu pedido</h2>
+      <div className="mb-5 rounded-2xl border border-primary/10 bg-primary/5 p-4 text-sm leading-relaxed text-text-muted">
+        Informe o ID do pedido ou pagamento junto com o telefone usado na compra.
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
         <input
           type="text"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-          placeholder="ID do pedido, telefone ou ID do pagamento"
-          className="flex-1 min-w-0 px-3 py-2.5 text-sm border border-border rounded-md bg-card-bg"
+          placeholder="ID do pedido ou ID do pagamento"
+          className="min-h-12 min-w-0 flex-1 rounded-xl border border-border bg-card-bg px-4 text-sm shadow-card"
+        />
+        <input
+          type="tel"
+          value={telefone}
+          onChange={(e) => setTelefone(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+          placeholder="Telefone da compra"
+          autoComplete="tel"
+          className="min-h-12 min-w-0 rounded-xl border border-border bg-card-bg px-4 text-sm shadow-card"
+          aria-label="Telefone usado na compra"
         />
         <button
-          className="shrink-0 px-5 py-2.5 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="min-h-12 shrink-0 cursor-pointer rounded-xl bg-accent px-5 text-sm font-bold text-white transition-colors hover:bg-[#d93648] disabled:opacity-50"
           onClick={handleSearch}
-          disabled={loading || !busca.trim()}
+          disabled={loading || !busca.trim() || !telefone.trim()}
         >
           {loading ? "Buscando..." : "Buscar"}
         </button>

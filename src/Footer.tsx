@@ -4,9 +4,8 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-primary text-white mt-auto relative">
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-accent to-primary" />
-      <div className="max-w-5xl mx-auto px-4 py-12">
+    <footer className="relative mt-auto bg-primary text-white">
+      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Sobre */}
           <div>
@@ -27,7 +26,7 @@ export default function Footer() {
                   rel="noreferrer"
                   className="text-white/70 hover:text-white no-underline transition-colors"
                 >
-                  💬 WhatsApp
+                  WhatsApp
                 </a>
               </li>
             </ul>
@@ -37,7 +36,7 @@ export default function Footer() {
           <div>
             <h3 className="text-lg font-bold mb-3">Informações</h3>
             <ul className="space-y-2 text-sm text-white/70 list-none m-0 p-0">
-              <li>💳 Pix, Cartão de Crédito e Débito</li>
+              <li>Pix, cartão de crédito e débito</li>
             </ul>
           </div>
 

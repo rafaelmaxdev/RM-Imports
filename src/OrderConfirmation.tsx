@@ -3,8 +3,13 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { getPedidoById } from "./lib/db";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
-import { Wallet } from "@mercadopago/sdk-react";
+import { initMercadoPago, Wallet } from "@mercadopago/sdk-react";
 import { STATUS_CONFIG, PAYMENT_LABELS } from "./lib/status";
+import { getOrderAccessToken } from "./lib/orderAccess";
+import { track } from "@vercel/analytics";
+
+const MP_PUBLIC_KEY = import.meta.env.VITE_MP_PUBLIC_KEY;
+if (MP_PUBLIC_KEY) initMercadoPago(MP_PUBLIC_KEY);
 
 export default function OrderConfirmation() {
   const { id } = useParams<{ id: string }>();
@@ -39,18 +44,14 @@ export default function OrderConfirmation() {
     setCreatingPreference(true);
     setPreferenceError(null);
     try {
-      const items = order.itens.map((item) => ({
-        title: `${item.nome} (${item.tipo} - ${item.tamanho})`,
-        quantity: 1,
-        unit_price: item.preco,
-      }));
+      const orderAccessToken = order.orderAccessToken || getOrderAccessToken(order.id);
+      if (!orderAccessToken) throw new Error("Confirme o pedido novamente usando seu telefone.");
       const res = await fetch("/api/create-preference", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items,
           orderId: order.id,
-          paymentMethod: order.payment_method,
+          orderAccessToken,
         }),
       });
       if (!res.ok) {
@@ -60,9 +61,9 @@ export default function OrderConfirmation() {
       const data = await res.json();
       // Update order with new preference ID
       setOrder((prev) => prev ? { ...prev, mp_preference_id: data.preferenceId } : prev);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error creating preference on demand:", err);
-      setPreferenceError(err.message || "Não foi possível gerar o link de pagamento.");
+      setPreferenceError(err instanceof Error ? err.message : "Não foi possível gerar o link de pagamento.");
     } finally {
       setCreatingPreference(false);
     }
@@ -116,6 +117,8 @@ export default function OrderConfirmation() {
   // Auto-create MP preference if missing (fixes "recarregue a página" loop)
   useEffect(() => {
     if (!order || order.mp_preference_id || creatingPreference || order.status !== "pendente" || !order.payment_method) return;
+    // Async synchronization with the external payment provider.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     createPreferenceIfNeeded();
   }, [order?.id, order?.mp_preference_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -146,9 +149,17 @@ export default function OrderConfirmation() {
     };
   }, [id, confirmed, walletReady]);
 
+  useEffect(() => {
+    if (!order || !["pago", "enviado_fornecedor", "em_producao", "a_caminho", "em_estoque", "em_entrega", "entregue"].includes(order.status)) return;
+    const eventKey = `purchase_tracked_${order.id}`;
+    if (sessionStorage.getItem(eventKey)) return;
+    track("purchase_confirmed", { order_id: order.id, value: order.total, item_count: order.itens.length });
+    sessionStorage.setItem(eventKey, "1");
+  }, [order]);
+
   if (loading) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-8">
+      <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
         <div className="animate-pulse space-y-6">
           <div className="w-15 h-15 bg-gray-200 rounded-full mx-auto" />
           <div className="h-6 bg-gray-200 rounded w-2/3 mx-auto" />
@@ -166,7 +177,7 @@ export default function OrderConfirmation() {
 
   if (!order) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-8 text-center">
+      <div className="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6">
         <h2 className="text-xl text-primary mb-4">Pedido não encontrado</h2>
         <button
           className="px-6 py-3 text-base font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"
@@ -185,7 +196,7 @@ export default function OrderConfirmation() {
   if (confirmed || ["pago", "enviado_fornecedor", "em_producao", "a_caminho", "em_estoque", "em_entrega", "entregue"].includes(order.status)) {
     const econTotal = order.itens.reduce((sum, item) => sum + ((item.precoBase ?? item.preco) - item.preco), 0);
     return (
-      <div className="max-w-lg mx-auto px-4 py-8">
+      <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
         {/* Success header */}
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-green-500 text-white rounded-full flex items-center justify-center text-3xl mx-auto mb-3 animate-bounce shadow-lg shadow-green-200" aria-hidden="true">✓</div>
@@ -194,7 +205,7 @@ export default function OrderConfirmation() {
         </div>
 
         {/* Order info card */}
-        <div className="bg-card-bg rounded-lg border border-border overflow-hidden mb-4">
+        <div className="mb-4 overflow-hidden rounded-2xl border border-border bg-card-bg shadow-card">
           <div className="p-4 bg-accent/5 border-b border-border">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -265,7 +276,7 @@ export default function OrderConfirmation() {
         </div>
 
         {/* Next steps */}
-        <div className="bg-card-bg rounded-lg border border-border p-4 mb-4">
+        <div className="mb-4 rounded-2xl border border-border bg-card-bg p-5 shadow-card">
           <h4 className="text-sm font-semibold text-primary mb-2">📋 Próximos passos</h4>
           <ol className="text-xs text-text-muted space-y-1.5 list-decimal list-inside">
             {order.pronta_entrega ? (
@@ -297,7 +308,7 @@ export default function OrderConfirmation() {
   // ── Cancelled order ──
   if (order.status === "cancelado") {
     return (
-      <div className="max-w-lg mx-auto px-4 py-8 text-center">
+      <div className="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6">
         <div className="w-20 h-20 bg-red-500 text-white rounded-full flex items-center justify-center text-4xl mx-auto mb-4">
           ✕
         </div>
@@ -317,7 +328,7 @@ export default function OrderConfirmation() {
 
   // ── Pending payment ──
   return (
-    <div className="max-w-lg mx-auto px-4 py-8 text-center min-h-[600px]">
+    <div className="mx-auto min-h-[600px] max-w-2xl px-4 py-12 text-center sm:px-6">
       <div className="mb-8">
         <div className="w-15 h-15 bg-yellow-500 text-white rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
           ⏳

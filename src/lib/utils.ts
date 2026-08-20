@@ -34,6 +34,24 @@ export function normalizarBusca(s: string): string {
     .trim();
 }
 
+/** Convert a value into a URL-friendly slug. */
+export function slugify(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** Convert a season label such as "2025/2026", "25/26", or "2026" to its first year. */
+export function parseAnoTemporada(value: string): number {
+  const first = value.split("/", 1)[0];
+  const year = parseInt(first, 10);
+  if (Number.isNaN(year)) return 0;
+  return first.length <= 2 ? (year >= 50 ? 1900 + year : 2000 + year) : year;
+}
+
 /** Check if ALL words in the query appear in the text (order-independent).
  *  e.g. buscaPorPalavras("cruzeiro manga longa", "manga longa cruzeiro 2026") → true
  */

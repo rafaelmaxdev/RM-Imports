@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
-import { isR2Configured, uploadToR2, getR2PublicUrl } from './lib/r2.js';
+import { isR2Configured, uploadToR2 } from './lib/r2.js';
+import { bearerToken, clientIp, consumeRateLimit, isAdminToken } from './lib/security.js';
 
 const ALLOWED_DOMAINS = [
   "photo.yupoo.com",
@@ -125,17 +126,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace("Bearer ", "");
-  if (token) {
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-  } else {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
+  if (!await isAdminToken(supabase, bearerToken(req.headers.authorization))) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+  if (!await consumeRateLimit(supabase, "precache", clientIp(req.headers, req.socket.remoteAddress), 10, 60)) {
+    res.status(429).json({ error: "Muitas requisições. Aguarde um momento." }); return;
   }
 
   const { produtoId, batch } = req.body;

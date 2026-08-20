@@ -578,7 +578,7 @@ export default function ProntaEntrega() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-4 pt-8 pb-16">
+      <div className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="bg-card-bg rounded-lg overflow-hidden border border-border animate-pulse">
@@ -600,7 +600,7 @@ export default function ProntaEntrega() {
 
   if (error) {
     return (
-      <div className="max-w-5xl mx-auto px-4 pt-8 pb-16">
+      <div className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
         <div className="text-center py-16 text-text-muted">
           <p className="text-4xl mb-4">⚠️</p>
           <p className="text-lg font-semibold text-primary mb-2">Algo deu errado</p>
@@ -620,9 +620,10 @@ export default function ProntaEntrega() {
 
   if (grouped.length === 0) {
     return (
-      <div className="max-w-5xl mx-auto px-4 pt-8 pb-16">
+      <div className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-2">📦 Pronta Entrega</h1>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent">Sai mais rápido</p>
+          <h1 className="mb-2 mt-1 text-3xl font-black tracking-tight text-primary sm:text-4xl">Pronta entrega</h1>
           <p className="text-sm sm:text-base text-text-muted">Camisas disponíveis para entrega imediata</p>
         </div>
         <div className="text-center py-16 text-text-muted">
@@ -646,10 +647,11 @@ export default function ProntaEntrega() {
 
   return (
     <>
-      <div className="max-w-5xl mx-auto px-4 pt-8 pb-16">
+      <div className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-2">📦 Pronta Entrega</h1>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent">Sai mais rápido</p>
+          <h1 className="mb-2 mt-1 text-3xl font-black tracking-tight text-primary sm:text-4xl">Pronta entrega</h1>
           <p className="text-sm sm:text-base text-text-muted">Camisas disponíveis para entrega imediata</p>
         </div>
 

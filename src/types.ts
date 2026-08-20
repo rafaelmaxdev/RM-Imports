@@ -66,8 +66,15 @@ export interface Order {
   reposicao?: boolean;
   cupom_codigo?: string;
   cupom_desconto?: number;
+  telefone_normalizado?: string;
+  cupom_id?: string;
+  influenciador_handle?: string;
+  rev_share_percentual?: number;
+  valor_base_comissao?: number;
+  comissao_calculada?: number;
   credit_release_period?: string;
   created_at?: string;
+  orderAccessToken?: string;
 }
 
 export interface EstoqueItem {
@@ -377,6 +384,12 @@ export interface Cupom {
   data_expiracao: string | null;
   ativo: boolean;
   created_at: string;
+  // Optional for coupons created before the influencer configuration existed.
+  uso_unico_por_cliente?: boolean;
+  influenciador?: boolean;
+  influenciador_handle?: string | null;
+  rev_share_percentual?: number | null;
+  observacao_interna?: string | null;
 }
 
 export const ADICIONAL_TAMANHO: Record<string, number> = {
@@ -469,15 +482,10 @@ export function calcularPreco(
 }
 
 export function formatarMoeda(valor: number): string {
-  const cents = Math.round((valor % 1) * 100);
-  if (cents === 0 || cents === 99) {
-    return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  }
-  const rounded = Math.floor(valor) + 0.99;
-  return rounded.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-/** @deprecated Use formatarMoeda instead (now includes .99 rounding) */
+/** @deprecated Use formatarMoeda instead */
 export const formatarPreco = formatarMoeda;
 
 export function montarMensagemPagamento(order: Order): string {

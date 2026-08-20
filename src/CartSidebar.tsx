@@ -3,11 +3,11 @@ import { useCart } from "./CartContext";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import type { OrderAddress, PaymentMethod, Cupom } from "./types";
 import { formatarMoeda, yupooThumbnailUrl, getCachedImageUrl } from "./types";
-import { validarCupom, aplicarCupom, validarCupomPorTelefone } from "./lib/db";
+import { validarCupom, aplicarCupom } from "./lib/db";
 
 interface CartSidebarProps {
   onClose: () => void;
-  onCheckout: (endereco: OrderAddress, paymentMethod: PaymentMethod, cupom?: { codigo: string; desconto: number }) => void;
+  onCheckout: (endereco: OrderAddress, paymentMethod: PaymentMethod, cupom?: { codigo: string; desconto: number }) => Promise<void>;
 }
 
 interface ViaCepResponse {
@@ -69,6 +69,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   });
 
   const [erro, setErro] = useState("");
+  const [finalizando, setFinalizando] = useState(false);
+  const [finalizacaoErro, setFinalizacaoErro] = useState("");
   const [cupomCodigo, setCupomCodigo] = useState("");
   const [cupomAplicado, setCupomAplicado] = useState<Cupom | null>(null);
   const [cupomErro, setCupomErro] = useState("");
@@ -203,6 +205,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   }
 
   async function handleConfirm() {
+    if (finalizando) return;
+
     if (endereco.deliveryMethod === "entrega") {
       if (
         !endereco.nome.trim() ||
@@ -227,19 +231,17 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
       }
     }
 
-    // Check if phone already used this coupon
-    if (cupomAplicado && endereco.telefone) {
-      const disponivel = await validarCupomPorTelefone(cupomAplicado.codigo, endereco.telefone);
-      if (!disponivel) {
-        setErro("Este cupom já foi utilizado.");
-        return;
-      }
-    }
-
     setErro("");
+    setFinalizacaoErro("");
     const desconto = cupomAplicado ? total - totalComDesconto : 0;
-    onCheckout(endereco, paymentMethod, cupomAplicado ? { codigo: cupomAplicado.codigo, desconto } : undefined);
-    onClose();
+    setFinalizando(true);
+    try {
+      await onCheckout(endereco, paymentMethod, cupomAplicado ? { codigo: cupomAplicado.codigo, desconto } : undefined);
+    } catch (err) {
+      setFinalizacaoErro(err instanceof Error ? err.message : "Não foi possível finalizar o pedido.");
+    } finally {
+      setFinalizando(false);
+    }
   }
 
   function updateField(field: keyof OrderAddress, value: string) {
@@ -308,14 +310,14 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   useBodyScrollLock(true);
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[1000] transition-colors duration-300" onClick={onClose}>
-      <div className="absolute right-0 top-0 bottom-0 w-full max-w-100 bg-card-bg flex flex-col shadow-[-8px_0_32px_rgba(0,0,0,0.2)] transition-transform duration-300 ease-out" role="dialog" aria-modal="true" aria-label="Carrinho de compras" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center px-6 py-4 border-b border-border">
-          <h3 className="m-0 text-primary font-semibold">
+    <div className="fixed inset-0 z-[1000] bg-primary/65 backdrop-blur-sm transition-colors duration-300" onClick={onClose}>
+      <div className="absolute bottom-0 right-0 top-0 flex w-full flex-col bg-card-bg shadow-[-20px_0_70px_rgba(0,0,0,0.24)] transition-transform duration-300 ease-out sm:max-w-[460px]" role="dialog" aria-modal="true" aria-label="Carrinho de compras" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-border px-5 py-4 sm:px-6">
+          <h3 className="m-0 text-lg font-black tracking-tight text-primary">
             {step === "cart" ? `Carrinho (${cart.length})` : step === "address" ? (endereco.deliveryMethod === "retirada" ? "Dados para Retirada" : "Endereço de Entrega") : "Pagamento"}
           </h3>
-          <button className="bg-none border-none text-xl cursor-pointer text-text-muted hover:text-accent transition-colors w-8 h-8 flex items-center justify-center rounded-full" onClick={onClose}>
-            ✕
+          <button className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-none bg-bg-base text-2xl text-text-muted transition-colors hover:text-accent" onClick={onClose} aria-label="Fechar carrinho">
+            ×
           </button>
         </div>
 
@@ -846,6 +848,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                   <span>{formatarMoeda(totalComDesconto)}</span>
                 </div>
               </div>
+              {finalizacaoErro && <div className="text-accent text-sm text-center mb-2" role="alert">{finalizacaoErro}</div>}
               <div className="flex gap-2">
                 <button
                   className="flex-1 py-3 text-sm font-semibold bg-border text-text-main rounded-md cursor-pointer transition-colors hover:bg-gray-300"
@@ -854,10 +857,11 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                   Voltar
                 </button>
                 <button
-                  className="flex-1 py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90"
+                  className="flex-1 py-3 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleConfirm}
+                  disabled={finalizando}
                 >
-                  Finalizar Pedido
+                  {finalizando ? "Finalizando..." : "Finalizar Pedido"}
                 </button>
               </div>
             </div>

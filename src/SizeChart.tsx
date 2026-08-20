@@ -3,8 +3,8 @@ import { tables, headerKeyMap } from "./sizeChartData";
 
 export default function SizeChart() {
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center gap-3 mb-8">
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
+      <div className="mb-8 flex flex-wrap items-center gap-3">
         <Link
           to="/"
           className="text-text-muted hover:text-accent transition-colors text-sm no-underline flex items-center gap-1"
@@ -12,7 +12,7 @@ export default function SizeChart() {
           ← Loja
         </Link>
         <span className="text-text-muted/40">|</span>
-        <h1 className="text-2xl font-bold text-primary">Guia de Tamanhos</h1>
+        <h1 className="text-3xl font-black tracking-tight text-primary sm:text-4xl">Guia de tamanhos</h1>
       </div>
 
       <p className="text-text-muted text-sm mb-4 leading-relaxed">
@@ -20,9 +20,9 @@ export default function SizeChart() {
         As medidas estão em centímetros (cm).
       </p>
 
-      <div className="mb-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <p className="text-sm text-blue-800 font-semibold">💡 Dica</p>
-        <p className="text-sm text-blue-700 mt-1">
+      <div className="mb-8 rounded-2xl border border-primary/10 bg-primary/5 p-5">
+        <p className="text-sm font-bold text-primary">Como escolher</p>
+        <p className="mt-1 text-sm text-text-muted">
           A versão Jogador costuma vestir mais justa. Recomendamos pegar{" "}
           <strong>1 ou 2 tamanhos acima</strong> do que você usaria na versão Torcedor.
         </p>
@@ -37,7 +37,7 @@ export default function SizeChart() {
             {table.subtitle && (
               <p className="text-xs text-text-muted mb-3 mt-1">{table.subtitle}</p>
             )}
-            <div className="overflow-x-auto rounded-lg border border-border shadow-sm">
+            <div className="overflow-x-auto rounded-2xl border border-border bg-card-bg shadow-card">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-primary text-white">
@@ -83,7 +83,7 @@ export default function SizeChart() {
       <div className="mt-6 text-center">
         <Link
           to="/"
-          className="inline-block px-6 py-3 bg-accent text-white font-semibold rounded-md hover:opacity-90 transition-opacity no-underline"
+          className="inline-flex min-h-12 items-center rounded-full bg-accent px-6 font-bold text-white no-underline transition-colors hover:bg-[#d93648]"
         >
           Voltar à Loja
         </Link>

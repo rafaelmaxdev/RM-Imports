@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import type { CartItem, Order, OrderAddress, PaymentMethod } from "./types";
 import { gerarId } from "./types";
-import { createPedido, removeOrderItemsFromEstoque } from "./lib/db";
-import { supabase } from "./lib/supabase";
+import { saveOrderAccessToken } from "./lib/orderAccess";
+import { track } from "@vercel/analytics";
 
 interface CartContextType {
   cart: CartItem[];
@@ -11,7 +11,7 @@ interface CartContextType {
   clearCart: () => void;
   total: number;
   createOrder: (endereco: OrderAddress, paymentMethod: PaymentMethod, cupom?: { codigo: string; desconto: number }) => Promise<Order | null>;
-  createMPPreference: (orderId: string, paymentMethod?: string) => Promise<{ preferenceId: string; initPoint: string } | null>;
+  createMPPreference: (orderId: string, orderAccessToken: string) => Promise<{ preferenceId: string; initPoint: string } | null>;
 }
 
 const CartContext = createContext<CartContextType | null>(null);
@@ -45,24 +45,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const total = useMemo(() => cart.reduce((sum, item) => sum + item.preco, 0), [cart]);
 
   const createMPPreference = useCallback(
-    async (orderId: string, paymentMethod?: string, cupomDesconto?: number): Promise<{ preferenceId: string; initPoint: string } | null> => {
+    async (orderId: string, orderAccessToken: string): Promise<{ preferenceId: string; initPoint: string } | null> => {
       try {
-        const rawTotal = cart.reduce((s, i) => s + i.preco, 0);
-        const ratio = cupomDesconto && rawTotal > 0 ? (rawTotal - cupomDesconto) / rawTotal : 1;
-        const payload = {
-          items: cart.map((item) => ({
-            title: `${item.nome} (${item.tipo} - ${item.tamanho})`,
-            quantity: 1,
-            unit_price: Math.round(item.preco * ratio * 100) / 100,
-          })),
-          orderId,
-          paymentMethod,
-        };
-
         const res = await fetch("/api/create-preference", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ orderId, orderAccessToken }),
         });
 
         if (!res.ok) {
@@ -77,78 +65,70 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
-    [cart]
+    []
   );
 
   const createOrder = useCallback(
     async (endereco: OrderAddress, paymentMethod: PaymentMethod, cupom?: { codigo: string; desconto: number }): Promise<Order | null> => {
       if (cart.length === 0) return null;
 
-      const now = new Date();
-      const data = now.toLocaleDateString("pt-BR");
-      const hora = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      const orderId = gerarId();
+      const items = cart.map((item) => ({
+        productId: item.productId,
+        tamanho: item.tamanho,
+        genero: item.genero,
+        personalizado: item.personalizado,
+        ...(item.personalizado
+          ? {
+              nomePersonalizado: item.nomePersonalizado,
+              numeroPersonalizado: item.numeroPersonalizado,
+            }
+          : {}),
+        prontaEntrega: item.prontaEntrega ?? false,
+      }));
 
-      // Check if any item is pronta entrega
-      const hasProntaEntrega = cart.some((item) => item.prontaEntrega);
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId,
+          address: endereco,
+          paymentMethod,
+          couponCode: cupom?.codigo,
+          items,
+        }),
+      });
+      const data = (await res.json()) as { order?: Order; orderAccessToken?: string; error?: string };
 
-      const totalFinal = cupom ? Math.round((total - cupom.desconto) * 100) / 100 : total;
-
-      const order: Order = {
-        id: gerarId(),
-        data,
-        hora,
-        itens: cart.map((item) => ({
-          nome: item.nome,
-          tipo: item.tipo,
-          temporada: item.temporada,
-          tamanho: item.tamanho,
-          genero: item.genero,
-          personalizado: item.personalizado,
-          nomePersonalizado: item.nomePersonalizado,
-          numeroPersonalizado: item.numeroPersonalizado,
-          preco: item.preco,
-          precoBase: item.precoBase,
-          yupooUrl: item.yupooUrl,
-          feminino: item.feminino,
-          prontaEntrega: item.prontaEntrega,
-          peMarkup: item.peMarkup,
-        })),
-        total: totalFinal,
-        status: "pendente",
-        endereco,
-        payment_method: paymentMethod,
-        pronta_entrega: hasProntaEntrega || undefined,
-        cupom_codigo: cupom?.codigo,
-        cupom_desconto: cupom?.desconto,
-      };
-
-      try {
-        // Save order to Supabase first
-        const saved = await createPedido(order);
-
-        // Deduct stock immediately for pronta_entrega items
-        if (hasProntaEntrega) {
-          try {
-            await removeOrderItemsFromEstoque(order);
-          } catch (stockErr) {
-            console.error("Erro ao deduzir estoque:", stockErr);
-          }
-        }
-
-        const mpResult = await createMPPreference(order.id, paymentMethod, cupom?.desconto);
-        if (mpResult) {
-          order.mp_preference_id = mpResult.preferenceId;
-          await supabase.from("pedidos").update({ mp_preference_id: mpResult.preferenceId }).eq("id", order.id);
-        }
-
-        setCart([]);
-        return saved;
-      } catch (err) {
-        console.error("Erro ao criar pedido:", err);
-        return null;
+      if (!res.ok) {
+        throw new Error(data.error || "Não foi possível criar o pedido.");
       }
+
+      const order = data.order;
+      if (!order) throw new Error("Não foi possível criar o pedido.");
+      const orderAccessToken = data.orderAccessToken;
+      if (!orderAccessToken) throw new Error("Não foi possível proteger o acesso ao pedido.");
+      saveOrderAccessToken(order.id, orderAccessToken);
+      track("checkout_created", {
+        order_id: order.id,
+        value: order.total,
+        item_count: order.itens.length,
+        payment_method: paymentMethod,
+      });
+
+      let mpResult: { preferenceId: string; initPoint: string } | null = null;
+      try {
+        mpResult = await createMPPreference(order.id, orderAccessToken);
+      } catch (mpErr) {
+        console.error("Erro ao gerar preferência de pagamento:", mpErr);
+      }
+
+      const securedOrder = { ...order, orderAccessToken };
+      const saved = mpResult ? { ...securedOrder, mp_preference_id: mpResult.preferenceId } : securedOrder;
+      setCart([]);
+      return saved;
     },
-    [cart, total, createMPPreference]
+    [cart, createMPPreference]
   );
 
   const contextValue = useMemo(
@@ -163,6 +143,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useCart() {
   const ctx = useContext(CartContext);
   if (!ctx) throw new Error("useCart must be used within CartProvider");

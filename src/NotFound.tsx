@@ -7,27 +7,28 @@ export default function NotFound() {
   }, []);
 
   return (
-    <div className="text-center py-16 px-4 max-w-lg mx-auto">
-      <h1 className="text-6xl font-bold text-primary mb-2">404</h1>
-      <p className="text-text-muted mb-8">Página não encontrada</p>
+    <div className="mx-auto max-w-2xl px-4 py-24 text-center">
+      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-accent">Fora de campo</p>
+      <h1 className="mb-3 mt-2 text-8xl font-black tracking-[-0.06em] text-primary">404</h1>
+      <p className="mb-8 text-lg text-text-muted">Esta página não faz parte da escalação.</p>
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
         <Link
           to="/"
-          className="px-6 py-3 bg-accent text-white rounded-md no-underline font-semibold transition-opacity hover:opacity-90"
+          className="rounded-full bg-accent px-6 py-3 font-bold text-white no-underline transition-colors hover:bg-[#d93648]"
         >
-          🏠 Loja
+          Voltar à loja
         </Link>
         <Link
           to="/pronta-entrega"
-          className="px-6 py-3 border border-border bg-card-bg text-text-main rounded-md no-underline font-semibold transition-colors hover:border-accent"
+          className="rounded-full border border-border bg-card-bg px-6 py-3 font-bold text-text-main no-underline transition-colors hover:border-accent"
         >
-          📦 Pronta Entrega
+          Pronta entrega
         </Link>
         <Link
           to="/meu-pedido"
-          className="px-6 py-3 border border-border bg-card-bg text-text-main rounded-md no-underline font-semibold transition-colors hover:border-accent"
+          className="rounded-full border border-border bg-card-bg px-6 py-3 font-bold text-text-main no-underline transition-colors hover:border-accent"
         >
-          🔍 Meu Pedido
+          Meu pedido
         </Link>
       </div>
     </div>

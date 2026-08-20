@@ -15,7 +15,7 @@ import {
   type OrderItem,
 } from "../types";
 import { montarNome, isRetro, formatarValor } from "../ProdutoForm";
-import { parseAnoTemporada } from "../Loja";
+import { parseAnoTemporada } from "../lib/utils";
 
 // ---------------------------------------------------------------------------
 // Helper to create a config with specific category-level promo active

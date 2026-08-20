@@ -98,6 +98,14 @@ export default memo(function ImageCarousel({
 
   const validImages = images.filter(Boolean);
 
+  const prev = useCallback(() => {
+    setCurrent((c) => (c > 0 ? c - 1 : validImages.length - 1));
+  }, [validImages.length]);
+
+  const next = useCallback(() => {
+    setCurrent((c) => (c < validImages.length - 1 ? c + 1 : 0));
+  }, [validImages.length]);
+
   /* ---- No images ---- */
   if (validImages.length === 0) {
     return (
@@ -126,14 +134,6 @@ export default memo(function ImageCarousel({
   }
 
   /* ---- Multiple images ---- */
-  const prev = useCallback(() => {
-    setCurrent((c) => (c > 0 ? c - 1 : validImages.length - 1));
-  }, [validImages.length]);
-
-  const next = useCallback(() => {
-    setCurrent((c) => (c < validImages.length - 1 ? c + 1 : 0));
-  }, [validImages.length]);
-
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
@@ -147,7 +147,7 @@ export default memo(function ImageCarousel({
       : 0;
     // Only register horizontal swipes (avoid interfering with vertical scroll)
     if (Math.abs(dx) > 40 && Math.abs(dx) > dy) {
-      dx > 0 ? next() : prev();
+      if (dx > 0) next(); else prev();
     }
     touchStartX.current = null;
     touchStartY.current = null;
@@ -199,7 +199,7 @@ export default memo(function ImageCarousel({
       {/* Left arrow */}
       <button
         onClick={(e) => { e.stopPropagation(); prev(); }}
-        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-11 h-11 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
+        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-11 h-11 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-30"
         aria-label="Imagem anterior"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -210,7 +210,7 @@ export default memo(function ImageCarousel({
       {/* Right arrow */}
       <button
         onClick={(e) => { e.stopPropagation(); next(); }}
-        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-11 h-11 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
+        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-11 h-11 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-30"
         aria-label="Próxima imagem"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -219,7 +219,7 @@ export default memo(function ImageCarousel({
       </button>
 
       {/* Dot indicators */}
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-0 z-10">
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-0 z-30">
         {validImages.map((_, i) => (
           <button
             key={i}

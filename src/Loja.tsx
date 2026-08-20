@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 
 const META_DESC = "RM Imports — Camisas de time e outros importados. Frete grátis em Bezerros-PE.";
@@ -81,7 +81,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   const visibleCount = pagination.key === filterKey ? pagination.count : 12;
   const [linkCopiado, setLinkCopiado] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [heroIndex, setHeroIndex] = useState(0);
+  const [heroState, setHeroState] = useState<{ current: number; previous: number | null }>({ current: 0, previous: null });
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const filterDrawerRef = useRef<HTMLDivElement>(null);
   const filterCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -250,16 +250,43 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       });
   }, [produtos]);
 
-  const heroItems = destaques.length > 0 ? destaques.slice(0, 8) : produtos.slice(0, 1);
-  const heroPosition = heroItems.length > 0 ? heroIndex % heroItems.length : 0;
+  const heroItems = useMemo(
+    () => (destaques.length > 0 ? destaques.slice(0, 8) : produtos.slice(0, 1)),
+    [destaques, produtos],
+  );
+  const moveHero = useCallback((direction: 1 | -1) => {
+    setHeroState((state) => {
+      if (heroItems.length <= 1) return state;
+      const current = ((state.current % heroItems.length) + heroItems.length) % heroItems.length;
+      return {
+        current: (current + direction + heroItems.length) % heroItems.length,
+        previous: current,
+      };
+    });
+  }, [heroItems.length]);
 
   useEffect(() => {
     if (heroItems.length <= 1) return;
-    const timer = window.setInterval(() => setHeroIndex((current) => (current + 1) % heroItems.length), 4500);
+    const timer = window.setInterval(() => moveHero(1), 4500);
     return () => window.clearInterval(timer);
-  }, [heroItems.length]);
+  }, [moveHero, heroItems.length]);
 
+  useEffect(() => {
+    const previous = heroState.previous;
+    if (previous === null) return;
+
+    const timer = window.setTimeout(() => {
+      setHeroState((state) => (state.previous === previous ? { ...state, previous: null } : state));
+    }, 720);
+    return () => window.clearTimeout(timer);
+  }, [heroState.previous]);
+
+  const heroPosition = heroItems.length > 0 ? ((heroState.current % heroItems.length) + heroItems.length) % heroItems.length : 0;
+  const heroPreviousPosition = heroState.previous !== null && heroItems.length > 0
+    ? ((heroState.previous % heroItems.length) + heroItems.length) % heroItems.length
+    : null;
   const heroProduct = heroItems[heroPosition];
+  const heroPreviousProduct = heroPreviousPosition !== null ? heroItems[heroPreviousPosition] : undefined;
   const heroImageSource = heroProduct ? parseImageUrls(heroProduct.imagem_urls)[0] : "";
   const heroImage = heroProduct && heroImageSource
     ? getCachedImageUrl(heroImageSource, heroProduct.cached_image_urls, 0, "large")
@@ -267,6 +294,23 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   const heroPrice = heroProduct
     ? getPrecoProduto(heroProduct.tipo, config, heroProduct.preco_customizado, (heroProduct.promocao_tipo as PromocaoTipo) ?? undefined, heroProduct.promocao_valor, heroProduct.time)
     : null;
+  const heroPreviousImageSource = heroPreviousProduct ? parseImageUrls(heroPreviousProduct.imagem_urls)[0] : "";
+  const heroPreviousImage = heroPreviousProduct && heroPreviousImageSource
+    ? getCachedImageUrl(heroPreviousImageSource, heroPreviousProduct.cached_image_urls, 0, "large")
+    : "";
+  const heroPreviousPrice = heroPreviousProduct
+    ? getPrecoProduto(heroPreviousProduct.tipo, config, heroPreviousProduct.preco_customizado, (heroPreviousProduct.promocao_tipo as PromocaoTipo) ?? undefined, heroPreviousProduct.promocao_valor, heroPreviousProduct.time)
+    : null;
+
+  useEffect(() => {
+    if (heroItems.length <= 1) return;
+    const nextHeroProduct = heroItems[(heroPosition + 1) % heroItems.length];
+    const nextImageSource = parseImageUrls(nextHeroProduct.imagem_urls)[0];
+    if (!nextImageSource) return;
+
+    const image = new Image();
+    image.src = getCachedImageUrl(nextImageSource, nextHeroProduct.cached_image_urls, 0, "large");
+  }, [heroItems, heroPosition]);
   const activeFilterCount = [
     categoriaSelecionada !== "Todas",
     Boolean(filtroTime),
@@ -297,9 +341,9 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                 Camisas atuais e retrô escolhidas para quem leva o time além dos 90 minutos.
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <a href="#catalogo" className="inline-flex min-h-12 items-center justify-center rounded-full bg-accent px-6 text-sm font-bold text-white transition-transform hover:-translate-y-0.5 hover:bg-[#ff5364]">
+                <Link to="/#catalogo" className="inline-flex min-h-12 items-center justify-center rounded-full bg-accent px-6 text-sm font-bold text-white transition-transform hover:-translate-y-0.5 hover:bg-[#ff5364]">
                   Explorar coleção
-                </a>
+                </Link>
                 <Link to="/pronta-entrega" className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/20 px-6 text-sm font-bold text-white transition-colors hover:bg-white/10">
                   Ver pronta entrega
                 </Link>
@@ -309,8 +353,27 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
               <div
                 className="relative mx-5 mb-5 min-h-[330px] overflow-hidden rounded-[20px] bg-white/5 sm:mx-8 sm:mb-8 lg:m-8 lg:ml-0 lg:min-h-[520px]"
               >
-                <Link key={heroProduct.id} to={`/produto/${heroProduct.id}/${slugify(heroProduct.nome)}`} className="animate-hero-product group absolute inset-0" aria-label={`Ver ${heroProduct.nome}`}>
-                  <div className="animate-hero-product-image absolute inset-0">
+                {heroPreviousProduct && heroPreviousImage && (
+                  <Link
+                    key={`previous-${heroPreviousProduct.id}`}
+                    to={`/produto/${heroPreviousProduct.id}/${slugify(heroPreviousProduct.nome)}`}
+                    className="animate-hero-slide-out group pointer-events-none absolute inset-0"
+                    aria-label={`Ver ${heroPreviousProduct.nome}`}
+                    aria-hidden="true"
+                    tabIndex={-1}
+                  >
+                    <div className="absolute inset-0">
+                      <img src={heroPreviousImage} alt={heroPreviousProduct.nome} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-primary via-primary/5 to-transparent" />
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5 sm:p-7">
+                      <div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/55">Em destaque</p><p className="mt-1 max-w-[15rem] text-lg font-bold leading-tight text-white sm:text-xl">{heroPreviousProduct.nome}</p></div>
+                      {heroPreviousPrice && <span className="shrink-0 rounded-full bg-white px-3 py-2 text-sm font-black text-primary">{formatarPreco(heroPreviousPrice.promo ?? heroPreviousPrice.base)}</span>}
+                    </div>
+                  </Link>
+                )}
+                <Link key={`current-${heroProduct.id}`} to={`/produto/${heroProduct.id}/${slugify(heroProduct.nome)}`} className="animate-hero-slide-in group absolute inset-0 z-10" aria-label={`Ver ${heroProduct.nome}`}>
+                  <div className="absolute inset-0">
                     <img src={heroImage} alt={heroProduct.nome} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]" />
                     <div className="absolute inset-0 bg-gradient-to-t from-primary via-primary/5 to-transparent" />
                   </div>
@@ -322,10 +385,10 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                 {heroItems.length > 1 && (
                   <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
                     <span className="rounded-full bg-primary/70 px-2.5 py-2 text-[10px] font-bold text-white backdrop-blur-sm">{heroPosition + 1} / {heroItems.length}</span>
-                    <button type="button" onClick={() => setHeroIndex((current) => (current - 1 + heroItems.length) % heroItems.length)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-primary shadow-md transition-colors hover:bg-white" aria-label="Destaque anterior">
+                    <button type="button" onClick={() => moveHero(-1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-primary shadow-md transition-colors hover:bg-white" aria-label="Destaque anterior">
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
                     </button>
-                    <button type="button" onClick={() => setHeroIndex((current) => (current + 1) % heroItems.length)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-primary shadow-md transition-colors hover:bg-white" aria-label="Próximo destaque">
+                    <button type="button" onClick={() => moveHero(1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-primary shadow-md transition-colors hover:bg-white" aria-label="Próximo destaque">
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
                     </button>
                   </div>

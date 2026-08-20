@@ -173,8 +173,8 @@ export default memo(function ImageCarousel({
     >
       {/* Sliding track */}
       <div
-        className="flex h-full transition-transform duration-300 ease-in-out"
-        style={{ transform: `translateX(-${current * 100}%)` }}
+        className="flex h-full transition-transform duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform motion-reduce:transition-none"
+        style={{ transform: `translate3d(-${current * 100}%, 0, 0)` }}
       >
         {validImages.map((url, i) => (
           <div key={i} className="w-full h-full flex-shrink-0 relative">

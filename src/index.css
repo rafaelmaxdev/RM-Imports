@@ -35,27 +35,87 @@
   animation: toast-in 0.3s ease forwards;
 }
 
-@keyframes hero-product-in {
-  from { transform: translate3d(8px, 4px, 0) scale(0.99); }
-  to { transform: translate3d(0, 0, 0) scale(1); }
+@keyframes cart-toast-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
 }
 
-.animate-hero-product {
-  animation: hero-product-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+.animate-cart-toast {
+  animation: cart-toast-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@keyframes hero-product-image-in {
-  from { transform: translate3d(18px, 12px, 0) scale(1.06); }
-  to { transform: translate3d(0, 0, 0) scale(1); }
+@keyframes cart-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-cart-overlay {
+  animation: cart-overlay-in 220ms ease-out both;
+}
+
+@keyframes cart-panel-in {
+  from { transform: translate3d(100%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+.animate-cart-panel {
+  animation: cart-panel-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-page-enter {
+  animation: page-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes hero-slide-in {
+  from {
+    opacity: 0;
+    transform: translate3d(2%, 0, 0) scale(1.025);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.animate-hero-slide-in {
+  animation: hero-slide-in 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes hero-slide-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-1.5%, 0, 0) scale(.99);
+  }
+}
+
+.animate-hero-slide-out {
+  animation: hero-slide-out 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes hero-product-info-in {
   from { opacity: 0; transform: translate3d(-10px, 18px, 0) scale(0.97); }
   to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-}
-
-.animate-hero-product-image {
-  animation: hero-product-image-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-hero-product-info {
@@ -201,8 +261,13 @@ textarea:hover {
 
 /* Contain layout for product cards with hover transforms to reduce CLS */
 .product-card-hover {
-  will-change: transform;
   contain: layout style paint;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .product-card-hover:hover {
+    will-change: transform;
+  }
 }
 
 /* iOS Safari zoom fix: inputs < 16px trigger zoom on focus */

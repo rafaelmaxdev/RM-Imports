@@ -119,10 +119,9 @@ interface DetailModalProps {
   product: GroupedProduct;
   config: LojaConfig;
   onClose: () => void;
-  onAdded: (nome: string) => void;
 }
 
-function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailModalProps) {
+function ProntaEntregaDetailModal({ product, config, onClose }: DetailModalProps) {
   const { addToCart } = useCart();
 
 
@@ -239,7 +238,6 @@ function ProntaEntregaDetailModal({ product, config, onClose, onAdded }: DetailM
     };
 
     addToCart(item);
-    onAdded(product.nome);
     onClose();
   }
 
@@ -480,8 +478,6 @@ export default function ProntaEntrega() {
   const ITENS_POR_PAGINA = 20;
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [produtoSelecionado, setProdutoSelecionado] = useState<GroupedProduct | null>(null);
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastProduto, setToastProduto] = useState("");
   const [lightbox, setLightbox] = useState<{
     images: string[];
     alt: string;
@@ -527,14 +523,6 @@ export default function ProntaEntrega() {
       cancelled = true;
     };
   }, []);
-
-  // Toast timer
-  useEffect(() => {
-    if (toastVisible) {
-      const timer = setTimeout(() => setToastVisible(false), 2500);
-      return () => clearTimeout(timer);
-    }
-  }, [toastVisible]);
 
   // Group estoque items with full product data
   const grouped = useMemo(() => groupEstoqueItems(estoque, produtos), [estoque, produtos]);
@@ -904,10 +892,6 @@ export default function ProntaEntrega() {
           product={produtoSelecionado}
           config={config}
           onClose={() => setProdutoSelecionado(null)}
-          onAdded={(nome) => {
-            setToastProduto(nome);
-            setToastVisible(true);
-          }}
         />
       )}
 
@@ -922,14 +906,6 @@ export default function ProntaEntrega() {
         />
       )}
 
-      {/* Toast notification */}
-      <div
-        className={`fixed bottom-8 left-1/2 bg-primary text-white px-6 py-3 rounded-md shadow-lg text-sm font-semibold z-[2000] pointer-events-none transition-all duration-300 ${
-          toastVisible ? "animate-toast opacity-100" : "opacity-0 translate-y-[25px]"
-        }`}
-      >
-        ✓ {toastProduto} adicionado ao carrinho
-      </div>
     </>
   );
 }

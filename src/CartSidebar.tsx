@@ -310,14 +310,17 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   useBodyScrollLock(true);
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-primary/65 backdrop-blur-sm transition-colors duration-300" onClick={onClose}>
-      <div className="absolute bottom-0 right-0 top-0 flex w-full flex-col bg-card-bg shadow-[-20px_0_70px_rgba(0,0,0,0.24)] transition-transform duration-300 ease-out sm:max-w-[460px]" role="dialog" aria-modal="true" aria-label="Carrinho de compras" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-border px-5 py-4 sm:px-6">
+    <div className="fixed inset-0 z-[1000] animate-cart-overlay bg-primary/65 backdrop-blur-sm" onClick={onClose}>
+      <div className="absolute bottom-0 right-0 top-0 flex w-full flex-col animate-cart-panel bg-card-bg shadow-[-20px_0_70px_rgba(0,0,0,0.24)] sm:max-w-[460px]" role="dialog" aria-modal="true" aria-label="Carrinho de compras" onClick={(e) => e.stopPropagation()}>
+        <div className="relative flex items-center justify-between border-b border-border px-5 py-4 pr-20 sm:px-6 sm:pr-20">
           <h3 className="m-0 text-lg font-black tracking-tight text-primary">
             {step === "cart" ? `Carrinho (${cart.length})` : step === "address" ? (endereco.deliveryMethod === "retirada" ? "Dados para Retirada" : "Endereço de Entrega") : "Pagamento"}
           </h3>
-          <button className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-none bg-bg-base text-2xl text-text-muted transition-colors hover:text-accent" onClick={onClose} aria-label="Fechar carrinho">
-            ×
+          <button className="absolute right-4 top-1/2 flex h-11 w-11 shrink-0 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-none bg-bg-base p-0 text-text-muted transition-colors hover:text-accent" onClick={onClose} aria-label="Fechar carrinho">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <path d="M3 3L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M15 3L3 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
           </button>
         </div>
 

@@ -229,12 +229,14 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
   const relatedProducts = produtos
     .filter((item) => item.id !== produto.id)
     .sort((a, b) => {
-      const score = (item: DbProduto) =>
-        Number(item.time === produto.time)
-        + Number(item.liga === produto.liga)
+      const sameTeam = Number(b.time === produto.time) - Number(a.time === produto.time);
+      if (sameTeam !== 0) return sameTeam;
+
+      const matchingTags = (item: DbProduto) =>
+        Number(item.liga === produto.liga)
         + Number(item.tipo === produto.tipo)
         + Number(item.temporada === produto.temporada);
-      return score(b) - score(a) || distanceAfterCurrent(a) - distanceAfterCurrent(b);
+      return matchingTags(b) - matchingTags(a) || distanceAfterCurrent(a) - distanceAfterCurrent(b);
     })
     .slice(0, 4);
   const tamanhosTipo = tamanhosDisponiveis(produto.tipo, genero === "Feminino");
@@ -285,7 +287,6 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
       tamanho,
       preco: precoFinal,
     });
-    setFeedback(`${produtoAtual.nome} adicionado ao carrinho`);
   }
 
   return (
@@ -306,55 +307,16 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
       </nav>
 
       <div className="grid items-start gap-6 lg:grid-cols-[1.08fr_.92fr] lg:gap-12">
-        <div className="space-y-6">
-          <div className="overflow-hidden rounded-2xl border border-border bg-[#eeeeeb] shadow-card sm:rounded-3xl">
-            <ImageCarousel
-              key={genero}
-              images={imagensDoModelo}
-              alt={produto.nome}
-              cachedImageUrls={modeloFemininoComImagens ? null : produto.cached_image_urls}
-            />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <section className="rounded-2xl border border-border bg-card-bg p-5 shadow-card" aria-labelledby="product-details-title">
-              <h2 id="product-details-title" className="text-lg font-bold text-primary mb-3">Detalhes do produto</h2>
-              <dl className="grid gap-2 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-text-muted">Time</dt>
-                  <dd className="text-right font-medium text-text-main">{produto.time}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-text-muted">Liga</dt>
-                  <dd className="text-right font-medium text-text-main">{produto.liga}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-text-muted">Temporada</dt>
-                  <dd className="text-right font-medium text-text-main">{produto.temporada}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-text-muted">Modelo/tipo</dt>
-                  <dd className="text-right font-medium text-text-main">{produto.tipo}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-text-muted">Versões</dt>
-                  <dd className="text-right font-medium text-text-main">{produto.feminino ? "Masculina e feminina" : "Masculina"}</dd>
-                </div>
-              </dl>
-            </section>
-
-            <section className="rounded-2xl border border-border bg-card-bg p-5 shadow-card" aria-labelledby="delivery-details-title">
-              <h2 id="delivery-details-title" className="text-lg font-bold text-primary mb-3">Entrega e pagamento</h2>
-              <ul className="grid gap-2 text-sm text-text-main">
-                <li>Entrega grátis em Bezerros-PE.</li>
-                <li>Retirada em Caruaru.</li>
-                <li>Pagamento seguro e parcelamento via Mercado Pago.</li>
-              </ul>
-            </section>
-          </div>
+        <div className="overflow-hidden rounded-2xl border border-border bg-[#eeeeeb] shadow-card sm:rounded-3xl lg:col-start-1 lg:row-start-1">
+          <ImageCarousel
+            key={genero}
+            images={imagensDoModelo}
+            alt={produto.nome}
+            cachedImageUrls={modeloFemininoComImagens ? null : produto.cached_image_urls}
+          />
         </div>
 
-        <section className="lg:sticky lg:top-24 lg:rounded-3xl lg:border lg:border-border lg:bg-card-bg lg:p-7 lg:shadow-card">
+        <section className="lg:sticky lg:top-24 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:rounded-3xl lg:border lg:border-border lg:bg-card-bg lg:p-7 lg:shadow-card">
           <div className="flex flex-wrap gap-2 mb-3 text-xs">
             <span className="rounded-md bg-primary/7 px-2 py-1 font-bold text-primary">{produto.time}</span>
             <span className="rounded-md bg-primary/7 px-2 py-1 font-bold text-primary">{produto.liga}</span>
@@ -533,9 +495,46 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
           <p className="min-h-5 mt-3 text-sm text-primary" aria-live="polite">{feedback}</p>
           <ul className="mt-4 grid grid-cols-2 gap-2 text-xs font-semibold text-text-muted" aria-label="Benefícios">
             <li className="rounded-xl bg-bg-base p-3"><strong className="mb-1 block text-primary">Pagamento seguro</strong>Via Mercado Pago</li>
-            <li className="rounded-xl bg-bg-base p-3"><strong className="mb-1 block text-primary">Entrega grátis</strong>Em Bezerros-PE</li>
+           <li className="rounded-xl bg-bg-base p-3"><strong className="mb-1 block text-primary">Entrega grátis</strong>Em Bezerros-PE</li>
           </ul>
         </section>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:col-start-1 lg:row-start-2">
+          <section className="rounded-2xl border border-border bg-card-bg p-5 shadow-card" aria-labelledby="product-details-title">
+            <h2 id="product-details-title" className="text-lg font-bold text-primary mb-3">Detalhes do produto</h2>
+            <dl className="grid gap-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-text-muted">Time</dt>
+                <dd className="text-right font-medium text-text-main">{produto.time}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-text-muted">Liga</dt>
+                <dd className="text-right font-medium text-text-main">{produto.liga}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-text-muted">Temporada</dt>
+                <dd className="text-right font-medium text-text-main">{produto.temporada}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-text-muted">Modelo/tipo</dt>
+                <dd className="text-right font-medium text-text-main">{produto.tipo}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-text-muted">Versões</dt>
+                <dd className="text-right font-medium text-text-main">{produto.feminino ? "Masculina e feminina" : "Masculina"}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="rounded-2xl border border-border bg-card-bg p-5 shadow-card" aria-labelledby="delivery-details-title">
+            <h2 id="delivery-details-title" className="text-lg font-bold text-primary mb-3">Entrega e pagamento</h2>
+            <ul className="grid gap-2 text-sm text-text-main">
+              <li>Entrega grátis em Bezerros-PE.</li>
+              <li>Retirada em Caruaru.</li>
+              <li>Pagamento seguro e parcelamento via Mercado Pago.</li>
+            </ul>
+          </section>
+        </div>
       </div>
 
       {relatedProducts.length > 0 && (

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import type { CartItem, Order, OrderAddress, PaymentMethod } from "./types";
 import { gerarId } from "./types";
 import { saveOrderAccessToken } from "./lib/orderAccess";
@@ -25,6 +25,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return [];
     }
   });
+  const [cartNotification, setCartNotification] = useState<{ nome: string; id: number } | null>(null);
+  const notificationId = useRef(0);
 
   useEffect(() => {
     localStorage.setItem("ul_cart", JSON.stringify(cart));
@@ -32,7 +34,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addToCart = useCallback((item: CartItem) => {
     setCart((prev) => [...prev, item]);
+    setCartNotification({ nome: item.nome, id: ++notificationId.current });
   }, []);
+
+  useEffect(() => {
+    if (!cartNotification) return;
+    const timer = window.setTimeout(() => setCartNotification(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [cartNotification]);
 
   const removeFromCart = useCallback((index: number) => {
     setCart((prev) => prev.filter((_, i) => i !== index));
@@ -139,6 +148,27 @@ export function CartProvider({ children }: { children: ReactNode }) {
   return (
     <CartContext.Provider value={contextValue}>
       {children}
+      {cartNotification && (
+        <div
+          className="fixed left-0 w-screen bottom-20 z-[2100] flex justify-center px-4 pointer-events-none sm:bottom-6"
+        >
+          <div
+            key={cartNotification.id}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="w-full max-w-sm animate-cart-toast rounded-md bg-primary px-4 py-3 text-white shadow-lg"
+          >
+            <div className="flex items-start gap-2">
+              <span aria-hidden="true" className="text-lg leading-5">✓</span>
+              <div className="min-w-0">
+                <p className="font-semibold">Adicionado ao carrinho</p>
+                <p className="line-clamp-2 text-sm">{cartNotification.nome}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </CartContext.Provider>
   );
 }

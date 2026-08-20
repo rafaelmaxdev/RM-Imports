@@ -84,7 +84,19 @@ function AppContent() {
 
   useBodyScrollLock(showMenu || showCart);
 
-  useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
+  useEffect(() => {
+    if (loading) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      if (location.hash) {
+        document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: "start" });
+      } else {
+        window.scrollTo(0, 0);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname, location.hash, loading]);
 
   useEffect(() => {
     Promise.all([
@@ -120,7 +132,7 @@ function AppContent() {
           </Link>
 
           <div className="hidden items-center gap-1 lg:flex">
-            <a href="/#catalogo" className="rounded-full px-4 py-2 text-sm font-semibold text-white/75 transition-colors hover:bg-white/10 hover:text-white">Catálogo</a>
+            <Link to="/#catalogo" className="rounded-full px-4 py-2 text-sm font-semibold text-white/75 transition-colors hover:bg-white/10 hover:text-white">Catálogo</Link>
             <Link to="/pronta-entrega" className="rounded-full px-4 py-2 text-sm font-semibold text-white/75 transition-colors hover:bg-white/10 hover:text-white">Pronta entrega</Link>
             <Link to="/tamanhos" className="rounded-full px-4 py-2 text-sm font-semibold text-white/75 transition-colors hover:bg-white/10 hover:text-white">Tamanhos</Link>
             <Link to="/meu-pedido" className="rounded-full px-4 py-2 text-sm font-semibold text-white/75 transition-colors hover:bg-white/10 hover:text-white">Meu pedido</Link>
@@ -175,25 +187,27 @@ function AppContent() {
           <LoadingSkeleton />
         ) : (
           <Suspense fallback={<LoadingSkeleton />}>
-            <Routes>
-            <Route path="/" element={<Loja produtos={produtos} config={config} />} />
-            <Route path="/produto/:id/:slug?" element={<ProductPage produtos={produtos} config={config} />} />
-            <Route
-              path="/admin"
-              element={
-                <AdminGate>
-                  <AdminPanel produtos={produtos} setProdutos={setProdutos} config={config} setConfig={setConfig} />
-                </AdminGate>
-              }
-            />
-            <Route path="/pedido/:id" element={<OrderConfirmation />} />
-            <Route path="/tamanhos" element={<SizeChart />} />
-            <Route path="/pronta-entrega" element={<ProntaEntrega />} />
-            <Route path="/meu-pedido" element={<MeusPedidos />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
-      )}
+            <div key={location.pathname} className="animate-page-enter">
+              <Routes location={location}>
+                <Route path="/" element={<Loja produtos={produtos} config={config} />} />
+                <Route path="/produto/:id/:slug?" element={<ProductPage produtos={produtos} config={config} />} />
+                <Route
+                  path="/admin"
+                  element={
+                    <AdminGate>
+                      <AdminPanel produtos={produtos} setProdutos={setProdutos} config={config} setConfig={setConfig} />
+                    </AdminGate>
+                  }
+                />
+                <Route path="/pedido/:id" element={<OrderConfirmation />} />
+                <Route path="/tamanhos" element={<SizeChart />} />
+                <Route path="/pronta-entrega" element={<ProntaEntrega />} />
+                <Route path="/meu-pedido" element={<MeusPedidos />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </div>
+          </Suspense>
+        )}
       </main>
 
       {showCart && (

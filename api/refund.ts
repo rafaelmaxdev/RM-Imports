@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { MercadoPagoConfig, PaymentRefund } from "mercadopago";
 import { createClient } from "@supabase/supabase-js";
-import { bearerToken, isAdminToken } from "./lib/security.js";
+import { bearerToken, isAdminToken } from "../server/lib/security.js";
 
 const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN!,

@@ -7,7 +7,7 @@ import {
   consumeRateLimit,
   isAdminToken,
   verifyOrderAccessToken,
-} from "./lib/security.js";
+} from "../server/lib/security.js";
 
 const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN!,

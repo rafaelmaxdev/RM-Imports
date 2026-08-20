@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bearerToken, createOrderAccessToken, verifyOrderAccessToken } from "../../api/lib/security";
+import { bearerToken, createOrderAccessToken, verifyOrderAccessToken } from "../../server/lib/security";
 
 describe("order access security", () => {
   const secret = "service-role-secret-for-tests";

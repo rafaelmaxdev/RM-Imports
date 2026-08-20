@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getCorsOrigin } from '../lib/cors.js';
+import { getCorsOrigin } from '../../server/lib/cors.js';
 
 const ALLOWED_YUPOO_HOSTS = ['minkang.x.yupoo.com', 'photo.yupoo.com', 'img.yupoo.com'];
 

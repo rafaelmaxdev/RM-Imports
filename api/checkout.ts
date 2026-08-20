@@ -7,8 +7,8 @@ import {
   type ServerCheckoutConfig,
   type ServerProductPricing,
   validateProductVariant,
-} from "./lib/checkout.js";
-import { clientIp, consumeRateLimit, createOrderAccessToken } from "./lib/security.js";
+} from "../server/lib/checkout.js";
+import { clientIp, consumeRateLimit, createOrderAccessToken } from "../server/lib/security.js";
 
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;

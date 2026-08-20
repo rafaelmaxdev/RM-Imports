@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
-import { setCorsHeaders } from "../lib/cors.js";
-import { normalizeBrazilPhone } from "../lib/checkout.js";
+import { setCorsHeaders } from "../../server/lib/cors.js";
+import { normalizeBrazilPhone } from "../../server/lib/checkout.js";
 import {
   bearerToken,
   clientIp,
@@ -9,7 +9,7 @@ import {
   createOrderAccessToken,
   isAdminToken,
   verifyOrderAccessToken,
-} from "../lib/security.js";
+} from "../../server/lib/security.js";
 
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!serviceRoleKey) {

@@ -4,7 +4,7 @@ import {
   validateProductVariant,
   normalizeBrazilPhone,
   type ServerCheckoutConfig,
-} from "../../api/lib/checkout";
+} from "../../server/lib/checkout";
 
 const config: ServerCheckoutConfig = {
   precos_base: { Torcedor: 129.90, Jogador: 169.90, NBA: 189.90 },

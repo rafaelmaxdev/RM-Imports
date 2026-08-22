@@ -303,14 +303,15 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     : null;
 
   useEffect(() => {
-    if (heroItems.length <= 1) return;
-    const nextHeroProduct = heroItems[(heroPosition + 1) % heroItems.length];
-    const nextImageSource = parseImageUrls(nextHeroProduct.imagem_urls)[0];
-    if (!nextImageSource) return;
+    heroItems.forEach((heroItem) => {
+      const imageSource = parseImageUrls(heroItem.imagem_urls)[0];
+      if (!imageSource) return;
 
-    const image = new Image();
-    image.src = getCachedImageUrl(nextImageSource, nextHeroProduct.cached_image_urls, 0, "large");
-  }, [heroItems, heroPosition]);
+      const image = new Image();
+      image.src = getCachedImageUrl(imageSource, heroItem.cached_image_urls, 0, "large");
+      if (image.decode) void image.decode().catch(() => undefined);
+    });
+  }, [heroItems]);
   const activeFilterCount = [
     categoriaSelecionada !== "Todas",
     Boolean(filtroTime),
@@ -439,7 +440,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
       </div>
 
-      <div className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-12 pt-12 sm:px-6 sm:pt-16 lg:px-8" id="catalogo">
+      <div className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-12 pt-4 sm:px-6 lg:px-8" id="catalogo">
         <div className="mb-5 flex items-end justify-between gap-4 sm:mb-7">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent">Catálogo</p>

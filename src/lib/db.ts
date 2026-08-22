@@ -389,12 +389,27 @@ export async function getPedidoById(id: string, phone?: string): Promise<import(
 }
 
 export async function updatePedidoStatus(id: string, status: string): Promise<void> {
-  const { error } = ["cancelado", "reembolsado"].includes(status)
-    ? await supabase.rpc("finalize_order_admin", { p_order_id: id, p_status: status })
-    : await supabase
-      .from("pedidos")
-      .update({ status })
-      .eq("id", id);
+  if (["cancelado", "reembolsado"].includes(status)) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch(`/api/order/${encodeURIComponent(id)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ status }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(body?.error || "Erro ao finalizar pedido.");
+    }
+    return;
+  }
+
+  const { error } = await supabase
+    .from("pedidos")
+    .update({ status })
+    .eq("id", id);
 
   if (error) {
     // Provide user-friendly message for status transition violations

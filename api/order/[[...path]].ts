@@ -44,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(req, res);
 
   if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== "GET" && req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   if (!supabase || !serviceRoleKey) return res.status(500).json({ error: "Serviço indisponível." });
   const ip = clientIp(req.headers, req.socket.remoteAddress);
@@ -57,6 +57,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const payment = req.query.payment;
   const phone = requestedPhone(req.query.phone);
   const admin = await isAdminToken(supabase, bearerToken(req.headers.authorization));
+
+  if (req.method === "POST") {
+    if (!admin) return res.status(403).json({ error: "Forbidden: admin role required" });
+    if (!path || !/^UL-[A-Z2-9]{8}$/.test(path)) return res.status(400).json({ error: "ID do pedido inválido." });
+
+    const status = (req.body as { status?: unknown } | null)?.status;
+    if (status !== "cancelado" && status !== "reembolsado") {
+      return res.status(400).json({ error: "Status final inválido." });
+    }
+
+    const { error } = await supabase.rpc("finalize_order_admin", {
+      p_order_id: path,
+      p_status: status,
+    });
+    if (error) {
+      console.error("[order] failed to finalize order", error.message);
+      return res.status(400).json({ error: "Não foi possível finalizar o pedido." });
+    }
+    return res.status(200).json({ success: true });
+  }
 
   // ── Payment ID search ──
   if (path === "search") {

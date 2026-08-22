@@ -18,26 +18,15 @@ async function autoCancelExpiredOrders(hours = 24): Promise<number> {
 
   let cancelled = 0;
   for (const order of expired) {
-    const { data: updated } = await supabase
-      .from("pedidos")
-      .update({ status: "cancelado" })
-      .eq("id", order.id)
-      .eq("status", "pendente")
-      .select("id")
-      .maybeSingle();
-    if (!updated) continue;
-    cancelled++;
-
-    const { error: stockError } = await supabase.rpc("restore_order_stock_once", { p_order_id: order.id });
-    if (stockError) console.warn("[check-admin] failed to restore stock");
-
-    const { error: couponError } = await supabase.rpc("finalizar_uso_cupom", {
-      p_pedido_id: order.id,
-      p_status: "liberado",
+    const { error } = await supabase.rpc("finalize_order_admin", {
+      p_order_id: order.id,
+      p_status: "cancelado",
     });
-    if (couponError && !/(?:utiliza(?:ção|cao)|usage).*?(?:encontrad|not found)/i.test(couponError.message ?? "")) {
-      console.warn("[check-admin] failed to release coupon reservation");
+    if (error) {
+      console.warn("[check-admin] failed to finalize expired order");
+      continue;
     }
+    cancelled++;
   }
   return cancelled;
 }

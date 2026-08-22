@@ -118,7 +118,6 @@ export default function OrderConfirmation() {
   useEffect(() => {
     if (!order || order.mp_preference_id || creatingPreference || order.status !== "pendente" || !order.payment_method) return;
     // Async synchronization with the external payment provider.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     createPreferenceIfNeeded();
   }, [order?.id, order?.mp_preference_id]); // eslint-disable-line react-hooks/exhaustive-deps
 

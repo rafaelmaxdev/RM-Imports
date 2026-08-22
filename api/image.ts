@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { isR2Configured, uploadToR2 } from '../server/lib/r2.js';
 import { getCorsOrigin } from '../server/lib/cors.js';
 import { clientIp, consumeRateLimit } from '../server/lib/security.js';
+import { fetchImage, ImageFetchError } from '../server/lib/image-fetch.js';
 
 const ALLOWED_DOMAINS = [
   "photo.yupoo.com",
@@ -13,16 +14,9 @@ const ALLOWED_DOMAINS = [
 
 const BUCKET = 'images';
 
-// Fail loudly if service role key is missing
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!serviceRoleKey) {
-  console.error("[api/image] SUPABASE_SERVICE_ROLE_KEY not configured");
-}
-
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  serviceRoleKey!
-);
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabase = supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null;
 
 function urlToKey(url: string): string {
   const hash = createHash('sha256').update(url).digest('hex').slice(0, 24);
@@ -49,7 +43,7 @@ function isAllowedDomain(url: string): boolean {
 let allowedUrlsCache: { urls: Set<string>; timestamp: number } | null = null;
 const CACHE_TTL = 1_800_000; // 30 minutes (increased from 5min to reduce DB queries)
 
-async function isAllowedImage(url: string): Promise<boolean> {
+async function isAllowedImage(url: string, db: NonNullable<typeof supabase>): Promise<boolean> {
   // First check: domain whitelist (fast, no DB call)
   if (!isAllowedDomain(url)) {
     return false;
@@ -62,7 +56,7 @@ async function isAllowedImage(url: string): Promise<boolean> {
     let offset = 0;
 
     while (true) {
-      const { data } = await supabase
+      const { data } = await db
         .from('produtos')
         .select('imagem_urls, imagem_urls_feminina')
         .range(offset, offset + PAGE_SIZE - 1);
@@ -100,21 +94,21 @@ const CDN_HEADERS = {
   'CDN-Cache-Control': 'public, max-age=2592000',
 };
 
-/** Fetch with timeout to avoid hanging on slow upstreams */
-async function fetchWithTimeout(url: string, timeoutMs: number, init?: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    return response;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  if (!supabase) {
+    res.status(500).json({ error: "Serviço indisponível." });
+    return;
+  }
+
+  const db = supabase;
   const ip = clientIp(req.headers, req.socket.remoteAddress);
-  if (!await consumeRateLimit(supabase, "image", ip, 60, 60)) {
+  if (!await consumeRateLimit(db, "image", ip, 60, 60)) {
     res.status(429).json({ error: "Muitas requisições. Aguarde um momento." }); return;
   }
 
@@ -131,7 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Try R2 first (zero egress), then fall back to Supabase Storage.
   // If cached, redirect to the public URL — no bytes proxied through API.
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('image_cache')
       .select('storage_key, content_type, r2_url')
       .eq('url_hash', storageKey)
@@ -148,7 +142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Fall back to Supabase Storage URL
-      const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(data.storage_key);
+      const { data: publicUrlData } = db.storage.from(BUCKET).getPublicUrl(data.storage_key);
       const publicUrl = publicUrlData.publicUrl;
 
       res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
@@ -164,30 +158,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── Step 2: Validate URL belongs to a product in our database ──
   // Only needed for uncached images (first request for this URL).
   // Cached images skip this check entirely (Step 1).
-  if (!(await isAllowedImage(url))) {
+  if (!(await isAllowedImage(url, db))) {
     return res.status(403).json({ error: 'URL not from catalog' });
   }
 
   // ── Step 3: Fetch from Yupoo ──
   try {
-    const response = await fetchWithTimeout(url, 15000, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://minkang.x.yupoo.com/',
-      },
+    const { buffer: bufferData, contentType } = await fetchImage(url, ALLOWED_DOMAINS, {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Referer': 'https://minkang.x.yupoo.com/',
     });
-
-    if (!response.ok) {
-      // Yupoo returned an error — don't cache this, let browser retry later
-      res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('CDN-Cache-Control', 'no-store');
-      res.status(502).json({ error: 'Upstream image fetch failed' });
-      return;
-    }
-
-    const buffer = await response.arrayBuffer();
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-    const bufferData = Buffer.from(buffer);
 
     // 4. Upload to R2 (zero egress) or fall back to Supabase Storage
     const uploadPromise = (async () => {
@@ -203,7 +183,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (!r2Url) {
         // Fallback: upload to Supabase Storage
-        const { error: uploadError } = await supabase.storage
+        const { error: uploadError } = await db.storage
           .from(BUCKET)
           .upload(storageKey, bufferData, {
             contentType,
@@ -217,7 +197,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Record in image_cache table
-      await supabase
+      await db
         .from('image_cache')
         .upsert({
           url_hash: storageKey,
@@ -236,10 +216,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.send(bufferData);
 
     await uploadPromise;
-  } catch {
+  } catch (error) {
     // Proxy error — don't cache, let browser retry on next load
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('CDN-Cache-Control', 'no-store');
+    if (error instanceof ImageFetchError) {
+      res.status(502).json({ error: 'Upstream image fetch failed' });
+      return;
+    }
     res.status(504).json({ error: 'Image proxy timeout' });
   }
 }

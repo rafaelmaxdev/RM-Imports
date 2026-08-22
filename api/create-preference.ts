@@ -9,24 +9,42 @@ import {
   verifyOrderAccessToken,
 } from "../server/lib/security.js";
 
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN!,
-  options: { timeout: 5000 },
-});
-
+const mpAccessToken = process.env.MP_ACCESS_TOKEN;
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!serviceRoleKey) {
-  console.error("[create-preference] SUPABASE_SERVICE_ROLE_KEY not configured");
-}
+const appUrl = process.env.VITE_APP_URL;
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  serviceRoleKey!
-);
+const client = mpAccessToken
+  ? new MercadoPagoConfig({
+      accessToken: mpAccessToken,
+      options: { timeout: 5000 },
+    })
+  : null;
+
+const supabase = supabaseUrl && serviceRoleKey
+  ? createClient(supabaseUrl, serviceRoleKey)
+  : null;
+
+const defaultBaseUrl = "https://rm-imports.vercel.app";
+const baseUrl = (() => {
+  if (!appUrl) return defaultBaseUrl;
+  try {
+    const url = new URL(appUrl);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.origin
+      : defaultBaseUrl;
+  } catch {
+    return defaultBaseUrl;
+  }
+})();
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  if (!client || !supabase || !serviceRoleKey) {
+    return res.status(500).json({ error: "Serviço indisponível." });
   }
 
   const ip = clientIp(req.headers, req.socket.remoteAddress);
@@ -43,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const admin = await isAdminToken(supabase, bearerToken(req.headers.authorization));
-    if (!admin && !verifyOrderAccessToken(orderId, body?.orderAccessToken, serviceRoleKey!)) {
+    if (!admin && !verifyOrderAccessToken(orderId, body?.orderAccessToken, serviceRoleKey)) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -114,7 +132,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ];
     }
 
-    const baseUrl = process.env.VITE_APP_URL || "https://rm-imports.vercel.app";
     const orderUrl = `${baseUrl}/pedido/${orderId}`;
 
     const result = await preference.create({

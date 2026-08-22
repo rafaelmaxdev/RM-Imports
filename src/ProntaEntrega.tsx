@@ -40,6 +40,8 @@ interface GroupedProduct {
   sizes: { tamanho: string; quantidade: number; personalizado: boolean; nome_personalizado?: string | null; numero_personalizado?: string | null; feminino: boolean }[];
 }
 
+type FeminineImagesRow = { imagem_urls_feminina: unknown };
+
 const TAMANHO_ORDER: Record<string, number> = {
   P: 0, M: 1, G: 2, GG: 3, G1: 4, G2: 5, G3: 6,
 };
@@ -148,9 +150,12 @@ function ProntaEntregaDetailModal({ product, config, onClose }: DetailModalProps
 
   const [feminineImages, setFeminineImages] = useState<string[]>([]);
   useEffect(() => {
-    Promise.resolve(supabase.from("produtos").select("imagem_urls_feminina").eq("id", product.produto_id).single()).then(({ data }: any) => {
-      if (data?.imagem_urls_feminina) {
-        const fem = Array.isArray(data.imagem_urls_feminina) ? data.imagem_urls_feminina.filter(Boolean) : [];
+    Promise.resolve(supabase.from("produtos").select("imagem_urls_feminina").eq("id", product.produto_id).single()).then(({ data }: { data: FeminineImagesRow | null }) => {
+      const raw = data?.imagem_urls_feminina;
+      if (raw) {
+        const fem = Array.isArray(raw)
+          ? raw.filter((url): url is string => typeof url === "string" && Boolean(url))
+          : typeof raw === "string" ? [raw] : [];
         setFeminineImages(fem);
       }
     }).catch((err) => console.warn("[ProntaEntrega] feminine images fetch failed:", err));

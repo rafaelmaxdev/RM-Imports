@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { calcularPreco, formatarMoeda, DEFAULT_CONFIG, ADICIONAL_TAMANHO, precoPersonalizacao } from "../types";
-import type { LojaConfig } from "../types";
+import type { LojaConfig, PromocaoTipo } from "../types";
 
 /**
  * Cart pricing tests.
@@ -190,7 +190,7 @@ describe("Cart pricing: multi-item totals", () => {
    * Simulates what CartContext does to compute `total`:
    *   total = cart.reduce((sum, item) => sum + item.preco, 0)
    */
-  function cartTotal(items: { tipo: string; tamanho: string; personalizado: boolean; config?: LojaConfig; precoCustom?: number | null; promoTipo?: any; promoValor?: number | null }[]): number {
+  function cartTotal(items: { tipo: string; tamanho: string; personalizado: boolean; config?: LojaConfig; precoCustom?: number | null; promoTipo?: PromocaoTipo; promoValor?: number | null }[]): number {
     return items.reduce((sum, item) => {
       return sum + calcularPreco(item.tipo, item.tamanho, item.personalizado, item.config, item.precoCustom, item.promoTipo, item.promoValor);
     }, 0);

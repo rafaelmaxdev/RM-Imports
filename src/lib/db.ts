@@ -221,15 +221,6 @@ export async function reorderDestaques(items: { id: string; ordem_destaque: numb
   }
 }
 
-export async function setPromocaoCategoria(tipo: string, ativa: boolean): Promise<void> {
-  const { error } = await supabase
-    .from("produtos")
-    .update({ promocao: ativa })
-    .eq("tipo", tipo);
-
-  if (error) throw error;
-}
-
 /** Apply promotion to all products of a specific team — stored in loja_config */
 export async function setPromocaoTime(
   time: string,
@@ -271,15 +262,6 @@ export async function removeDescontoGlobal(): Promise<void> {
   if (error) throw error;
   const { clearCache } = await import("./cache");
   clearCache("loja_config");
-}
-
-export async function updateProdutoCustomPrice(id: string, preco_customizado: number | null): Promise<void> {
-  const { error } = await supabase
-    .from("produtos")
-    .update({ preco_customizado })
-    .eq("id", id);
-
-  if (error) throw error;
 }
 
 // ── Pedidos ──
@@ -349,41 +331,6 @@ export async function getProdutosByIds(ids: string[]): Promise<DbProduto[]> {
   return (data as DbProduto[]) ?? [];
 }
 
-export async function createPedido(order: import("../types").Order): Promise<import("../types").Order> {
-const row = {
-    id: order.id,
-    data: order.data,
-    hora: order.hora,
-    itens: JSON.stringify(order.itens),
-    total: order.total,
-    status: order.status,
-    endereco: order.endereco ? JSON.stringify(order.endereco) : null,
-    payment_method: order.payment_method || null,
-    mp_preference_id: order.mp_preference_id || null,
-    mp_payment_id: order.mp_payment_id || null,
-    admin_order: order.admin_order || null,
-    pronta_entrega: order.pronta_entrega || null,
-    reposicao: order.reposicao || null,
-    cupom_codigo: order.cupom_codigo ?? null,
-    cupom_desconto: order.cupom_desconto ?? null,
-    telefone_normalizado: order.telefone_normalizado ?? null,
-    cupom_id: order.cupom_id ?? null,
-    influenciador_handle: order.influenciador_handle ?? null,
-    rev_share_percentual: order.rev_share_percentual ?? null,
-    valor_base_comissao: order.valor_base_comissao ?? null,
-    comissao_calculada: order.comissao_calculada ?? null,
-  };
-
-  const { data, error } = await supabase
-    .from("pedidos")
-    .insert(row)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return dbPedidoToOrder(data as DbPedido);
-}
-
 export async function getPedidos(): Promise<import("../types").Order[]> {
   const CACHE_KEY = "pedidos";
   const CACHE_TTL = 30 * 1000;
@@ -442,10 +389,12 @@ export async function getPedidoById(id: string, phone?: string): Promise<import(
 }
 
 export async function updatePedidoStatus(id: string, status: string): Promise<void> {
-  const { error } = await supabase
-    .from("pedidos")
-    .update({ status })
-    .eq("id", id);
+  const { error } = ["cancelado", "reembolsado"].includes(status)
+    ? await supabase.rpc("finalize_order_admin", { p_order_id: id, p_status: status })
+    : await supabase
+      .from("pedidos")
+      .update({ status })
+      .eq("id", id);
 
   if (error) {
     // Provide user-friendly message for status transition violations
@@ -486,68 +435,6 @@ export async function deletePedido(id: string): Promise<void> {
     }
     throw error;
   }
-}
-
-/** Auto-cancel pending orders older than `hours` (default 24h).
- *  Returns the number of orders cancelled. */
-export async function autoCancelExpiredOrders(hours = 24): Promise<number> {
-  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-
-  const { data: expired, error: fetchError } = await supabase
-    .from("pedidos")
-    .select("id, itens, pronta_entrega")
-    .eq("status", "pendente")
-    .lt("created_at", cutoff);
-
-  if (fetchError) {
-    console.error("Erro ao buscar pedidos expirados:", fetchError);
-    return 0;
-  }
-  if (!expired || expired.length === 0) return 0;
-
-  // Batch fetch product IDs
-  const nomes = [...new Set(expired.flatMap((o: any) => {
-    if (!o.pronta_entrega || !o.itens) return [];
-    const itens = typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens;
-    return itens.map((i: any) => i.nome);
-  }))];
-  const { data: produtosBatch } = await supabase.from("produtos").select("id, nome").in("nome", nomes);
-  const produtoMap = new Map((produtosBatch || []).map((p: any) => [p.nome, p.id]));
-
-  for (const order of expired) {
-    if (order.pronta_entrega && order.itens) {
-      const itens = typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens;
-      for (const item of itens) {
-        const produtoId = produtoMap.get(item.nome);
-        if (!produtoId) continue;
-        const isPersonalizado = item.personalizado ?? false;
-        const nomePessoal = isPersonalizado ? (item.nomePersonalizado ?? null) : null;
-        const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
-        const isFeminino = item.feminino ?? false;
-        let query = supabase.from("estoque_pronta_entrega").select("id, quantidade").eq("produto_id", produtoId).eq("tamanho", item.tamanho).eq("personalizado", isPersonalizado).eq("feminino", isFeminino);
-        if (nomePessoal) query = query.eq("nome_personalizado", nomePessoal); else query = query.is("nome_personalizado", null);
-        if (numeroPessoal) query = query.eq("numero_personalizado", numeroPessoal); else query = query.is("numero_personalizado", null);
-        const { data: existing } = await query.maybeSingle();
-        if (existing) {
-          await supabase.from("estoque_pronta_entrega").update({ quantidade: existing.quantidade + 1 }).eq("id", existing.id);
-        } else {
-          await supabase.from("estoque_pronta_entrega").insert({ produto_id: produtoId, tamanho: item.tamanho, quantidade: 1, personalizado: isPersonalizado, nome_personalizado: nomePessoal, numero_personalizado: numeroPessoal, feminino: isFeminino });
-        }
-      }
-    }
-  }
-
-  const { error } = await supabase
-    .from("pedidos")
-    .update({ status: "cancelado" })
-    .eq("status", "pendente")
-    .lt("created_at", cutoff);
-
-  if (error) {
-    console.error("Erro ao auto-cancelar pedidos expirados:", error);
-    return 0;
-  }
-  return expired.length;
 }
 
 // ── Pacotes ──
@@ -705,15 +592,14 @@ export interface DbEstoqueItem {
   numero_personalizado: string | null;
   feminino: boolean;
   custo: number | null;
-  pedido_reposicao_id: string | null;
   created_at: string;
 }
 
-function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; imagem_urls: string[] | string; imagem_urls_feminina?: string[] | string | null; cached_image_urls?: any; tipo: string; time: string; liga: string; temporada: string } | null; custo?: number | null }): EstoqueItem {
+function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; imagem_urls: string[] | string; imagem_urls_feminina?: string[] | string | null; cached_image_urls?: CachedImageMap | null; tipo: string; time: string; liga: string; temporada: string } | null; custo?: number | null }): EstoqueItem {
   const produto = db.produtos;
   const feminineImages = produto?.imagem_urls_feminina ? parseImageUrls(produto.imagem_urls_feminina) : [];
   const masculineImages = produto ? parseImageUrls(produto.imagem_urls as string[] | string) : [];
-  const cachedUrls = produto?.cached_image_urls as import("../types").CachedImageMap | null | undefined;
+  const cachedUrls = produto?.cached_image_urls;
   return {
     id: db.id,
     produto_id: db.produto_id,
@@ -725,7 +611,6 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
     feminino: db.feminino,
     custo: db.custo ?? undefined,
     created_at: db.created_at,
-    pedido_reposicao_id: db.pedido_reposicao_id ?? undefined,
     produto_nome: produto?.nome ?? undefined,
     produto_imagem: db.feminino && feminineImages.length > 0 ? feminineImages[0] : (masculineImages[0] ?? undefined),
     produto_imagens_femininas: feminineImages.length > 0 ? feminineImages : undefined,
@@ -737,7 +622,7 @@ function dbEstoqueToEstoque(db: DbEstoqueItem & { produtos?: { nome: string; ima
   };
 }
 
-const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, custo, pedido_reposicao_id, created_at, produtos(nome, imagem_urls, imagem_urls_feminina, cached_image_urls, tipo, time, liga, temporada)";
+const ESTOQUE_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, custo, created_at, produtos(nome, imagem_urls, imagem_urls_feminina, cached_image_urls, tipo, time, liga, temporada)";
 const ESTOQUE_PUBLICO_SELECT = "id, produto_id, tamanho, quantidade, personalizado, nome_personalizado, numero_personalizado, feminino, created_at, produtos";
 
 export async function getEstoque(): Promise<EstoqueItem[]> {
@@ -874,190 +759,32 @@ export async function deleteEstoqueItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function addOrderItemsToEstoque(order: import("../types").Order, pedidoReposicaoId?: string): Promise<void> {
-  const nomes = [...new Set(order.itens.map((i) => i.nome))];
-  const { data: batch } = await supabase.from("produtos").select("id, nome").in("nome", nomes);
-  const produtoMap = new Map((batch || []).map((p: any) => [p.nome, p.id]));
-
-  for (const item of order.itens) {
-    const produtoId = produtoMap.get(item.nome);
-    if (!produtoId) continue;
-    const isPersonalizado = item.personalizado ?? false;
-    const nomePessoal = isPersonalizado ? (item.nomePersonalizado ?? null) : null;
-    const numeroPessoal = isPersonalizado ? (item.numeroPersonalizado ?? null) : null;
-    const isFeminino = item.feminino ?? false;
-
-    if (pedidoReposicaoId) {
-      await supabase.from("estoque_pronta_entrega").insert({
-        produto_id: produtoId, tamanho: item.tamanho, quantidade: 1,
-        personalizado: isPersonalizado, nome_personalizado: nomePessoal,
-        numero_personalizado: numeroPessoal, feminino: isFeminino,
-        custo: null, pedido_reposicao_id: pedidoReposicaoId,
-      });
-    } else {
-      let query = supabase.from("estoque_pronta_entrega").select("id, quantidade").eq("produto_id", produtoId).eq("tamanho", item.tamanho).eq("personalizado", isPersonalizado).eq("feminino", isFeminino);
-      if (nomePessoal) query = query.eq("nome_personalizado", nomePessoal); else query = query.is("nome_personalizado", null);
-      if (numeroPessoal) query = query.eq("numero_personalizado", numeroPessoal); else query = query.is("numero_personalizado", null);
-
-      const { data: existing } = await query.maybeSingle();
-      if (existing) {
-        await supabase.from("estoque_pronta_entrega").update({ quantidade: existing.quantidade + 1 }).eq("id", existing.id);
-      } else {
-        await supabase.from("estoque_pronta_entrega").insert({ produto_id: produtoId, tamanho: item.tamanho, quantidade: 1, personalizado: isPersonalizado, nome_personalizado: nomePessoal, numero_personalizado: numeroPessoal, feminino: isFeminino });
-      }
-    }
-  }
+export async function addOrderItemsToEstoque(orderId: string): Promise<void> {
+  const { error } = await supabase.rpc("receive_replenishment_order", {
+    p_order_id: orderId,
+  });
+  if (error) throw error;
 }
 
-/** Remove items from estoque when a pronta_entrega order is paid.
- *  Looks up each product by name, then decrements stock by 1 per item. */
-export async function removeOrderItemsFromEstoque(order: import("../types").Order): Promise<void> {
-  const nomes = [...new Set(order.itens.map((i) => i.nome))];
-  const { data: batch } = await supabase.from("produtos").select("id, nome").in("nome", nomes);
-  const produtoMap = new Map((batch || []).map((p: any) => [p.nome, p.id]));
-
-  for (const item of order.itens) {
-    const produtoId = produtoMap.get(item.nome);
-    if (!produtoId) continue;
-    await decrementEstoqueItem(produtoId, item.tamanho, item.personalizado ?? false, item.nomePersonalizado, item.numeroPersonalizado, item.feminino ?? false);
-  }
-}
-
-/** Decrement stock quantity for a pronta entrega item.
- *  Called when a customer buys from pronta entrega.
- *  Returns true if the stock was successfully decremented. */
-export async function decrementEstoqueItem(
-  produtoId: string,
-  tamanho: string,
-  personalizado: boolean = false,
-  nomePersonalizado?: string,
-  numeroPersonalizado?: string,
-  feminino?: boolean,
-): Promise<boolean> {
-  const nomePessoal = personalizado ? (nomePersonalizado ?? null) : null;
-  const numeroPessoal = personalizado ? (numeroPersonalizado ?? null) : null;
-
-  let query = supabase
-    .from("estoque_pronta_entrega")
-    .select("id, quantidade")
-    .eq("produto_id", produtoId)
-    .eq("tamanho", tamanho)
-    .eq("personalizado", personalizado);
-
-  if (feminino !== undefined) {
-    query = query.eq("feminino", feminino);
-  }
-
-  if (nomePessoal) {
-    query = query.eq("nome_personalizado", nomePessoal);
-  } else {
-    query = query.is("nome_personalizado", null);
-  }
-  if (numeroPessoal) {
-    query = query.eq("numero_personalizado", numeroPessoal);
-  } else {
-    query = query.is("numero_personalizado", null);
-  }
-
-  const { data: existing } = await query.maybeSingle();
-  if (!existing || existing.quantidade <= 0) return false;
-
-  const newQty = existing.quantidade - 1;
-  const { error } = await supabase
-    .from("estoque_pronta_entrega")
-    .update({ quantidade: newQty })
-    .eq("id", existing.id);
-
-  return !error;
-}
-
-/** Register a direct sale (venda direta/boca a boca) from admin.
- *  Decrements stock and creates a completed order automatically.
- *  The order goes through: pago → entregue (via DB RPC to bypass trigger). */
+/** Register a direct sale (venda direta/boca a boca) from admin. */
 export async function criarVendaDireta(
   items: { produtoId: string; nome: string; tipo: string; temporada: string; tamanho: string; preco: number; personalizado: boolean; nomePersonalizado?: string; numeroPersonalizado?: string; feminino?: boolean }[],
   nomeCliente: string,
   paymentMethod?: string,
 ): Promise<import("../types").Order> {
-  const now = new Date();
-  const data = now.toLocaleDateString("pt-BR");
-  const hora = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-
-  const total = items.reduce((sum, i) => sum + i.preco, 0);
-
   const { gerarId } = await import("../types");
   const orderId = gerarId();
 
-  const orderItens: OrderItem[] = items.map((item) => ({
-    nome: item.nome,
-    tipo: item.tipo,
-    temporada: item.temporada,
-    tamanho: item.tamanho,
-    genero: item.feminino ? "Feminino" : "Masculino",
-    personalizado: item.personalizado,
-    nomePersonalizado: item.nomePersonalizado,
-    numeroPersonalizado: item.numeroPersonalizado,
-    preco: item.preco,
-    yupooUrl: "",
-    feminino: item.feminino ?? false,
-  }));
+  const { data, error } = await supabase.rpc("create_direct_sale", {
+    p_order_id: orderId,
+    p_items: items,
+    p_customer_name: nomeCliente,
+    p_payment_method: paymentMethod ?? "pix",
+  });
 
-  // Create order as "pago" (DB trigger only accepts "pendente" or "pago" on INSERT)
-  const order: import("../types").Order = {
-    id: orderId,
-    data,
-    hora,
-    itens: orderItens,
-    total,
-    status: "pago",
-    endereco: {
-      nome: nomeCliente,
-      rua: "",
-      numero: "",
-      complemento: "",
-      bairro: "",
-      cidade: "",
-      estado: "",
-      cep: "",
-      telefone: "",
-      deliveryMethod: "venda_direta",
-    },
-    pronta_entrega: true,
-    payment_method: paymentMethod as any,
-  };
-
-  // Create the order (status = "pago")
-  const saved = await createPedido(order);
-
-  // Step through status transitions to "entregue" via RPC (bypasses trigger)
-  // If RPC doesn't exist, we use the direct_sale_entregue RPC, otherwise step manually
-  const { error: rpcError } = await supabase.rpc("venda_direta_entregue", { pedido_id: orderId });
-
-  if (rpcError) {
-    // RPC doesn't exist yet — try stepping through transitions manually
-    // pago → enviado_fornecedor → em_producao → a_caminho → em_estoque → em_entrega → entregue
-    const steps = ["enviado_fornecedor", "em_producao", "a_caminho", "em_estoque", "em_entrega", "entregue"];
-    for (const step of steps) {
-      const { error } = await supabase.from("pedidos").update({ status: step }).eq("id", orderId);
-      if (error) {
-        console.error(`Erro ao avançar status para ${step}:`, error.message);
-        break;
-      }
-    }
-  }
-
-  for (const item of items) {
-    await decrementEstoqueItem(
-      item.produtoId,
-      item.tamanho,
-      item.personalizado,
-      item.nomePersonalizado,
-      item.numeroPersonalizado,
-      item.feminino,
-    );
-  }
-
-  return { ...saved, status: "entregue", pronta_entrega: true };
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("Venda direta não retornou um pedido.");
+  return dbPedidoToOrder(data[0] as DbPedido);
 }
 
 // ── Cupons ──
@@ -1129,7 +856,12 @@ export async function getCupomRevenue(codigo: string): Promise<{
     .eq("cupom_codigo", codigo.toUpperCase().trim())
     .not("status", "in", `("cancelado","reembolsado","pendente")`);
   if (error) return { descontos: 0, pedidos: 0, faturamento: 0, comissao: 0 };
-  const pedidos = (data as any[]) ?? [];
+  type CupomRevenueRow = {
+    total: number | null;
+    cupom_desconto: number | null;
+    comissao_calculada: number | null;
+  };
+  const pedidos = (data as CupomRevenueRow[] | null) ?? [];
   return {
     descontos: pedidos.reduce((s, p) => s + Number(p.cupom_desconto ?? 0), 0),
     pedidos: pedidos.length,

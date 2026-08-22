@@ -26,6 +26,15 @@ function saveExtras(extras: ExtraCusto[]) {
   localStorage.setItem(EXTRA_KEY, JSON.stringify(extras));
 }
 
+async function loadExtrasFromSupabase(): Promise<ExtraCusto[]> {
+  try {
+    const { data } = await supabase.from("custos_extras").select("*");
+    if (data) return data as ExtraCusto[];
+  } catch (err) {
+    console.warn("[Financeiro] Erro ao carregar custos extras do Supabase:", err);
+  }
+  return [];
+}
 
 
 function filtrarPorData(o: Order, ano: number, mes: number | null): boolean {
@@ -98,14 +107,6 @@ export default function AdminFinanceiro() {
     } catch (err) {
       console.warn("[Financeiro] Erro ao deletar custo extra do Supabase:", err);
     }
-  }
-
-  async function loadExtrasFromSupabase(): Promise<ExtraCusto[]> {
-    try {
-      const { data } = await supabase.from("custos_extras").select("*");
-      if (data) return data as ExtraCusto[];
-    } catch {}
-    return [];
   }
 
   function addExtra() {

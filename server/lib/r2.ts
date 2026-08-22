@@ -72,21 +72,3 @@ export async function uploadToR2(
 
   return getR2PublicUrl(key);
 }
-
-/** Check if an object exists in R2. Returns the public URL or null. */
-export async function checkR2Exists(key: string): Promise<string | null> {
-  const { HeadObjectCommand } = await import("@aws-sdk/client-s3");
-  const client = await getS3Client();
-
-  try {
-    await client.send(
-      new HeadObjectCommand({
-        Bucket: R2_BUCKET_NAME,
-        Key: key,
-      }),
-    );
-    return getR2PublicUrl(key);
-  } catch {
-    return null;
-  }
-}

@@ -191,7 +191,7 @@ describe("Order filtering logic", () => {
   ];
 
   it("filtra apenas pedidos ativos (não admin, não PE, não cancelado, não pendente)", () => {
-    const ativos = orders.filter((o: any) =>
+    const ativos = orders.filter((o) =>
       o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && o.status !== "pendente"
     );
     expect(ativos).toHaveLength(1);
@@ -199,10 +199,10 @@ describe("Order filtering logic", () => {
   });
 
   it("receita considera apenas ativos", () => {
-    const ativos = orders.filter((o: any) =>
+    const ativos = orders.filter((o) =>
       o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && o.status !== "pendente"
     );
-    const receita = ativos.reduce((s: number, o: any) => s + o.total, 0);
+    const receita = ativos.reduce((s, o) => s + o.total, 0);
     expect(receita).toBe(100);
   });
 });

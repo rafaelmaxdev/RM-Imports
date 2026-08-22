@@ -169,7 +169,6 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
     return () => window.clearTimeout(timer);
   }, [feedback]);
 
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setGenero("Masculino");
     setTamanho("");
@@ -178,7 +177,6 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
     setNumeroPersonalizado("");
     setFeedback("");
   }, [produto?.id]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!produto) {
     return (

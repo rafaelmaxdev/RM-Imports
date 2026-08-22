@@ -3,6 +3,12 @@ import { defineConfig, type Plugin, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+type DevOrderAddress = { telefone?: string | null };
+type DevOrder = Record<string, unknown> & {
+  endereco: DevOrderAddress | string | null;
+  itens: unknown[] | string;
+};
+
 function ignoreApiDir(): Plugin {
   return {
     name: "ignore-api-dir",
@@ -59,7 +65,9 @@ function devApiPlugin(): Plugin {
           try {
             const { data } = await supabase.rpc("get_user_role", { uid: user.id });
             meta = data as { role?: string } | null;
-          } catch {}
+          } catch {
+            // A failed role lookup keeps the default non-admin fallback.
+          }
           const isAdmin = meta?.role === "admin";
 
           res.statusCode = 200;
@@ -130,15 +138,16 @@ function orderApiPlugin(): Plugin {
               .from("pedidos")
               .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco")
               .order("created_at", { ascending: false });
-            const filtered = (orders || []).filter((o: any) => {
+            const typedOrders = (orders as DevOrder[] | null) ?? [];
+            const filtered = typedOrders.filter((o) => {
               if (!o.endereco) return false;
-              const addr = typeof o.endereco === "string" ? JSON.parse(o.endereco) : o.endereco;
+              const addr = typeof o.endereco === "string" ? JSON.parse(o.endereco) as DevOrderAddress : o.endereco;
               const raw = addr.telefone || "";
               const clean = raw.replace(/\D/g, "");
               if (!clean) return false;
               return clean.includes(digits) || digits.includes(clean) || clean.endsWith(last8) || last8.endsWith(clean);
             });
-            const parsed = filtered.map((o: any) => ({ ...o, itens: typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens }));
+            const parsed = filtered.map((o) => ({ ...o, itens: typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens }));
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify(parsed));

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
 import { isR2Configured, uploadToR2 } from '../server/lib/r2.js';
 import { bearerToken, clientIp, consumeRateLimit, isAdminToken } from '../server/lib/security.js';
+import { fetchImage } from '../server/lib/image-fetch.js';
 
 const ALLOWED_DOMAINS = [
   "photo.yupoo.com",
@@ -13,14 +14,8 @@ const ALLOWED_DOMAINS = [
 const BUCKET = 'images';
 
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!serviceRoleKey) {
-  console.error("[api/precache] SUPABASE_SERVICE_ROLE_KEY not configured");
-}
-
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  serviceRoleKey!
-);
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabase = supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null;
 
 function urlToKey(url: string): string {
   const hash = createHash('sha256').update(url).digest('hex').slice(0, 24);
@@ -34,12 +29,12 @@ function toSizeVariant(url: string, size: 'small' | 'medium' | 'large'): string 
 }
 
 /** Cache a single image URL and return the best available URL */
-async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl: string } | null> {
+async function cacheImage(url: string, db: NonNullable<typeof supabase>): Promise<{ storageKey: string; publicUrl: string } | null> {
   const storageKey = urlToKey(url);
 
   // Check if already cached in image_cache table
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('image_cache')
       .select('storage_key, r2_url')
       .eq('url_hash', storageKey)
@@ -51,7 +46,7 @@ async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl:
         return { storageKey: data.storage_key, publicUrl: data.r2_url };
       }
       // Fall back to Supabase Storage URL
-      const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(data.storage_key);
+      const { data: publicUrlData } = db.storage.from(BUCKET).getPublicUrl(data.storage_key);
       return { storageKey: data.storage_key, publicUrl: publicUrlData.publicUrl };
     }
   } catch {
@@ -60,18 +55,10 @@ async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl:
 
   // Fetch from Yupoo and cache
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://minkang.x.yupoo.com/',
-      },
+    const { buffer: bufferData, contentType } = await fetchImage(url, ALLOWED_DOMAINS, {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Referer': 'https://minkang.x.yupoo.com/',
     });
-
-    if (!response.ok) return null;
-
-    const buffer = await response.arrayBuffer();
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-    const bufferData = Buffer.from(buffer);
 
     let r2Url: string | null = null;
 
@@ -85,7 +72,7 @@ async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl:
     }
 
     if (!r2Url) {
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await db.storage
         .from(BUCKET)
         .upload(storageKey, bufferData, {
           contentType,
@@ -100,14 +87,14 @@ async function cacheImage(url: string): Promise<{ storageKey: string; publicUrl:
     }
 
     // Record in image_cache table
-    await supabase
+    await db
       .from('image_cache')
       .upsert(
         { url_hash: storageKey, storage_key: storageKey, content_type: contentType, r2_url: r2Url },
         { onConflict: 'url_hash' }
       );
 
-    const publicUrl = r2Url || supabase.storage.from(BUCKET).getPublicUrl(storageKey).data.publicUrl;
+    const publicUrl = r2Url || db.storage.from(BUCKET).getPublicUrl(storageKey).data.publicUrl;
     return { storageKey, publicUrl };
   } catch (err) {
     console.error('[api/precache] Fetch error:', err);
@@ -126,10 +113,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  if (!await isAdminToken(supabase, bearerToken(req.headers.authorization))) {
+  if (!supabase) {
+    res.status(500).json({ error: "Serviço indisponível." });
+    return;
+  }
+
+  const db = supabase;
+
+  if (!await isAdminToken(db, bearerToken(req.headers.authorization))) {
     res.status(403).json({ error: "Forbidden" }); return;
   }
-  if (!await consumeRateLimit(supabase, "precache", clientIp(req.headers, req.socket.remoteAddress), 10, 60)) {
+  if (!await consumeRateLimit(db, "precache", clientIp(req.headers, req.socket.remoteAddress), 10, 60)) {
     res.status(429).json({ error: "Muitas requisições. Aguarde um momento." }); return;
   }
 
@@ -143,7 +137,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const BATCH_SIZE = 50;
 
     while (true) {
-      let query = supabase.from('produtos').select('id, imagem_urls, imagem_urls_feminina, cached_image_urls').order('id').limit(BATCH_SIZE);
+      let query = db.from('produtos').select('id, imagem_urls, imagem_urls_feminina, cached_image_urls').order('id').limit(BATCH_SIZE);
       if (cursor) query = query.gt('id', cursor);
       const { data: produtos } = await query;
       if (!produtos || produtos.length === 0) break;
@@ -167,13 +161,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               const urlObj = new URL(variantUrl);
               if (!ALLOWED_DOMAINS.some(d => urlObj.hostname === d || urlObj.hostname.endsWith('.' + d))) continue;
             } catch { continue; }
-            const result = await cacheImage(variantUrl);
+            const result = await cacheImage(variantUrl, db);
             if (result) entry[size] = result.publicUrl;
           }
           cachedImageUrls.push(entry);
         }
 
-        await supabase.from('produtos').update({ cached_image_urls: cachedImageUrls }).eq('id', produto.id);
+        await db.from('produtos').update({ cached_image_urls: cachedImageUrls }).eq('id', produto.id);
         totalCached++;
       }
     }
@@ -188,7 +182,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const { data: produto, error: fetchError } = await supabase
+  const { data: produto, error: fetchError } = await db
     .from('produtos')
     .select('id, imagem_urls, imagem_urls_feminina, cached_image_urls')
     .eq('id', produtoId)
@@ -220,12 +214,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const urlObj = new URL(variantUrl);
         if (!ALLOWED_DOMAINS.some(d => urlObj.hostname === d || urlObj.hostname.endsWith('.' + d))) continue;
       } catch { continue; }
-      const result = await cacheImage(variantUrl);
+      const result = await cacheImage(variantUrl, db);
       if (result) entry[size] = result.publicUrl;
     }
     cachedImageUrls.push(entry);
   }
 
-  await supabase.from('produtos').update({ cached_image_urls: cachedImageUrls }).eq('id', produtoId);
+  await db.from('produtos').update({ cached_image_urls: cachedImageUrls }).eq('id', produtoId);
   res.json({ cached_image_urls: cachedImageUrls });
 }

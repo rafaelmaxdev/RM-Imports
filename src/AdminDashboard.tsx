@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { getPedidos } from "./lib/db";
 import { clearCache } from "./lib/cache";
 import type { Order, PaymentMethod } from "./types";
@@ -28,10 +28,11 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     load();
   }, []);
 
-  const now = new Date();
+  const anoAtual = new Date().getFullYear();
+  const mesAtual = new Date().getMonth() + 1;
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<number>();
-    anos.add(now.getFullYear());
+    anos.add(anoAtual);
     for (const o of orders) {
       if (o.created_at) anos.add(new Date(o.created_at).getFullYear());
       if (o.data) {
@@ -40,12 +41,12 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
       }
     }
     return [...anos].filter((a) => !isNaN(a)).sort((a, b) => b - a);
-  }, [orders]);
-  const [anoFiltro, setAnoFiltro] = useState(now.getFullYear());
+  }, [orders, anoAtual]);
+  const [anoFiltro, setAnoFiltro] = useState(anoAtual);
   const [mesFiltro, setMesFiltro] = useState<number | null>(null);
   const MESES = ["Todos", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-  function filtrarPorData(o: Order): boolean {
+  const filtrarPorData = useCallback((o: Order): boolean => {
     let data: Date | null = null;
     if (o.created_at) data = new Date(o.created_at);
     else if (o.data) {
@@ -56,7 +57,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     if (data.getFullYear() !== anoFiltro) return false;
     if (mesFiltro !== null && data.getMonth() + 1 !== mesFiltro) return false;
     return true;
-  }
+  }, [anoFiltro, mesFiltro]);
 
   const {
     totalOrders,
@@ -77,7 +78,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
     // Monthly revenue for filtered year
     const monthMap: Record<string, { revenue: number; count: number; itens: number }> = {};
-    const ateMes = anoFiltro === now.getFullYear() ? now.getMonth() + 1 : 12;
+     const ateMes = anoFiltro === anoAtual ? mesAtual : 12;
     for (let m = 1; m <= ateMes; m++) {
       const key = `${anoFiltro}-${String(m).padStart(2, "0")}`;
       monthMap[key] = { revenue: 0, count: 0, itens: 0 };
@@ -158,7 +159,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
       paymentCount: payCount,
       statusCount: statCount,
     };
-  }, [orders]);
+  }, [orders, anoFiltro, anoAtual, mesAtual, filtrarPorData]);
 
   const chartData = mesFiltro ? monthlyData.filter((m) => parseInt(m.mes.split("-")[1]) === mesFiltro) : monthlyData;
   const maxRevenue = Math.max(...chartData.map((m) => m.revenue), 1);

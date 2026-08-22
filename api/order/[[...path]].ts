@@ -11,15 +11,12 @@ import {
   verifyOrderAccessToken,
 } from "../../server/lib/security.js";
 
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!serviceRoleKey) {
-  console.error("[api/order] SUPABASE_SERVICE_ROLE_KEY not configured");
-}
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  serviceRoleKey!
-);
+const supabase = supabaseUrl && serviceRoleKey
+  ? createClient(supabaseUrl, serviceRoleKey)
+  : null;
 
 const PUBLIC_ORDER_FIELDS = "id,data,hora,itens,total,status,endereco,payment_method,mp_preference_id,pronta_entrega,created_at,telefone_normalizado";
 
@@ -49,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
-  if (!serviceRoleKey) return res.status(500).json({ error: "Serviço indisponível." });
+  if (!supabase || !serviceRoleKey) return res.status(500).json({ error: "Serviço indisponível." });
   const ip = clientIp(req.headers, req.socket.remoteAddress);
   if (!await consumeRateLimit(supabase, "order", ip, 30, 60)) {
     return res.status(429).json({ error: "Muitas requisições. Aguarde um momento." });

@@ -117,8 +117,16 @@ function roundCents(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function configuredNumber(value: number | null | undefined): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+function configuredPositiveNumber(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function configuredMarkup(value: number | null | undefined): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+function isValidDiscountPercentage(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 100;
 }
 
 export function calculateServerItemPrice(
@@ -126,15 +134,15 @@ export function calculateServerItemPrice(
   options: ServerItemPricingOptions,
   config: ServerCheckoutConfig,
 ): { preco: number; precoBase: number } {
-  const basePrice = configuredNumber(config.precos_base?.[product.tipo]) ?? 89.90;
-  const customPrice = configuredNumber(product.preco_customizado);
+  const basePrice = configuredPositiveNumber(config.precos_base?.[product.tipo]) ?? 89.90;
+  const customPrice = configuredPositiveNumber(product.preco_customizado);
   let unitPrice = basePrice;
   let priceBase = basePrice;
   let resolved = false;
 
   // Keep the same priority as getPrecoProduto: individual, custom, team,
   // category, then global promotion.
-  if (product.promocao_tipo === "porcentagem" && product.promocao_valor) {
+  if (product.promocao_tipo === "porcentagem" && isValidDiscountPercentage(product.promocao_valor)) {
     unitPrice = roundCents(basePrice - basePrice * (product.promocao_valor / 100));
     resolved = true;
   } else if (product.promocao_tipo === "novo_preco" && customPrice !== null) {
@@ -156,32 +164,42 @@ export function calculateServerItemPrice(
   }
 
   const teamPromotion = product.time ? config.promocoes_time?.[product.time] : undefined;
-  if (!resolved && teamPromotion?.tipo === "porcentagem" && teamPromotion.valor) {
+  if (!resolved && teamPromotion?.tipo === "porcentagem" && isValidDiscountPercentage(teamPromotion.valor)) {
     unitPrice = roundCents(basePrice - basePrice * (teamPromotion.valor / 100));
     resolved = true;
-  } else if (!resolved && teamPromotion?.tipo === "novo_preco" && teamPromotion.preco != null) {
-    unitPrice = teamPromotion.preco;
-    resolved = true;
+  } else if (!resolved && teamPromotion?.tipo === "novo_preco") {
+    const teamPrice = configuredPositiveNumber(teamPromotion.preco);
+    if (teamPrice !== null) {
+      unitPrice = teamPrice;
+      resolved = true;
+    }
   }
 
   if (!resolved && config.promocao_ativa?.[product.tipo]) {
-    unitPrice = configuredNumber(config.precos_promocao?.[product.tipo]) ?? basePrice;
+    unitPrice = configuredPositiveNumber(config.precos_promocao?.[product.tipo]) ?? basePrice;
     resolved = true;
   }
 
-  if (!resolved && config.desconto_global && config.desconto_global > 0) {
+  if (!resolved && isValidDiscountPercentage(config.desconto_global)) {
     unitPrice = roundCents(basePrice - basePrice * (config.desconto_global / 100));
+  }
+
+  if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+    unitPrice = basePrice;
   }
 
   const sizeMarkup = options.tamanho === "G2" ? 10 : options.tamanho === "G3" ? 20 : 0;
   const personalizationMarkup = options.personalizado ? (product.tipo === "Torcedor" ? 20 : 25) : 0;
   const peMarkup = options.prontaEntrega
-    ? configuredNumber(config.pronta_entrega_markup) ?? 0
+    ? configuredMarkup(config.pronta_entrega_markup)
     : 0;
   const addOns = sizeMarkup + personalizationMarkup + peMarkup;
+  const fallbackPrice = roundCents(89.90 + addOns);
+  const price = roundCents(unitPrice + addOns);
+  const basePriceWithAddOns = roundCents(priceBase + addOns);
 
   return {
-    preco: roundCents(unitPrice + addOns),
-    precoBase: roundCents(priceBase + addOns),
+    preco: Number.isFinite(price) && price > 0 ? price : fallbackPrice,
+    precoBase: Number.isFinite(basePriceWithAddOns) && basePriceWithAddOns > 0 ? basePriceWithAddOns : fallbackPrice,
   };
 }

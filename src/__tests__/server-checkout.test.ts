@@ -46,12 +46,28 @@ describe("calculateServerItemPrice", () => {
     )).toEqual({ preco: 187.91, precoBase: 204.90 });
   });
 
+  it("ignores percentage promotions above 100", () => {
+    expect(calculateServerItemPrice(
+      { tipo: "Torcedor", promocao_tipo: "porcentagem", promocao_valor: 101 },
+      { tamanho: "M", personalizado: false },
+      config,
+    )).toEqual({ preco: 129.90, precoBase: 129.90 });
+  });
+
   it("uses a custom price before team, category and global promotions", () => {
     expect(calculateServerItemPrice(
       { tipo: "NBA", preco_customizado: 159.90 },
       { tamanho: "M", personalizado: false },
       { ...config, desconto_global: 20 },
     )).toEqual({ preco: 159.90, precoBase: 189.90 });
+  });
+
+  it("ignores a negative custom price", () => {
+    expect(calculateServerItemPrice(
+      { tipo: "NBA", preco_customizado: -10 },
+      { tamanho: "M", personalizado: false },
+      config,
+    )).toEqual({ preco: 189.90, precoBase: 189.90 });
   });
 
   it("applies a team promotion", () => {
@@ -68,6 +84,14 @@ describe("calculateServerItemPrice", () => {
       { tamanho: "G3", personalizado: false, prontaEntrega: true },
       config,
     )).toEqual({ preco: 169.90, precoBase: 169.90 });
+  });
+
+  it("ignores a negative pronta-entrega markup", () => {
+    expect(calculateServerItemPrice(
+      { tipo: "Torcedor" },
+      { tamanho: "M", personalizado: false, prontaEntrega: true },
+      { ...config, pronta_entrega_markup: -20 },
+    )).toEqual({ preco: 129.90, precoBase: 129.90 });
   });
 });
 

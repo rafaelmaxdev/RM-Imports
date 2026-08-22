@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder, updatePedidoProntaEntrega, addOrderItemsToEstoque, autoCancelExpiredOrders } from "./lib/db";
+import { getPedidos, updatePedidoStatus, deletePedido, updatePedidoAdminOrder, updatePedidoProntaEntrega, addOrderItemsToEstoque } from "./lib/db";
 import { clearCache } from "./lib/cache";
 import type { Order } from "./types";
 import { formatarMoeda } from "./types";
@@ -49,15 +49,10 @@ export default function AdminOrders() {
   const loadOrders = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      // Auto-cancel pending orders older than 24h (PIX expiration)
-      const cancelled = await autoCancelExpiredOrders(24);
-      if (cancelled > 0) {
-        console.log(`Auto-cancelados ${cancelled} pedido(s) expirado(s)`);
-      }
       const all = await getPedidos();
       setOrders(all.filter((o) => !["entregue", "cancelado", "reembolsado"].includes(o.status) && !(o.pronta_entrega && ["em_estoque", "em_entrega"].includes(o.status))));
-    } catch (err) {
-      console.error("Erro ao carregar pedidos:", err);
+    } catch (err: unknown) {
+      console.error("Erro ao carregar pedidos:", err instanceof Error ? err.message : err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -80,7 +75,9 @@ export default function AdminOrders() {
           setNovosPedidos((p) => p + (total - ultimoTotalRef.current));
         }
         ultimoTotalRef.current = total;
-      } catch {}
+      } catch {
+        // Polling errors are ignored; the next cycle retries without notifying the user.
+      }
     }, 30000);
     return () => clearInterval(interval);
   }, [loading]);
@@ -100,14 +97,14 @@ export default function AdminOrders() {
   }), [orders, statusFilter, peFilter, search]);
 
   async function handleStatusChange(id: string, newStatus: string) {
+    const currentOrder = orders.find((o) => o.id === id);
     const label = STATUS_CONFIG_ADMIN[newStatus]?.label || newStatus;
 
     // If refunding, call the refund API first
     if (newStatus === "reembolsado") {
-      const order = orders.find((o) => o.id === id);
-      if (!order) return;
+      if (!currentOrder) return;
 
-      if (order.mp_payment_id) {
+      if (currentOrder.mp_payment_id) {
         if (!confirm(`Reembolsar pedido ${id} no Mercado Pago e alterar status para "${label}"?`)) return;
 
         try {
@@ -130,9 +127,9 @@ export default function AdminOrders() {
           }
 
           alert(`Reembolso processado com sucesso!${data.refundId ? ` ID: ${data.refundId}` : ""}`);
-        } catch (err) {
+        } catch (err: unknown) {
           alert("Erro de conexão ao processar reembolso. Tente novamente.");
-          console.error("Refund error:", err);
+          console.error("Refund error:", err instanceof Error ? err.message : err);
           return;
         }
       } else {
@@ -140,39 +137,22 @@ export default function AdminOrders() {
         if (!confirm(`Alterar status para "${label}"? (Pedido sem pagamento no Mercado Pago)`)) return;
         try {
           await updatePedidoStatus(id, newStatus);
-        } catch (err: any) {
-          alert(err.message || "Erro ao atualizar status do pedido.");
+        } catch (err: unknown) {
+          alert(err instanceof Error && err.message ? err.message : "Erro ao atualizar status do pedido.");
           return;
         }
       }
     } else {
       if (!confirm(`Alterar status para "${label}"?`)) return;
       try {
-        await updatePedidoStatus(id, newStatus);
-      } catch (err: any) {
-        alert(err.message || "Erro ao atualizar status do pedido.");
+        if (newStatus === "em_estoque" && currentOrder?.pronta_entrega) {
+          await addOrderItemsToEstoque(id);
+        } else {
+          await updatePedidoStatus(id, newStatus);
+        }
+      } catch (err: unknown) {
+        alert(err instanceof Error && err.message ? err.message : "Erro ao atualizar status do pedido.");
         return;
-      }
-    }
-
-    const currentOrder = orders.find((o) => o.id === id);
-
-    if (["cancelado", "reembolsado"].includes(newStatus) && currentOrder?.pronta_entrega) {
-      // Restore stock on cancel/refund (stock was deducted at order creation)
-      try {
-        await addOrderItemsToEstoque(currentOrder);
-      } catch (err) {
-        console.error("Erro ao restaurar estoque:", err);
-      }
-    }
-
-    if (newStatus === "em_estoque" && currentOrder?.pronta_entrega) {
-      // Auto-add to PE stock when a replenishment order reaches em_estoque
-      try {
-        await addOrderItemsToEstoque(currentOrder, id);
-        await supabase.from("pedidos").update({ reposicao: true }).eq("id", id);
-      } catch (err) {
-        console.error("Erro ao adicionar ao estoque:", err);
       }
     }
 
@@ -199,8 +179,8 @@ export default function AdminOrders() {
     try {
       await deletePedido(id);
       setOrders((prev) => prev.filter((o) => o.id !== id));
-    } catch (err: any) {
-      alert(err.message || "Erro ao excluir pedido.");
+    } catch (err: unknown) {
+      alert(err instanceof Error && err.message ? err.message : "Erro ao excluir pedido.");
     }
   }
 
@@ -500,10 +480,10 @@ export default function AdminOrders() {
                           onClick={async () => {
                             if (!confirm(`Adicionar itens do pedido ${order.id} ao estoque de pronta entrega?`)) return;
                             try {
-                              await addOrderItemsToEstoque(order);
+                              await addOrderItemsToEstoque(order.id);
                               alert("Itens adicionados ao estoque!");
-                            } catch (err) {
-                              console.error("Erro ao adicionar ao estoque:", err);
+                            } catch (err: unknown) {
+                              console.error("Erro ao adicionar ao estoque:", err instanceof Error ? err.message : err);
                               alert("Erro ao adicionar ao estoque.");
                             }
                           }}

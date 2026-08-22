@@ -3,21 +3,21 @@ import { MercadoPagoConfig, Payment } from "mercadopago";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
 
-const mpClient = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN!,
-  options: { timeout: 5000 },
-});
-
-// Warn if service role key is missing
+const mpAccessToken = process.env.MP_ACCESS_TOKEN;
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!serviceRoleKey) {
-  console.error("[mp-webhook] SUPABASE_SERVICE_ROLE_KEY not configured");
-}
+const webhookSecret = process.env.MP_WEBHOOK_SECRET;
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  serviceRoleKey!
-);
+const mpClient = mpAccessToken
+  ? new MercadoPagoConfig({
+      accessToken: mpAccessToken,
+      options: { timeout: 5000 },
+    })
+  : null;
+
+const supabase = supabaseUrl && serviceRoleKey
+  ? createClient(supabaseUrl, serviceRoleKey)
+  : null;
 
 /** Map MP payment_type_id to our internal payment method values.
  *  MP sends specific method IDs like "visa", "master" in payment_method_id,
@@ -46,14 +46,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // ── Signature verification ──
-  const webhookSecret = process.env.MP_WEBHOOK_SECRET;
-  const xSignature = req.headers["x-signature"] as string | undefined;
-
-  if (!webhookSecret) {
-    console.error("MP_WEBHOOK_SECRET not configured — rejecting webhook");
-    return res.status(500).send("Webhook secret not configured");
+  if (!mpClient || !supabase || !webhookSecret) {
+    return res.status(500).json({ error: "Serviço indisponível." });
   }
+
+  // ── Signature verification ──
+  const xSignature = req.headers["x-signature"] as string | undefined;
 
   if (!xSignature) {
     console.error("Missing x-signature header");
@@ -237,10 +235,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const errorMessage = couponError?.message ?? "";
         const isMissingUsage = /(?:utiliza(?:ção|cao)|usage).*?(?:encontrad|not found)/i.test(errorMessage);
         if (couponError && !isMissingUsage) {
-          console.warn("[mp-webhook] failed to finalize coupon reservation");
+          console.error("[mp-webhook] failed to finalize coupon reservation");
+          return res.status(500).send("Internal server error");
         }
       } catch {
-        console.warn("[mp-webhook] failed to finalize coupon reservation");
+        console.error("[mp-webhook] failed to finalize coupon reservation");
+        return res.status(500).send("Internal server error");
       }
     }
   }
@@ -248,7 +248,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Restore pronta-entrega stock transactionally and only once.
   if (orderStatus === "cancelado" || orderStatus === "reembolsado") {
     const { error: stockError } = await supabase.rpc("restore_order_stock_once", { p_order_id: externalReference });
-    if (stockError) console.error(`Error restoring stock for order ${externalReference}`);
+    if (stockError) {
+      console.error("[mp-webhook] failed to restore order stock");
+      return res.status(500).send("Internal server error");
+    }
   }
 
   return res.status(200).send("OK");

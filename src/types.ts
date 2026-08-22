@@ -88,7 +88,6 @@ export interface EstoqueItem {
   feminino: boolean;
   custo?: number | null;
   created_at: string;
-  pedido_reposicao_id?: string;
   // Joined from produtos
   produto_nome?: string;
   produto_imagem?: string;

@@ -507,7 +507,7 @@ export default function ProdutoForm({
     if (!editandoId) {
       setPeriodo(getValorAtual(isAno));
     }
-  }, [isAno]);
+  }, [isAno, editandoId]);
 
   const timesDaLiga = useMemo(() => {
     if (liga === "Seleções") {
@@ -537,7 +537,7 @@ export default function ProdutoForm({
     } else if (!retro && !isNBA && tipo === "NBA") {
       setTipo("Torcedor");
     }
-  }, [retro, isNBA]);
+  }, [retro, isNBA, tipo]);
 
   useEffect(() => {
     if (!TIPOS_COM_FEMININO.includes(tipo)) setFeminino(false);

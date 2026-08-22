@@ -360,6 +360,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const total = Math.round((subtotal - (coupon?.desconto ?? 0)) * 100) / 100;
+    if (coupon && total < 1) {
+      await releaseCoupon();
+      return res.status(400).json({ error: COUPON_ERROR });
+    }
     const revShare = coupon?.rev_share_percentual ?? 0;
     const now = new Date();
     const row = {

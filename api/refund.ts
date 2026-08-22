@@ -3,24 +3,28 @@ import { MercadoPagoConfig, PaymentRefund } from "mercadopago";
 import { createClient } from "@supabase/supabase-js";
 import { bearerToken, isAdminToken } from "../server/lib/security.js";
 
-const mpClient = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN!,
-  options: { timeout: 5000 },
-});
-
+const mpAccessToken = process.env.MP_ACCESS_TOKEN;
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!serviceRoleKey) {
-  console.error("[refund] SUPABASE_SERVICE_ROLE_KEY not configured");
-}
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  serviceRoleKey!
-);
+const mpClient = mpAccessToken
+  ? new MercadoPagoConfig({
+      accessToken: mpAccessToken,
+      options: { timeout: 5000 },
+    })
+  : null;
+
+const supabase = supabaseUrl && serviceRoleKey
+  ? createClient(supabaseUrl, serviceRoleKey)
+  : null;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  if (!mpClient || !supabase) {
+    return res.status(500).json({ error: "Serviço indisponível." });
   }
 
   try {
@@ -61,19 +65,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`Refund issued for order ${orderId}, MP payment ${order.mp_payment_id}:`, refundResult.id);
 
-    // Update order status to reembolsado
-    const { error: updateError } = await supabase
-      .from("pedidos")
-      .update({ status: "reembolsado" })
-      .eq("id", orderId);
+    const { error: finalizeError } = await supabase.rpc("finalize_order_admin", {
+      p_order_id: orderId,
+      p_status: "reembolsado",
+    });
 
-    if (updateError) {
-      console.error("Error updating order status after refund:", updateError);
+    if (finalizeError) {
+      console.error("Error finalizing order after refund:", finalizeError);
       return res.status(500).json({ error: "Reembolso processado, mas erro ao atualizar status do pedido" });
     }
-
-    const { error: stockError } = await supabase.rpc("restore_order_stock_once", { p_order_id: orderId });
-    if (stockError) console.error(`Error restoring stock for order ${orderId}`);
 
     return res.status(200).json({
       success: true,

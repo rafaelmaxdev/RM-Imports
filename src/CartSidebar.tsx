@@ -246,6 +246,10 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
 
   function updateField(field: keyof OrderAddress, value: string) {
     setEndereco((prev) => ({ ...prev, [field]: value }));
+    if (field === "telefone" && cupomAplicado) {
+      setCupomAplicado(null);
+      setCupomErro("");
+    }
     setErro("");
   }
 
@@ -408,59 +412,6 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
             </div>
 
             <div className="px-6 py-4 border-t border-border">
-              {/* Coupon */}
-              <div className="mb-4">
-                {cupomAplicado ? (
-                  <div className="flex items-center justify-between p-2.5 bg-green-50 border border-green-200 rounded-md">
-                    <div>
-                      <span className="text-xs font-semibold text-green-700">Cupom aplicado: {cupomAplicado.codigo}</span>
-                      <span className="text-xs text-green-600 ml-2">
-                        ({cupomAplicado.tipo === "porcentagem" ? `${cupomAplicado.valor}% OFF` : `R$ ${cupomAplicado.valor.toFixed(2)} OFF`})
-                      </span>
-                    </div>
-                    <button
-                      className="text-xs font-semibold text-red-500 bg-transparent border-none cursor-pointer hover:text-red-700"
-                      onClick={() => { setCupomAplicado(null); setCupomCodigo(""); setCupomErro(""); }}
-                    >
-                      Remover
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={cupomCodigo}
-                      onChange={(e) => setCupomCodigo(e.target.value.toUpperCase())}
-                      placeholder="Cupom de desconto"
-                      className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
-                    />
-                    <button
-                      className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
-                      disabled={cupomLoading || !cupomCodigo.trim()}
-                      onClick={async () => {
-                        setCupomLoading(true);
-                        setCupomErro("");
-                        try {
-                          const cupom = await validarCupom(cupomCodigo, total);
-                          if (cupom) {
-                            setCupomAplicado(cupom);
-                          } else {
-                            setCupomErro("Cupom inválido ou expirado.");
-                          }
-                        } catch {
-                          setCupomErro("Erro ao validar cupom.");
-                        } finally {
-                          setCupomLoading(false);
-                        }
-                      }}
-                    >
-                      {cupomLoading ? "..." : "Aplicar"}
-                    </button>
-                  </div>
-                )}
-                {cupomErro && <p className="text-xs text-accent mt-1">{cupomErro}</p>}
-              </div>
-
               <div className="flex flex-col gap-0.5 mb-4">
                 {(() => {
                   const subTotalBase = cart.reduce((s, i) => s + (i.precoBase ?? i.preco), 0);
@@ -565,6 +516,62 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                   maxLength={15}
                   className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                 />
+              </div>
+
+              {/* Coupon */}
+              <div className="mb-4">
+                {cupomAplicado ? (
+                  <div className="flex items-center justify-between p-2.5 bg-green-50 border border-green-200 rounded-md">
+                    <div>
+                      <span className="text-xs font-semibold text-green-700">Cupom aplicado: {cupomAplicado.codigo}</span>
+                      <span className="text-xs text-green-600 ml-2">
+                        ({cupomAplicado.tipo === "porcentagem" ? `${cupomAplicado.valor}% OFF` : `R$ ${cupomAplicado.valor.toFixed(2)} OFF`})
+                      </span>
+                    </div>
+                    <button
+                      className="text-xs font-semibold text-red-500 bg-transparent border-none cursor-pointer hover:text-red-700"
+                      onClick={() => { setCupomAplicado(null); setCupomCodigo(""); setCupomErro(""); }}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={cupomCodigo}
+                      onChange={(e) => setCupomCodigo(e.target.value.toUpperCase())}
+                      placeholder="Cupom de desconto"
+                      className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                    />
+                    <button
+                      className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+                      disabled={cupomLoading || !cupomCodigo.trim() || endereco.telefone.replace(/\D/g, "").length < 10}
+                      onClick={async () => {
+                        setCupomLoading(true);
+                        setCupomErro("");
+                        try {
+                          const cupom = await validarCupom(cupomCodigo, total, endereco.telefone);
+                          if (cupom) {
+                            setCupomAplicado(cupom);
+                          } else {
+                            setCupomErro("Cupom inválido ou expirado.");
+                          }
+                        } catch (err) {
+                          setCupomErro(err instanceof Error ? err.message : "Erro ao validar cupom.");
+                        } finally {
+                          setCupomLoading(false);
+                        }
+                      }}
+                    >
+                      {cupomLoading ? "..." : "Aplicar"}
+                    </button>
+                  </div>
+                )}
+                {cupomErro && <p className="text-xs text-accent mt-1">{cupomErro}</p>}
+                {endereco.telefone.replace(/\D/g, "").length < 10 && (
+                  <p className="text-xs text-text-muted mt-1">Informe um telefone válido antes de aplicar o cupom.</p>
+                )}
               </div>
 
               {endereco.deliveryMethod === "entrega" ? (

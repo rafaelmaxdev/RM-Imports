@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
+import { normalizeBrazilPhone } from "../server/lib/checkout.js";
 import { clientIp, consumeRateLimit } from "../server/lib/security.js";
 
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -37,12 +38,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!isObject(req.body)) return res.status(400).json({ error: "Dados inválidos." });
 
-  const { code, total } = req.body;
+  const { code, total, phone: phoneRaw } = req.body;
   if (typeof code !== "string" || code.length > 50 || !code.trim()) {
     return res.status(400).json({ error: "Código do cupom inválido." });
   }
   if (typeof total !== "number" || !Number.isFinite(total) || total < 0) {
     return res.status(400).json({ error: "Total inválido." });
+  }
+
+  if (typeof phoneRaw !== "string") {
+    return res.status(400).json({ error: "Informe um telefone válido para verificar o cupom." });
+  }
+  let telefone: string;
+  try {
+    telefone = normalizeBrazilPhone(phoneRaw);
+  } catch {
+    return res.status(400).json({ error: "Informe um telefone válido para verificar o cupom." });
   }
 
   const codigo = code.trim().toUpperCase();
@@ -68,6 +79,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (coupon.data_expiracao && new Date(coupon.data_expiracao).getTime() <= Date.now()) {
     return res.status(404).json({ error: "Cupom inválido ou expirado." });
+  }
+
+  if (coupon.uso_unico_por_cliente) {
+    const { data: usage, error: usageError } = await supabase
+      .from("cupom_utilizacoes")
+      .select("id")
+      .eq("cupom_id", coupon.id)
+      .eq("telefone_normalizado", telefone)
+      .in("status", ["reservado", "confirmado"])
+      .limit(1);
+
+    if (usageError) {
+      console.error("[api/coupon] failed to load coupon usage");
+      return res.status(500).json({ error: "Não foi possível validar o cupom." });
+    }
+    if (usage?.length) {
+      return res.status(409).json({ error: "Este cupom já foi utilizado por este telefone." });
+    }
   }
 
   return res.status(200).json({

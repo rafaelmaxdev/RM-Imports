@@ -836,18 +836,17 @@ export async function deleteCupom(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function validarCupom(codigo: string, totalPedido: number): Promise<Cupom | null> {
-  try {
-    const res = await fetch("/api/coupon", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: codigo, total: totalPedido }),
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as Cupom;
-  } catch {
-    return null;
+export async function validarCupom(codigo: string, totalPedido: number, telefone: string): Promise<Cupom | null> {
+  const res = await fetch("/api/coupon", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: codigo, total: totalPedido, phone: telefone }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string } | null;
+    throw new Error(body?.error || "Cupom inválido ou expirado.");
   }
+  return (await res.json()) as Cupom;
 }
 
 export function aplicarCupom(total: number, cupom: Cupom): number {

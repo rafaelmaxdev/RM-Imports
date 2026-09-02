@@ -67,13 +67,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Status final inválido." });
     }
 
-    const { error } = await supabase.rpc("finalize_order_admin", {
+    let result = await supabase.rpc("finalize_order_admin", {
       p_order_id: path,
       p_status: status,
     });
-    if (error) {
-      console.error("[order] failed to finalize order", error.message);
-      return res.status(400).json({ error: "Não foi possível finalizar o pedido." });
+    if (result.error) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      result = await supabase.rpc("finalize_order_admin", {
+        p_order_id: path,
+        p_status: status,
+      });
+    }
+    if (result.error) {
+      console.error("[order] failed to finalize order", {
+        code: result.error.code,
+        message: result.error.message,
+      });
+      return res.status(500).json({ error: "Não foi possível finalizar o pedido." });
     }
     return res.status(200).json({ success: true });
   }

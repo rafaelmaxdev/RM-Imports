@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getCupons, createCupom, updateCupom, deleteCupom, getCupomRevenue } from "./lib/db";
 import { normalizarTelefonesWhitelist } from "./lib/utils";
+import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import type { Cupom } from "./types";
 import { formatarMoeda } from "./types";
 
@@ -73,6 +74,8 @@ export default function AdminCupons() {
   const [message, setMessage] = useState("");
   const [messageError, setMessageError] = useState(false);
 
+  useBodyScrollLock(Boolean(editingCupomId));
+
   function resetForm() {
     setEditingCupomId(null);
     setCodigo("");
@@ -107,12 +110,10 @@ export default function AdminCupons() {
     setTelefonesSemLimite((cupom.telefones_sem_limite ?? []).join("\n"));
     setMessage("");
     setMessageError(false);
-    requestAnimationFrame(() => {
-      document.getElementById("formulario-cupom")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
   }
 
   function handleCancelarEdicao() {
+    if (saving) return;
     resetForm();
     setMessage("");
     setMessageError(false);
@@ -253,199 +254,203 @@ export default function AdminCupons() {
     }
   }
 
+  const messageAlert = message && (
+    <div className={`mb-4 px-4 py-2 rounded-md text-sm font-medium ${
+      messageError ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
+    }`}>
+      {message}
+    </div>
+  );
+
+  const formFields = (idPrefix: string, isEditing: boolean) => (
+    <div className="flex flex-col gap-3">
+      <input
+        type="text"
+        value={codigo}
+        onChange={(e) => setCodigo(e.target.value.toUpperCase())}
+        placeholder="Código (ex: BEMVINDO10)"
+        className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
+      />
+      <label className="flex items-center gap-2 text-sm text-text-muted">
+        <input
+          type="checkbox"
+          checked={usoUnicoPorCliente}
+          onChange={(e) => setUsoUnicoPorCliente(e.target.checked)}
+          className="accent-accent"
+        />
+        <span>Um uso por cliente (telefone)</span>
+      </label>
+      {usoUnicoPorCliente && (
+        <div>
+          <label htmlFor={`${idPrefix}-telefones-sem-limite`} className="block text-xs font-semibold text-text-muted mb-1">
+            Telefones que podem reutilizar o cupom <span className="font-normal">(opcional)</span>
+          </label>
+          <textarea
+            id={`${idPrefix}-telefones-sem-limite`}
+            value={telefonesSemLimite}
+            onChange={(e) => setTelefonesSemLimite(e.target.value)}
+            rows={3}
+            placeholder="Um telefone por linha"
+            className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base resize-y"
+          />
+          <p className="text-xs text-text-muted mt-1">
+            Esses números podem reutilizar o cupom apesar do limite por telefone. Aceitamos linha, vírgula ou ponto e vírgula; o limite global de usos continua valendo.
+          </p>
+        </div>
+      )}
+      <label className="flex items-center gap-2 text-sm text-text-muted">
+        <input
+          type="checkbox"
+          checked={influenciador}
+          onChange={(e) => setInfluenciador(e.target.checked)}
+          className="accent-accent"
+        />
+        <span>Cupom de influenciador</span>
+      </label>
+      {influenciador && (
+        <div className="flex flex-col gap-3 p-3 rounded-md border border-border bg-bg-base/50">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor={`${idPrefix}-influenciador-handle`} className="block text-xs font-semibold text-text-muted mb-1">
+                @ do influenciador <span className="text-red-600">*</span>
+              </label>
+              <input
+                id={`${idPrefix}-influenciador-handle`}
+                type="text"
+                value={influenciadorHandle}
+                onChange={(e) => setInfluenciadorHandle(e.target.value)}
+                placeholder="@exemplo"
+                aria-label="Handle do influenciador"
+                required
+                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
+              />
+            </div>
+            <div>
+              <label htmlFor={`${idPrefix}-rev-share-percentual`} className="block text-xs font-semibold text-text-muted mb-1">
+                Rev share (%) <span className="text-red-600">*</span>
+              </label>
+              <input
+                id={`${idPrefix}-rev-share-percentual`}
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={revSharePercentual}
+                onChange={(e) => setRevSharePercentual(e.target.value)}
+                placeholder="Ex: 10"
+                aria-label="Rev share (%)"
+                required
+                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-muted mb-1">
+              Observação interna <span className="font-normal">(opcional)</span>
+            </label>
+            <textarea
+              value={observacaoInterna}
+              onChange={(e) => setObservacaoInterna(e.target.value)}
+              rows={2}
+              placeholder="Anotações para uso interno"
+              className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base resize-y"
+            />
+          </div>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-3">
+        <select
+          value={tipo}
+          onChange={(e) => setTipo(e.target.value as "porcentagem" | "fixo")}
+          className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
+        >
+          <option value="porcentagem">Porcentagem (%)</option>
+          <option value="fixo">Valor Fixo (R$)</option>
+        </select>
+        <input
+          type="number"
+          step={tipo === "porcentagem" ? "1" : "0.01"}
+          min="0.01"
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          placeholder={tipo === "porcentagem" ? "Ex: 10" : "Ex: 20.00"}
+          className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
+        />
+      </div>
+      {tipo === "porcentagem" && (
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={descontoMaximo}
+          onChange={(e) => setDescontoMaximo(e.target.value)}
+          placeholder="Desconto máximo em R$ (opcional — ex: 30,00)"
+          className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
+        />
+      )}
+      <div className="grid grid-cols-2 gap-3">
+        <input
+          type="number"
+          min="0"
+          value={usoMaximo}
+          onChange={(e) => setUsoMaximo(e.target.value)}
+          placeholder="Usos máximos (opcional)"
+          className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
+        />
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={valorMinimo}
+          onChange={(e) => setValorMinimo(e.target.value)}
+          placeholder="Valor mínimo pedido (opcional)"
+          className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-text-muted mb-1">
+          Validade do cupom <span className="font-normal text-text-muted">(opcional — deixe em branco para não expirar)</span>
+        </label>
+        <input
+          type="date"
+          value={dataExpiracao}
+          onChange={(e) => setDataExpiracao(e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
+        />
+      </div>
+      <button
+        type="button"
+        className="w-full py-2.5 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+        onClick={handleSave}
+        disabled={saving}
+      >
+        {saving ? (isEditing ? "Salvando..." : "Criando...") : (isEditing ? "Salvar configuração" : "Criar Cupom")}
+      </button>
+      {isEditing && (
+        <button
+          type="button"
+          className="w-full py-2.5 text-sm font-semibold border border-border text-text-muted rounded-md cursor-pointer hover:bg-bg-base transition-colors"
+          onClick={handleCancelarEdicao}
+          disabled={saving}
+        >
+          Cancelar
+        </button>
+      )}
+    </div>
+  );
+
   if (loading) return <div className="text-center py-8 text-text-muted">Carregando cupons...</div>;
 
   return (
     <div className="pb-16">
       <h3 className="text-xl mb-4 text-primary">Cupons de Desconto</h3>
 
-      {message && (
-        <div className={`mb-4 px-4 py-2 rounded-md text-sm font-medium ${
-          messageError ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
-        }`}>
-          {message}
-        </div>
-      )}
+      {!editingCupomId && messageAlert}
 
       {/* Create form */}
-      <div id="formulario-cupom" className="p-4 bg-card-bg rounded-lg border border-border mb-6">
-        <h4 className="text-sm font-semibold text-text-muted mb-3">
-          {editingCupomId ? "Configurar Cupom" : "Novo Cupom"}
-        </h4>
-        <div className="flex flex-col gap-3">
-          <input
-            type="text"
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value.toUpperCase())}
-            placeholder="Código (ex: BEMVINDO10)"
-            className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
-          />
-          <label className="flex items-center gap-2 text-sm text-text-muted">
-            <input
-              type="checkbox"
-              checked={usoUnicoPorCliente}
-              onChange={(e) => setUsoUnicoPorCliente(e.target.checked)}
-              className="accent-accent"
-            />
-            <span>Um uso por cliente (telefone)</span>
-          </label>
-          {usoUnicoPorCliente && (
-            <div>
-              <label htmlFor="telefones-sem-limite" className="block text-xs font-semibold text-text-muted mb-1">
-                Telefones que podem reutilizar o cupom <span className="font-normal">(opcional)</span>
-              </label>
-              <textarea
-                id="telefones-sem-limite"
-                value={telefonesSemLimite}
-                onChange={(e) => setTelefonesSemLimite(e.target.value)}
-                rows={3}
-                placeholder="Um telefone por linha"
-                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base resize-y"
-              />
-              <p className="text-xs text-text-muted mt-1">
-                Esses números podem reutilizar o cupom apesar do limite por telefone. Aceitamos linha, vírgula ou ponto e vírgula; o limite global de usos continua valendo.
-              </p>
-            </div>
-          )}
-          <label className="flex items-center gap-2 text-sm text-text-muted">
-            <input
-              type="checkbox"
-              checked={influenciador}
-              onChange={(e) => setInfluenciador(e.target.checked)}
-              className="accent-accent"
-            />
-            <span>Cupom de influenciador</span>
-          </label>
-          {influenciador && (
-            <div className="flex flex-col gap-3 p-3 rounded-md border border-border bg-bg-base/50">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="influenciador-handle" className="block text-xs font-semibold text-text-muted mb-1">
-                    @ do influenciador <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    id="influenciador-handle"
-                    type="text"
-                    value={influenciadorHandle}
-                    onChange={(e) => setInfluenciadorHandle(e.target.value)}
-                    placeholder="@exemplo"
-                    aria-label="Handle do influenciador"
-                    required
-                    className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="rev-share-percentual" className="block text-xs font-semibold text-text-muted mb-1">
-                    Rev share (%) <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    id="rev-share-percentual"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    value={revSharePercentual}
-                    onChange={(e) => setRevSharePercentual(e.target.value)}
-                    placeholder="Ex: 10"
-                    aria-label="Rev share (%)"
-                    required
-                    className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-muted mb-1">
-                  Observação interna <span className="font-normal">(opcional)</span>
-                </label>
-                <textarea
-                  value={observacaoInterna}
-                  onChange={(e) => setObservacaoInterna(e.target.value)}
-                  rows={2}
-                  placeholder="Anotações para uso interno"
-                  className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base resize-y"
-                />
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <select
-              value={tipo}
-              onChange={(e) => setTipo(e.target.value as "porcentagem" | "fixo")}
-              className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
-            >
-              <option value="porcentagem">Porcentagem (%)</option>
-              <option value="fixo">Valor Fixo (R$)</option>
-            </select>
-            <input
-              type="number"
-              step={tipo === "porcentagem" ? "1" : "0.01"}
-              min="0.01"
-              value={valor}
-              onChange={(e) => setValor(e.target.value)}
-              placeholder={tipo === "porcentagem" ? "Ex: 10" : "Ex: 20.00"}
-              className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
-            />
-          </div>
-          {tipo === "porcentagem" && (
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={descontoMaximo}
-              onChange={(e) => setDescontoMaximo(e.target.value)}
-              placeholder="Desconto máximo em R$ (opcional — ex: 30,00)"
-              className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
-            />
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              type="number"
-              min="0"
-              value={usoMaximo}
-              onChange={(e) => setUsoMaximo(e.target.value)}
-              placeholder="Usos máximos (opcional)"
-              className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
-            />
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={valorMinimo}
-              onChange={(e) => setValorMinimo(e.target.value)}
-              placeholder="Valor mínimo pedido (opcional)"
-              className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-text-muted mb-1">
-              Validade do cupom <span className="font-normal text-text-muted">(opcional — deixe em branco para não expirar)</span>
-            </label>
-            <input
-              type="date"
-              value={dataExpiracao}
-              onChange={(e) => setDataExpiracao(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
-            />
-          </div>
-          <button
-            type="button"
-            className="w-full py-2.5 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? (editingCupomId ? "Salvando..." : "Criando...") : (editingCupomId ? "Salvar configuração" : "Criar Cupom")}
-          </button>
-          {editingCupomId && (
-            <button
-              type="button"
-              className="w-full py-2.5 text-sm font-semibold border border-border text-text-muted rounded-md cursor-pointer hover:bg-bg-base transition-colors"
-              onClick={handleCancelarEdicao}
-              disabled={saving}
-            >
-              Cancelar
-            </button>
-          )}
-        </div>
+      <div className="p-4 bg-card-bg rounded-lg border border-border mb-6">
+        <h4 className="text-sm font-semibold text-text-muted mb-3">Novo Cupom</h4>
+        {formFields("novo-cupom", false)}
       </div>
 
       {/* Cupons list */}
@@ -507,11 +512,12 @@ export default function AdminCupons() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    className="px-2 py-1 text-xs font-semibold border border-accent text-accent rounded cursor-pointer hover:bg-accent/10 transition-colors"
+                    className="w-8 h-8 flex items-center justify-center text-base border border-accent text-accent rounded cursor-pointer hover:bg-accent/10 transition-colors"
                     onClick={() => handleConfigurar(c)}
                     aria-label={`Configurar cupom ${c.codigo}`}
+                    title={`Configurar cupom ${c.codigo}`}
                   >
-                    Configurar
+                    <span aria-hidden="true">⚙</span>
                   </button>
                   <button
                     type="button"
@@ -535,9 +541,43 @@ export default function AdminCupons() {
                 </div>
               </div>
             </div>
-          ))}
+           ))}
+         </div>
+       )}
+
+      {editingCupomId && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center overflow-y-auto"
+          onClick={(e) => {
+            if (!saving && e.target === e.currentTarget) handleCancelarEdicao();
+          }}
+        >
+          <div
+            className="bg-card-bg rounded-lg shadow-xl max-w-3xl w-full my-4 sm:my-8 mx-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="configurar-cupom-titulo"
+          >
+            <div className="sticky top-0 bg-card-bg p-4 border-b border-border flex justify-between items-center z-10 rounded-t-lg">
+              <h2 id="configurar-cupom-titulo" className="text-xl text-primary m-0">Configurar Cupom</h2>
+              <button
+                type="button"
+                className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-text-main text-xl bg-transparent border-none cursor-pointer rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50"
+                onClick={handleCancelarEdicao}
+                title="Fechar"
+                aria-label="Fechar configuração do cupom"
+                disabled={saving}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 max-h-[calc(100vh-8rem)] overflow-y-auto">
+              {messageAlert}
+              {formFields("configurar-cupom", true)}
+            </div>
+          </div>
         </div>
       )}
-    </div>
+     </div>
   );
 }

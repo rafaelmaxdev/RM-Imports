@@ -20,6 +20,7 @@ interface CouponRow {
   ativo: boolean;
   created_at: string;
   uso_unico_por_cliente?: boolean;
+  telefones_sem_limite?: string[];
   influenciador?: boolean;
 }
 
@@ -59,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const codigo = code.trim().toUpperCase();
   const { data, error } = await supabase
     .from("cupons")
-    .select("id,codigo,tipo,valor,desconto_maximo,uso_maximo,usos_atuais,valor_minimo_pedido,data_expiracao,ativo,created_at,uso_unico_por_cliente,influenciador")
+    .select("id,codigo,tipo,valor,desconto_maximo,uso_maximo,usos_atuais,valor_minimo_pedido,data_expiracao,ativo,created_at,uso_unico_por_cliente,telefones_sem_limite,influenciador")
     .eq("codigo", codigo)
     .eq("ativo", true)
     .maybeSingle();
@@ -81,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ error: "Cupom inválido ou expirado." });
   }
 
-  if (coupon.uso_unico_por_cliente) {
+  if (coupon.uso_unico_por_cliente && !coupon.telefones_sem_limite?.includes(telefone)) {
     const { data: usage, error: usageError } = await supabase
       .from("cupom_utilizacoes")
       .select("id")

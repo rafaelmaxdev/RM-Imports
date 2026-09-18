@@ -61,3 +61,17 @@ export function buscaPorPalavras(query: string, text: string): boolean {
   const normalized = normalizarBusca(text);
   return words.every((word) => normalized.includes(word));
 }
+
+export function normalizarTelefonesWhitelist(value: string): { telefones: string[]; invalido: string | null } {
+  const telefones = new Set<string>();
+  for (const parte of value.split(/[\n,;]+/)) {
+    const entrada = parte.trim();
+    if (!entrada) continue;
+
+    let telefone = entrada.replace(/\D/g, "");
+    if (telefone.length === 10 || telefone.length === 11) telefone = `55${telefone}`;
+    if (!/^55\d{10,11}$/.test(telefone)) return { telefones: [], invalido: entrada };
+    telefones.add(telefone);
+  }
+  return { telefones: [...telefones], invalido: null };
+}

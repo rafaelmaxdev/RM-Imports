@@ -385,6 +385,7 @@ export interface Cupom {
   created_at: string;
   // Optional for coupons created before the influencer configuration existed.
   uso_unico_por_cliente?: boolean;
+  telefones_sem_limite?: string[];
   influenciador?: boolean;
   influenciador_handle?: string | null;
   rev_share_percentual?: number | null;

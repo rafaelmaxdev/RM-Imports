@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getCupons, createCupom, updateCupom, deleteCupom, getCupomRevenue } from "./lib/db";
+import { normalizarTelefonesWhitelist } from "./lib/utils";
 import type { Cupom } from "./types";
 import { formatarMoeda } from "./types";
 
@@ -15,7 +16,7 @@ function normalizarHandle(value: string): string {
   return handle ? `@${handle}` : "";
 }
 
-function mensagemErroCriarCupom(error: unknown): string {
+function mensagemErroSalvarCupom(error: unknown, editando: boolean): string {
   const details = typeof error === "object" && error !== null
     ? error as { code?: unknown; message?: unknown }
     : {};
@@ -45,7 +46,9 @@ function mensagemErroCriarCupom(error: unknown): string {
   if (code === "PGRST204" || missingSecurityColumn) {
     return "O banco de dados precisa da atualização de segurança dos cupons.";
   }
-  return "Não foi possível criar o cupom. Tente novamente.";
+  return editando
+    ? "Não foi possível salvar a configuração do cupom. Tente novamente."
+    : "Não foi possível criar o cupom. Tente novamente.";
 }
 
 export default function AdminCupons() {
@@ -64,9 +67,56 @@ export default function AdminCupons() {
   const [influenciadorHandle, setInfluenciadorHandle] = useState("");
   const [revSharePercentual, setRevSharePercentual] = useState("");
   const [observacaoInterna, setObservacaoInterna] = useState("");
+  const [telefonesSemLimite, setTelefonesSemLimite] = useState("");
+  const [editingCupomId, setEditingCupomId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageError, setMessageError] = useState(false);
+
+  function resetForm() {
+    setEditingCupomId(null);
+    setCodigo("");
+    setTipo("porcentagem");
+    setValor("");
+    setUsoMaximo("");
+    setValorMinimo("");
+    setDataExpiracao("");
+    setDescontoMaximo("");
+    setUsoUnicoPorCliente(true);
+    setInfluenciador(false);
+    setInfluenciadorHandle("");
+    setRevSharePercentual("");
+    setObservacaoInterna("");
+    setTelefonesSemLimite("");
+  }
+
+  function handleConfigurar(cupom: Cupom) {
+    setEditingCupomId(cupom.id);
+    setCodigo(cupom.codigo);
+    setTipo(cupom.tipo);
+    setValor(String(cupom.valor));
+    setDescontoMaximo(cupom.desconto_maximo != null ? String(cupom.desconto_maximo) : "");
+    setUsoMaximo(cupom.uso_maximo != null ? String(cupom.uso_maximo) : "");
+    setValorMinimo(cupom.valor_minimo_pedido != null ? String(cupom.valor_minimo_pedido) : "");
+    setDataExpiracao(cupom.data_expiracao ? cupom.data_expiracao.slice(0, 10) : "");
+    setUsoUnicoPorCliente(cupom.uso_unico_por_cliente ?? false);
+    setInfluenciador(cupom.influenciador ?? false);
+    setInfluenciadorHandle(cupom.influenciador_handle ?? "");
+    setRevSharePercentual(cupom.rev_share_percentual != null ? String(cupom.rev_share_percentual) : "");
+    setObservacaoInterna(cupom.observacao_interna ?? "");
+    setTelefonesSemLimite((cupom.telefones_sem_limite ?? []).join("\n"));
+    setMessage("");
+    setMessageError(false);
+    requestAnimationFrame(() => {
+      document.getElementById("formulario-cupom")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function handleCancelarEdicao() {
+    resetForm();
+    setMessage("");
+    setMessageError(false);
+  }
 
   useEffect(() => {
     loadCupons();
@@ -89,7 +139,7 @@ export default function AdminCupons() {
     }
   }
 
-  async function handleCreate() {
+  async function handleSave() {
     const valorNumero = Number(valor);
     if (!codigo.trim()) {
       setMessage("Informe um código para o cupom.");
@@ -136,41 +186,44 @@ export default function AdminCupons() {
       return;
     }
 
+    const whitelist = normalizarTelefonesWhitelist(usoUnicoPorCliente ? telefonesSemLimite : "");
+    if (whitelist.invalido) {
+      setMessage(`Telefone inválido na whitelist: "${whitelist.invalido}". Informe um telefone com DDD.`);
+      setMessageError(true);
+      return;
+    }
+
+    const configuracao = {
+      codigo: codigo.toUpperCase().trim(),
+      tipo,
+      valor: valorNumero,
+      desconto_maximo: descontoMaximo.trim() ? Number(descontoMaximo) : null,
+      uso_maximo: usoMaximo.trim() ? Number(usoMaximo) : null,
+      valor_minimo_pedido: valorMinimo.trim() ? Number(valorMinimo) : null,
+      data_expiracao: dataExpiracao || null,
+      uso_unico_por_cliente: usoUnicoPorCliente,
+      influenciador,
+      influenciador_handle: influenciador ? handleNormalizado : null,
+      rev_share_percentual: influenciador ? revShare : null,
+      observacao_interna: influenciador && observacaoInterna.trim() ? observacaoInterna.trim() : null,
+      telefones_sem_limite: whitelist.telefones,
+    };
+
     setSaving(true);
     try {
-      await createCupom({
-        codigo: codigo.toUpperCase().trim(),
-        tipo,
-        valor: valorNumero,
-        desconto_maximo: descontoMaximo.trim() ? Number(descontoMaximo) : null,
-        uso_maximo: usoMaximo.trim() ? Number(usoMaximo) : null,
-        valor_minimo_pedido: valorMinimo.trim() ? Number(valorMinimo) : null,
-        data_expiracao: dataExpiracao || null,
-        ativo: true,
-        uso_unico_por_cliente: usoUnicoPorCliente,
-        influenciador,
-        influenciador_handle: influenciador ? handleNormalizado : null,
-        rev_share_percentual: influenciador ? revShare : null,
-        observacao_interna: influenciador && observacaoInterna.trim() ? observacaoInterna.trim() : null,
-      });
-      setMessage("Cupom criado!");
+      if (editingCupomId) {
+        await updateCupom(editingCupomId, configuracao);
+        setMessage("Configuração do cupom salva!");
+      } else {
+        await createCupom({ ...configuracao, ativo: true });
+        setMessage("Cupom criado!");
+      }
       setMessageError(false);
-      setCodigo("");
-      setTipo("porcentagem");
-      setValor("");
-      setUsoMaximo("");
-      setValorMinimo("");
-      setDataExpiracao("");
-      setDescontoMaximo("");
-      setUsoUnicoPorCliente(true);
-      setInfluenciador(false);
-      setInfluenciadorHandle("");
-      setRevSharePercentual("");
-      setObservacaoInterna("");
+      resetForm();
       await loadCupons();
     } catch (err) {
-      console.error("Erro ao criar cupom:", err);
-      setMessage(mensagemErroCriarCupom(err));
+      console.error("Erro ao salvar cupom:", err);
+      setMessage(mensagemErroSalvarCupom(err, Boolean(editingCupomId)));
       setMessageError(true);
     } finally {
       setSaving(false);
@@ -215,8 +268,10 @@ export default function AdminCupons() {
       )}
 
       {/* Create form */}
-      <div className="p-4 bg-card-bg rounded-lg border border-border mb-6">
-        <h4 className="text-sm font-semibold text-text-muted mb-3">Novo Cupom</h4>
+      <div id="formulario-cupom" className="p-4 bg-card-bg rounded-lg border border-border mb-6">
+        <h4 className="text-sm font-semibold text-text-muted mb-3">
+          {editingCupomId ? "Configurar Cupom" : "Novo Cupom"}
+        </h4>
         <div className="flex flex-col gap-3">
           <input
             type="text"
@@ -234,6 +289,24 @@ export default function AdminCupons() {
             />
             <span>Um uso por cliente (telefone)</span>
           </label>
+          {usoUnicoPorCliente && (
+            <div>
+              <label htmlFor="telefones-sem-limite" className="block text-xs font-semibold text-text-muted mb-1">
+                Telefones que podem reutilizar o cupom <span className="font-normal">(opcional)</span>
+              </label>
+              <textarea
+                id="telefones-sem-limite"
+                value={telefonesSemLimite}
+                onChange={(e) => setTelefonesSemLimite(e.target.value)}
+                rows={3}
+                placeholder="Um telefone por linha"
+                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base resize-y"
+              />
+              <p className="text-xs text-text-muted mt-1">
+                Esses números podem reutilizar o cupom apesar do limite por telefone. Aceitamos linha, vírgula ou ponto e vírgula; o limite global de usos continua valendo.
+              </p>
+            </div>
+          )}
           <label className="flex items-center gap-2 text-sm text-text-muted">
             <input
               type="checkbox"
@@ -355,12 +428,23 @@ export default function AdminCupons() {
             />
           </div>
           <button
+            type="button"
             className="w-full py-2.5 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
-            onClick={handleCreate}
+            onClick={handleSave}
             disabled={saving}
           >
-            {saving ? "Criando..." : "Criar Cupom"}
+            {saving ? (editingCupomId ? "Salvando..." : "Criando...") : (editingCupomId ? "Salvar configuração" : "Criar Cupom")}
           </button>
+          {editingCupomId && (
+            <button
+              type="button"
+              className="w-full py-2.5 text-sm font-semibold border border-border text-text-muted rounded-md cursor-pointer hover:bg-bg-base transition-colors"
+              onClick={handleCancelarEdicao}
+              disabled={saving}
+            >
+              Cancelar
+            </button>
+          )}
         </div>
       </div>
 
@@ -422,6 +506,15 @@ export default function AdminCupons() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
+                    type="button"
+                    className="px-2 py-1 text-xs font-semibold border border-accent text-accent rounded cursor-pointer hover:bg-accent/10 transition-colors"
+                    onClick={() => handleConfigurar(c)}
+                    aria-label={`Configurar cupom ${c.codigo}`}
+                  >
+                    Configurar
+                  </button>
+                  <button
+                    type="button"
                     className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${
                       c.ativo ? "bg-accent" : "bg-gray-300"
                     }`}
@@ -433,6 +526,7 @@ export default function AdminCupons() {
                     }`} />
                   </button>
                   <button
+                    type="button"
                     className="px-2 py-1 text-xs font-semibold bg-red-500 text-white rounded cursor-pointer hover:opacity-90 transition-opacity"
                     onClick={() => handleDelete(c.id)}
                   >

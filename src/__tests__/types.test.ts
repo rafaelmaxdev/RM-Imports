@@ -15,7 +15,7 @@ import {
   type OrderItem,
 } from "../types";
 import { montarNome, isRetro, formatarValor } from "../ProdutoForm";
-import { parseAnoTemporada } from "../lib/utils";
+import { normalizarTelefonesWhitelist, parseAnoTemporada } from "../lib/utils";
 
 // ---------------------------------------------------------------------------
 // Helper to create a config with specific category-level promo active
@@ -654,6 +654,16 @@ describe("parseAnoTemporada", () => {
 
   it("returns 0 for invalid input", () => {
     expect(parseAnoTemporada("abc")).toBe(0);
+  });
+});
+
+describe("normalizarTelefonesWhitelist", () => {
+  it("normalizes, deduplicates, splits and rejects whitelist phones", () => {
+    expect(normalizarTelefonesWhitelist("(11) 99999-8888\n+55 (11) 98765-4321, 5511999998888; 5511987654321")).toEqual({
+      telefones: ["5511999998888", "5511987654321"],
+      invalido: null,
+    });
+    expect(normalizarTelefonesWhitelist("abc")).toEqual({ telefones: [], invalido: "abc" });
   });
 });
 

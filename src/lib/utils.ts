@@ -62,6 +62,17 @@ export function buscaPorPalavras(query: string, text: string): boolean {
   return words.every((word) => normalized.includes(word));
 }
 
+export function formatarTelefoneBrasileiro(value: string): string {
+  let digits = value.replace(/\D/g, "");
+  if (digits.length > 11 && digits.startsWith("55")) digits = digits.slice(2);
+  digits = digits.slice(0, 11);
+  if (!digits) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
 export function normalizarTelefonesWhitelist(value: string): { telefones: string[]; invalido: string | null } {
   const telefones = new Set<string>();
   for (const parte of value.split(/[\n,;]+/)) {

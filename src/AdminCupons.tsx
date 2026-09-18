@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getCupons, createCupom, updateCupom, deleteCupom, getCupomRevenue } from "./lib/db";
-import { normalizarTelefonesWhitelist } from "./lib/utils";
+import { formatarTelefoneBrasileiro, normalizarTelefonesWhitelist } from "./lib/utils";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import type { Cupom } from "./types";
 import { formatarMoeda } from "./types";
@@ -68,7 +68,7 @@ export default function AdminCupons() {
   const [influenciadorHandle, setInfluenciadorHandle] = useState("");
   const [revSharePercentual, setRevSharePercentual] = useState("");
   const [observacaoInterna, setObservacaoInterna] = useState("");
-  const [telefonesSemLimite, setTelefonesSemLimite] = useState("");
+  const [telefonesSemLimite, setTelefonesSemLimite] = useState<string[]>([""]);
   const [editingCupomId, setEditingCupomId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -90,7 +90,7 @@ export default function AdminCupons() {
     setInfluenciadorHandle("");
     setRevSharePercentual("");
     setObservacaoInterna("");
-    setTelefonesSemLimite("");
+    setTelefonesSemLimite([""]);
   }
 
   function handleConfigurar(cupom: Cupom) {
@@ -107,7 +107,10 @@ export default function AdminCupons() {
     setInfluenciadorHandle(cupom.influenciador_handle ?? "");
     setRevSharePercentual(cupom.rev_share_percentual != null ? String(cupom.rev_share_percentual) : "");
     setObservacaoInterna(cupom.observacao_interna ?? "");
-    setTelefonesSemLimite((cupom.telefones_sem_limite ?? []).join("\n"));
+    const telefones = (cupom.telefones_sem_limite ?? [])
+      .map(formatarTelefoneBrasileiro)
+      .filter(Boolean);
+    setTelefonesSemLimite(telefones.length > 0 ? telefones : [""]);
     setMessage("");
     setMessageError(false);
   }
@@ -187,7 +190,7 @@ export default function AdminCupons() {
       return;
     }
 
-    const whitelist = normalizarTelefonesWhitelist(usoUnicoPorCliente ? telefonesSemLimite : "");
+    const whitelist = normalizarTelefonesWhitelist(usoUnicoPorCliente ? telefonesSemLimite.join("\n") : "");
     if (whitelist.invalido) {
       setMessage(`Telefone inválido na whitelist: "${whitelist.invalido}". Informe um telefone com DDD.`);
       setMessageError(true);
@@ -278,23 +281,51 @@ export default function AdminCupons() {
           onChange={(e) => setUsoUnicoPorCliente(e.target.checked)}
           className="accent-accent"
         />
-        <span>Um uso por cliente (telefone)</span>
+        <span>Limitar a um uso por telefone</span>
       </label>
       {usoUnicoPorCliente && (
         <div>
-          <label htmlFor={`${idPrefix}-telefones-sem-limite`} className="block text-xs font-semibold text-text-muted mb-1">
-            Telefones que podem reutilizar o cupom <span className="font-normal">(opcional)</span>
+          <label className="block text-xs font-semibold text-text-muted mb-1">
+            Telefones que podem reutilizar o cupom <span className="font-normal">(exceções, opcional)</span>
           </label>
-          <textarea
-            id={`${idPrefix}-telefones-sem-limite`}
-            value={telefonesSemLimite}
-            onChange={(e) => setTelefonesSemLimite(e.target.value)}
-            rows={3}
-            placeholder="Um telefone por linha"
-            className="w-full px-3 py-2 text-sm border border-border rounded-md bg-bg-base resize-y"
-          />
+          <div className="flex flex-col gap-2">
+            {telefonesSemLimite.map((telefone, index) => (
+              <div key={index} className="flex gap-2">
+                <input
+                  id={`${idPrefix}-telefone-sem-limite-${index}`}
+                  type="tel"
+                  value={telefone}
+                  onChange={(e) => setTelefonesSemLimite((prev) => prev.map((item, i) => (
+                    i === index ? formatarTelefoneBrasileiro(e.target.value) : item
+                  )))}
+                  placeholder="(11) 99999-9999"
+                  inputMode="numeric"
+                  aria-label={`Telefone que pode reutilizar o cupom ${index + 1}`}
+                  className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-bg-base"
+                />
+                {telefonesSemLimite.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setTelefonesSemLimite((prev) => prev.filter((_, i) => i !== index))}
+                    className="px-2.5 text-red-500 hover:bg-red-50 rounded-md border border-red-200 text-sm cursor-pointer transition-colors"
+                    aria-label={`Remover telefone ${index + 1}`}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setTelefonesSemLimite((prev) => [...prev, ""])}
+              className="text-sm text-accent hover:underline cursor-pointer self-start"
+              aria-label="Adicionar número à whitelist"
+            >
+              + Adicionar número
+            </button>
+          </div>
           <p className="text-xs text-text-muted mt-1">
-            Esses números podem reutilizar o cupom apesar do limite por telefone. Aceitamos linha, vírgula ou ponto e vírgula; o limite global de usos continua valendo.
+            Os números adicionados são exceções e podem reutilizar o cupom, mas o limite global de usos continua valendo.
           </p>
         </div>
       )}

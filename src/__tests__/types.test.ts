@@ -15,7 +15,7 @@ import {
   type OrderItem,
 } from "../types";
 import { montarNome, isRetro, formatarValor } from "../ProdutoForm";
-import { normalizarTelefonesWhitelist, parseAnoTemporada } from "../lib/utils";
+import { formatarTelefoneBrasileiro, normalizarTelefonesWhitelist, parseAnoTemporada } from "../lib/utils";
 
 // ---------------------------------------------------------------------------
 // Helper to create a config with specific category-level promo active
@@ -664,6 +664,24 @@ describe("normalizarTelefonesWhitelist", () => {
       invalido: null,
     });
     expect(normalizarTelefonesWhitelist("abc")).toEqual({ telefones: [], invalido: "abc" });
+  });
+});
+
+describe("formatarTelefoneBrasileiro", () => {
+  it("formats mobile phones", () => {
+    expect(formatarTelefoneBrasileiro("11999998888")).toBe("(11) 99999-8888");
+  });
+
+  it("formats landline phones", () => {
+    expect(formatarTelefoneBrasileiro("1133334444")).toBe("(11) 3333-4444");
+  });
+
+  it("removes the Brazilian country prefix from stored values", () => {
+    expect(formatarTelefoneBrasileiro("5511999998888")).toBe("(11) 99999-8888");
+  });
+
+  it("keeps a reasonable progressive format while typing", () => {
+    expect(formatarTelefoneBrasileiro("119")).toBe("(11) 9");
   });
 });
 

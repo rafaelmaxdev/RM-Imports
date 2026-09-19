@@ -19,6 +19,22 @@ const supabase = supabaseUrl && serviceRoleKey
   : null;
 
 const PUBLIC_ORDER_FIELDS = "id,data,hora,itens,total,status,endereco,payment_method,mp_preference_id,pronta_entrega,created_at,telefone_normalizado";
+const ORDER_ID_PATTERN = /^UL-[A-Z2-9]{8}$/;
+
+function flattenCandidates(value: unknown): unknown[] {
+  return Array.isArray(value) ? value.flatMap(flattenCandidates) : [value];
+}
+
+export function resolveOrderPath(rawPath: unknown, url?: string): string | undefined {
+  const candidates = flattenCandidates(rawPath)
+    .flatMap((value) => typeof value === "string" ? value.split("/") : [])
+    .filter(Boolean);
+  const urlMatch = url?.match(/\/api\/order\/([^/?#]+)/);
+  if (urlMatch) candidates.push(decodeURIComponent(urlMatch[1]));
+
+  return candidates.find((candidate) => candidate === "search" || ORDER_ID_PATTERN.test(candidate))
+    ?? candidates.at(-1);
+}
 
 function requestedPhone(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -52,15 +68,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ error: "Muitas requisições. Aguarde um momento." });
   }
 
-  const rawPath = req.query.path;
-  const path = Array.isArray(rawPath) ? rawPath[0] : rawPath;
+  const path = resolveOrderPath([req.query.path, req.query.id], req.url);
   const payment = req.query.payment;
   const phone = requestedPhone(req.query.phone);
   const admin = await isAdminToken(supabase, bearerToken(req.headers.authorization));
 
   if (req.method === "POST") {
     if (!admin) return res.status(403).json({ error: "Forbidden: admin role required" });
-    if (!path || !/^UL-[A-Z2-9]{8}$/.test(path)) return res.status(400).json({ error: "ID do pedido inválido." });
+    if (!path || !ORDER_ID_PATTERN.test(path)) return res.status(400).json({ error: "ID do pedido inválido." });
 
     const status = (req.body as { status?: unknown } | null)?.status;
     if (status !== "cancelado" && status !== "reembolsado") {
@@ -109,19 +124,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── Order ID search ──
-  let id: string | undefined;
-
-  if (path && typeof path === "string") id = path;
-  if (!id && req.url) {
-    const match = req.url.split("?")[0].match(/\/order\/([^/]+)$/);
-    if (match) id = decodeURIComponent(match[1]);
-  }
-  if (!id) {
-    const queryId = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
-    if (typeof queryId === "string" && queryId) id = queryId;
-  }
+  const id = path;
   if (!id) return res.status(400).json({ error: "Informe o ID do pedido." });
-  if (!/^UL-[A-Z2-9]{8}$/.test(id)) return res.status(400).json({ error: "ID do pedido inválido." });
+  if (!ORDER_ID_PATTERN.test(id)) return res.status(400).json({ error: "ID do pedido inválido." });
 
   if (admin) {
     const { data: order } = await supabase.from("pedidos").select("*").eq("id", id).single();

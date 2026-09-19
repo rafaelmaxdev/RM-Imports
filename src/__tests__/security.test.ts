@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveOrderPath } from "../../api/order/[[...path]]";
 import { bearerToken, createOrderAccessToken, verifyOrderAccessToken } from "../../server/lib/security";
 
 describe("order access security", () => {
@@ -18,5 +19,13 @@ describe("order access security", () => {
     expect(bearerToken("Bearer abc")).toBe("abc");
     expect(bearerToken("Basic abc")).toBeNull();
     expect(bearerToken("Bearer ")).toBeNull();
+  });
+
+  it("resolves order route candidates", () => {
+    expect(resolveOrderPath(["api", "order", "UL-KZX9AL76"])).toBe("UL-KZX9AL76");
+    expect(resolveOrderPath("UL-KZX9AL76")).toBe("UL-KZX9AL76");
+    expect(resolveOrderPath(["api", "order", "search"])).toBe("search");
+    expect(resolveOrderPath(undefined, "/api/order/UL-KZX9AL76")).toBe("UL-KZX9AL76");
+    expect(resolveOrderPath([undefined, [["UL-KZX9AL76"]]])).toBe("UL-KZX9AL76");
   });
 });

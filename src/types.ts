@@ -127,14 +127,14 @@ export interface LojaConfig {
 
 export const DEFAULT_CONFIG: LojaConfig = {
   precos_base: {
-    "Torcedor": 129.90,
+    "Torcedor": 149.90,
     "Jogador": 169.90,
     "Retrô": 169.90,
     "Manga Longa Torcedor": 159.90,
     "Manga Longa Jogador": 169.90,
     "Manga Longa Retrô": 169.90,
-    "Goleiro": 129.90,
-    "Treinamento": 139.90,
+    "Goleiro": 149.90,
+    "Treinamento": 149.90,
     "Polo": 139.90,
     "NBA": 189.90,
   },

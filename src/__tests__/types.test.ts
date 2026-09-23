@@ -27,6 +27,16 @@ function categoriaEmPromocao(tipo: string, ativa = true): LojaConfig {
   };
 }
 
+describe("DEFAULT_CONFIG", () => {
+  it("uses R$149.90 for the current support kit base prices", () => {
+    expect([
+      DEFAULT_CONFIG.precos_base.Torcedor,
+      DEFAULT_CONFIG.precos_base.Goleiro,
+      DEFAULT_CONFIG.precos_base.Treinamento,
+    ]).toEqual([149.90, 149.90, 149.90]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // getPrecoProduto
 // ---------------------------------------------------------------------------
@@ -120,9 +130,9 @@ describe("getPrecoProduto", () => {
   });
 
   it("applies novo_preco with 0 discount (same price)", () => {
-    const r = getPrecoProduto("Torcedor", DEFAULT_CONFIG, 129.90, "novo_preco");
-    expect(r.base).toBe(129.90);
-    expect(r.promo).toBe(129.90);
+    const r = getPrecoProduto("Torcedor", DEFAULT_CONFIG, 149.90, "novo_preco");
+    expect(r.base).toBe(149.90);
+    expect(r.promo).toBe(149.90);
     expect(r.emPromocao).toBe(true);
     expect(r.badge).toBe("PROMO");
     expect(r.discountLabel).toBe("0% OFF");
@@ -130,7 +140,7 @@ describe("getPrecoProduto", () => {
 
   it("applies leve_pague promo", () => {
     const r = getPrecoProduto("Torcedor", DEFAULT_CONFIG, null, "leve_pague");
-    expect(r.base).toBe(129.90);
+    expect(r.base).toBe(149.90);
     expect(r.promo).toBeNull();
     expect(r.emPromocao).toBe(true);
     expect(r.promocaoTipo).toBe("leve_pague");
@@ -140,7 +150,7 @@ describe("getPrecoProduto", () => {
 
   it("applies leve_3_pague_2 promo", () => {
     const r = getPrecoProduto("Torcedor", DEFAULT_CONFIG, null, "leve_3_pague_2");
-    expect(r.base).toBe(129.90);
+    expect(r.base).toBe(149.90);
     expect(r.promo).toBeNull();
     expect(r.emPromocao).toBe(true);
     expect(r.promocaoTipo).toBe("leve_3_pague_2");
@@ -162,18 +172,18 @@ describe("getPrecoProduto", () => {
 
   it("applies category-level promo when promocao_ativa is true", () => {
     const r = getPrecoProduto("Torcedor", categoriaEmPromocao("Torcedor", true));
-    expect(r.base).toBe(129.90);
+    expect(r.base).toBe(149.90);
     expect(r.promo).toBe(109.90);
     expect(r.emPromocao).toBe(true);
     expect(r.promocaoTipo).toBeNull();
     expect(r.promocaoValor).toBeNull();
     expect(r.badge).toBe("PROMO");
-    expect(r.discountLabel).toBe("15% OFF");
+    expect(r.discountLabel).toBe("27% OFF");
   });
 
   it("does not apply category-level promo when promocao_ativa is false", () => {
     const r = getPrecoProduto("Torcedor", categoriaEmPromocao("Torcedor", false));
-    expect(r.base).toBe(129.90);
+    expect(r.base).toBe(149.90);
     expect(r.promo).toBeNull();
     expect(r.emPromocao).toBe(false);
     expect(r.badge).toBeNull();
@@ -185,12 +195,12 @@ describe("getPrecoProduto", () => {
     const cfg = categoriaEmPromocao("Torcedor", true);
     const r = getPrecoProduto("Torcedor", cfg, 119.90);
     // Custom price (119.90) should override category promo price (109.90)
-    // Discount should be based on base price (129.90)
-    expect(r.base).toBe(129.90);
+    // Discount should be based on base price (149.90)
+    expect(r.base).toBe(149.90);
     expect(r.promo).toBe(119.90);
     expect(r.emPromocao).toBe(true);
     expect(r.badge).toBe("PROMO");
-    expect(r.discountLabel).toBe("8% OFF");
+    expect(r.discountLabel).toBe("20% OFF");
   });
 
   // ── Unknown / fallback ──
@@ -237,20 +247,20 @@ describe("getPrecoProduto", () => {
 // ---------------------------------------------------------------------------
 describe("calcularPreco", () => {
   it("returns base price for standard size without personalization", () => {
-    expect(calcularPreco("Torcedor", "M", false)).toBe(129.90);
+    expect(calcularPreco("Torcedor", "M", false)).toBe(149.90);
   });
 
   it("adds surcharge for G2", () => {
-    expect(calcularPreco("Torcedor", "G2", false)).toBe(129.90 + ADICIONAL_TAMANHO["G2"]);
+    expect(calcularPreco("Torcedor", "G2", false)).toBe(149.90 + ADICIONAL_TAMANHO["G2"]);
   });
 
   it("adds surcharge for G3", () => {
-    expect(calcularPreco("Torcedor", "G3", false)).toBe(129.90 + ADICIONAL_TAMANHO["G3"]);
+    expect(calcularPreco("Torcedor", "G3", false)).toBe(149.90 + ADICIONAL_TAMANHO["G3"]);
   });
 
   it("no surcharge for standard sizes (P, M, G, GG, G1)", () => {
     for (const size of ["P", "M", "G", "GG", "G1"]) {
-      expect(calcularPreco("Torcedor", size, false)).toBe(129.90);
+      expect(calcularPreco("Torcedor", size, false)).toBe(149.90);
     }
   });
 
@@ -259,7 +269,7 @@ describe("calcularPreco", () => {
   });
 
   it("adds personalization cost for Torcedor (R$20)", () => {
-    expect(calcularPreco("Torcedor", "M", true)).toBe(129.90 + precoPersonalizacao("Torcedor"));
+    expect(calcularPreco("Torcedor", "M", true)).toBe(149.90 + precoPersonalizacao("Torcedor"));
     expect(precoPersonalizacao("Torcedor")).toBe(20.00);
   });
 
@@ -292,7 +302,7 @@ describe("calcularPreco", () => {
   });
 
   it("leve_pague promo returns base price (promo is null, so base used) plus surcharges", () => {
-    expect(calcularPreco("Torcedor", "M", false, undefined, null, "leve_pague")).toBe(129.90);
+    expect(calcularPreco("Torcedor", "M", false, undefined, null, "leve_pague")).toBe(149.90);
   });
 });
 

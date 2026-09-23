@@ -3,6 +3,7 @@ import { aplicarCupom } from "../lib/db";
 import {
   formatarMoeda,
   calcularPreco,
+  DEFAULT_CONFIG,
   ADICIONAL_TAMANHO,
   precoPersonalizacao,
   gerarId,
@@ -91,15 +92,15 @@ describe("Coupon application", () => {
 
 describe("Price calculation", () => {
   it("calcula preco base sem adicional", () => {
-    expect(calcularPreco("Torcedor", "M", false)).toBe(129.90);
+    expect(calcularPreco("Torcedor", "M", false)).toBe(DEFAULT_CONFIG.precos_base.Torcedor);
   });
 
   it("adiciona taxa para G2", () => {
-    expect(calcularPreco("Torcedor", "G2", false)).toBe(129.90 + ADICIONAL_TAMANHO.G2);
+    expect(calcularPreco("Torcedor", "G2", false)).toBe(DEFAULT_CONFIG.precos_base.Torcedor + ADICIONAL_TAMANHO.G2);
   });
 
   it("adiciona personalizacao para Torcedor", () => {
-    const esperado = 129.90 + precoPersonalizacao("Torcedor");
+    const esperado = DEFAULT_CONFIG.precos_base.Torcedor + precoPersonalizacao("Torcedor");
     expect(calcularPreco("Torcedor", "M", true)).toBe(esperado);
     expect(precoPersonalizacao("Torcedor")).toBe(20);
   });
@@ -114,27 +115,27 @@ describe("Price calculation", () => {
 describe("Pronta entrega markup", () => {
   const PE_MARKUP = 20;
   it("aplica taxa fixa de R$20 no preco base", () => {
-    const base = 129.90;
+    const base = DEFAULT_CONFIG.precos_base.Torcedor;
     const comTaxa = Math.round((base + PE_MARKUP) * 100) / 100;
-    expect(comTaxa).toBe(149.90);
+    expect(comTaxa).toBe(169.90);
   });
 
   it("taxa fixa sobre preco com desconto", () => {
-    const base = 129.90;
+    const base = DEFAULT_CONFIG.precos_base.Torcedor;
     const desconto = 0.2;
     const precoDesc = Math.round((base - base * desconto) * 100) / 100;
     const comTaxa = Math.round((precoDesc + PE_MARKUP) * 100) / 100;
-    expect(comTaxa).toBe(123.92);
+    expect(comTaxa).toBe(139.92);
   });
 });
 
 describe("Cart total with coupon", () => {
   it("soma itens e aplica cupom", () => {
-    const itens = [129.90, 169.90, 25];
+    const itens = [DEFAULT_CONFIG.precos_base.Torcedor, 169.90, 25];
     const total = itens.reduce((s, p) => s + p, 0);
     const totalComCupom = total - total * 0.1;
-    expect(total).toBe(324.80);
-    expect(Math.round(totalComCupom * 100) / 100).toBe(292.32);
+    expect(total).toBe(344.80);
+    expect(Math.round(totalComCupom * 100) / 100).toBe(310.32);
   });
 
   it("aplica cupom fixo no total", () => {
@@ -158,10 +159,10 @@ describe("Order ID generation", () => {
 
 describe("Cart total with PE markup", () => {
   it("calcula total com taxa fixa de PE", () => {
-    const base = 129.90;
+    const base = DEFAULT_CONFIG.precos_base.Torcedor;
     const peMarkup = 20;
     const total = Math.round((base + peMarkup) * 100) / 100;
-    expect(total).toBe(149.90);
+    expect(total).toBe(169.90);
   });
 
   it("calcula total com desconto + taxa PE", () => {

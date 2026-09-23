@@ -91,6 +91,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
       (produto.promocao_tipo as PromocaoTipo) ?? undefined,
       produto.promocao_valor,
       produto.time,
+      produto.temporada,
     );
     const structuredData = (document.getElementById("product-structured-data") as HTMLScriptElement | null)
       ?? document.createElement("script");
@@ -219,6 +220,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
     (produto.promocao_tipo as PromocaoTipo) ?? undefined,
     produto.promocao_valor,
     produto.time,
+    produto.temporada,
   );
   const images = parseImageUrls(produto.imagem_urls);
   const currentIndex = produtos.findIndex((item) => item.id === produto.id);
@@ -555,6 +557,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
                 (related.promocao_tipo as PromocaoTipo) ?? undefined,
                 related.promocao_valor,
                 related.time,
+                related.temporada,
               );
               return (
                 <Link
@@ -577,13 +580,13 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
                       {formatarMoeda(relatedPriceInfo.promo ?? relatedPriceInfo.base)}
                     </p>
                     <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
-                        <span className={`inline-flex w-fit items-center rounded-full bg-primary/7 px-2 py-1 text-xs font-bold text-primary transition-colors duration-200 ${related.time === produto.time ? "group-hover:bg-accent group-hover:text-white group-focus-visible:bg-accent group-focus-visible:text-white" : "group-hover:bg-primary/10 group-hover:text-primary group-focus-visible:bg-primary/10 group-focus-visible:text-primary"}`}>
+                        <span className={`inline-flex w-fit items-center rounded-full px-2 py-1 text-xs font-medium transition-colors duration-200 ${related.time === produto.time ? "bg-accent text-white" : "bg-bg-base text-text-muted"}`}>
                           {related.time}
                         </span>
-                        <span className={`inline-flex w-fit items-center rounded-full bg-bg-base px-2 py-1 text-xs font-medium text-text-muted transition-colors duration-200 ${related.tipo === produto.tipo ? "group-hover:bg-accent group-hover:text-white group-focus-visible:bg-accent group-focus-visible:text-white" : "group-hover:bg-primary/10 group-hover:text-primary group-focus-visible:bg-primary/10 group-focus-visible:text-primary"}`}>
+                        <span className={`inline-flex w-fit items-center rounded-full px-2 py-1 text-xs font-medium transition-colors duration-200 ${related.tipo === produto.tipo ? "bg-accent text-white" : "bg-bg-base text-text-muted"}`}>
                           {related.tipo}
                         </span>
-                        <span className={`inline-flex w-fit items-center rounded-full bg-bg-base px-2 py-1 text-xs font-medium text-text-muted transition-colors duration-200 ${related.temporada === produto.temporada ? "group-hover:bg-accent group-hover:text-white group-focus-visible:bg-accent group-focus-visible:text-white" : "group-hover:bg-primary/10 group-hover:text-primary group-focus-visible:bg-primary/10 group-focus-visible:text-primary"}`}>
+                        <span className={`inline-flex w-fit items-center rounded-full px-2 py-1 text-xs font-medium transition-colors duration-200 ${related.temporada === produto.temporada ? "bg-accent text-white" : "bg-bg-base text-text-muted"}`}>
                           {related.temporada}
                         </span>
                     </div>

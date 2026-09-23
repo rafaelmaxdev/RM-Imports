@@ -15,6 +15,8 @@ interface AdminPromocoesProps {
 export default function AdminPromocoes({ produtos, setProdutos, config, setConfig }: AdminPromocoesProps) {
   const [precosBase, setPrecosBase] = useState<Record<string, string>>({});
   const [precosPromo, setPrecosPromo] = useState<Record<string, string>>({});
+  const [anoTemporadaLancamento, setAnoTemporadaLancamento] = useState("");
+  const [descontosTemporadaAnterior, setDescontosTemporadaAnterior] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -64,6 +66,12 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
     }
     setPrecosBase(pb);
     setPrecosPromo(pp);
+    setAnoTemporadaLancamento(String(config.ano_temporada_lancamento ?? DEFAULT_CONFIG.ano_temporada_lancamento));
+    const da: Record<string, string> = {};
+    for (const tipo of TIPOS_CATEGORIA) {
+      da[tipo] = String(config.desconto_temporada_anterior?.[tipo] ?? DEFAULT_CONFIG.desconto_temporada_anterior[tipo] ?? 0);
+    }
+    setDescontosTemporadaAnterior(da);
     setPeMarkupValue(String(config.pronta_entrega_markup));
     const cb: Record<string, string> = {};
     for (const tipo of TIPOS_CATEGORIA) {
@@ -109,15 +117,53 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
   async function handleSavePrecos() {
     setSaving(true);
     try {
-      const newBase: Record<string, number> = {};
-      const newPromo: Record<string, number> = {};
+      const ano = Number(anoTemporadaLancamento);
+      if (!Number.isInteger(ano) || ano < 2000 || ano > 2100) {
+        setMessage("Erro: o ano inicial da temporada de lançamento deve ser um inteiro entre 2000 e 2100.");
+        return;
+      }
+
+      const newBase: Record<string, number> = {
+        ...DEFAULT_CONFIG.precos_base,
+        ...config.precos_base,
+      };
+      const newPromo: Record<string, number> = {
+        ...DEFAULT_CONFIG.precos_promocao,
+        ...config.precos_promocao,
+      };
       for (const tipo of TIPOS_CATEGORIA) {
         newBase[tipo] = parseFloat(precosBase[tipo]) || DEFAULT_CONFIG.precos_base[tipo];
         newPromo[tipo] = parseFloat(precosPromo[tipo]) || DEFAULT_CONFIG.precos_promocao[tipo];
       }
-      await updateLojaConfig("precos_base", newBase);
-      await updateLojaConfig("precos_promocao", newPromo);
-      setConfig((prev) => ({ ...prev, precos_base: newBase, precos_promocao: newPromo }));
+
+      const newDescontos = {
+        ...DEFAULT_CONFIG.desconto_temporada_anterior,
+        ...(config.desconto_temporada_anterior ?? {}),
+      };
+      for (const tipo of TIPOS_CATEGORIA) {
+        if (tipo.includes("Retrô")) continue;
+        const valor = descontosTemporadaAnterior[tipo]?.trim() ?? "";
+        const desconto = Number(valor);
+        if (valor === "" || !Number.isFinite(desconto) || desconto < 0 || desconto >= 100) {
+          setMessage(`Erro: o desconto da categoria ${tipo} deve ser um número entre 0 e menor que 100.`);
+          return;
+        }
+        newDescontos[tipo] = desconto;
+      }
+
+      await Promise.all([
+        updateLojaConfig("precos_base", newBase),
+        updateLojaConfig("precos_promocao", newPromo),
+        updateLojaConfig("ano_temporada_lancamento", ano),
+        updateLojaConfig("desconto_temporada_anterior", newDescontos),
+      ]);
+      setConfig((prev) => ({
+        ...prev,
+        precos_base: newBase,
+        precos_promocao: newPromo,
+        ano_temporada_lancamento: ano,
+        desconto_temporada_anterior: newDescontos,
+      }));
       setMessage("Preços salvos com sucesso!");
       setTimeout(() => setMessage(""), 3000);
     } catch (err) {
@@ -395,9 +441,24 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
       {/* Edit prices */}
       <div className="border-t border-border pt-6 mb-10">
         <h4 className="text-lg font-bold text-primary mb-4">Editar Preços</h4>
+        <p className="text-sm text-text-muted mb-4">
+          O preço base é o preço de lançamento; temporadas com primeiro ano menor recebem desconto. Retrô não participa.
+        </p>
+        <div className="mb-4 max-w-full sm:max-w-xs">
+          <label className="block text-xs font-semibold text-text-muted mb-1">Ano inicial da temporada de lançamento</label>
+          <input
+            type="number"
+            min="2000"
+            max="2100"
+            step="1"
+            value={anoTemporadaLancamento}
+            onChange={(e) => setAnoTemporadaLancamento(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+          />
+        </div>
         <div className="flex flex-col gap-4">
           {TIPOS_CATEGORIA.map((tipo) => (
-            <div key={tipo} className="grid grid-cols-[120px_1fr_1fr] gap-3 items-center">
+            <div key={tipo} className="grid grid-cols-1 gap-3 items-center sm:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,1fr))]">
               <span className="font-semibold text-sm">{tipo}</span>
               <div>
                 <label className="block text-[10px] text-text-muted mb-0.5">Preço Base (R$)</label>
@@ -418,6 +479,22 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
                   onChange={(e) => setPrecosPromo((prev) => ({ ...prev, [tipo]: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                 />
+              </div>
+              <div>
+                <label className="block text-[10px] text-text-muted mb-0.5">Desconto temporadas anteriores (%)</label>
+                {tipo.includes("Retrô") ? (
+                  <div className="px-3 py-2 bg-bg-base rounded-md text-sm font-medium text-text-muted">Não se aplica</div>
+                ) : (
+                  <input
+                    type="number"
+                    min="0"
+                    max="99.999"
+                    step="0.001"
+                    value={descontosTemporadaAnterior[tipo] ?? ""}
+                    onChange={(e) => setDescontosTemporadaAnterior((prev) => ({ ...prev, [tipo]: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                  />
+                )}
               </div>
             </div>
           ))}

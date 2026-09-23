@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateServerItemPrice,
+  limitarDescontoCupom,
   validateProductVariant,
   normalizeBrazilPhone,
   type ServerCheckoutConfig,
@@ -13,6 +14,8 @@ const config: ServerCheckoutConfig = {
   desconto_global: null,
   promocoes_time: {},
   pronta_entrega_markup: 20,
+  ano_temporada_lancamento: 2026,
+  desconto_temporada_anterior: { Torcedor: 6.671, Jogador: 5.266 },
 };
 
 describe("normalizeBrazilPhone", () => {
@@ -29,7 +32,67 @@ describe("normalizeBrazilPhone", () => {
   });
 });
 
+describe("limitarDescontoCupom", () => {
+  it("mantém cupom de 10% sem promoção", () => {
+    expect(limitarDescontoCupom(10, 100, 100)).toBe(10);
+  });
+
+  it("limita promoção de 15% mais cupom de 10% a 20%", () => {
+    expect(limitarDescontoCupom(10, 85, 100)).toBe(5);
+  });
+
+  it("não permite cupom quando a promoção já atingiu 20%", () => {
+    expect(limitarDescontoCupom(10, 80, 100)).toBe(0);
+  });
+
+  it("arredonda a sobra em centavos", () => {
+    expect(limitarDescontoCupom(10, 84.99, 99.99)).toBe(5);
+  });
+});
+
 describe("calculateServerItemPrice", () => {
+  it("matches client seasonal launch and previous-season prices", () => {
+    const seasonalConfig = {
+      ...config,
+      precos_base: { ...config.precos_base, Torcedor: 149.90, Jogador: 189.90 },
+    };
+
+    expect(calculateServerItemPrice(
+      { tipo: "Torcedor", temporada: "2026/2027" },
+      { tamanho: "M", personalizado: false },
+      seasonalConfig,
+    ).preco).toBe(149.90);
+    expect(calculateServerItemPrice(
+      { tipo: "Torcedor", temporada: "2025/2026" },
+      { tamanho: "M", personalizado: false },
+      seasonalConfig,
+    ).preco).toBeCloseTo(139.90, 2);
+    expect(calculateServerItemPrice(
+      { tipo: "Jogador", temporada: "2025/2026" },
+      { tamanho: "M", personalizado: false },
+      seasonalConfig,
+    ).preco).toBeCloseTo(179.90, 2);
+  });
+
+  it("excludes Retrô and invalid seasonal percentages", () => {
+    const seasonalConfig = {
+      ...config,
+      precos_base: { ...config.precos_base, "Manga Longa Retrô": 169.90, Torcedor: 149.90 },
+      desconto_temporada_anterior: { Retrô: 50, "Manga Longa Retrô": 50, Torcedor: 100 },
+    };
+
+    expect(calculateServerItemPrice(
+      { tipo: "Manga Longa Retrô", temporada: "2025/2026" },
+      { tamanho: "M", personalizado: false },
+      seasonalConfig,
+    ).preco).toBe(169.90);
+    expect(calculateServerItemPrice(
+      { tipo: "Torcedor", temporada: "2025/2026" },
+      { tamanho: "M", personalizado: false },
+      seasonalConfig,
+    ).preco).toBe(149.90);
+  });
+
   it("returns the base and the server add-ons", () => {
     expect(calculateServerItemPrice(
       { tipo: "Torcedor" },

@@ -26,6 +26,24 @@ const CATEGORIAS = [
   "Seleções",
 ].sort((a, b) => (a === "Todas" ? -1 : b === "Todas" ? 1 : a.localeCompare(b)));
 
+const TIMES_PRINCIPAIS = [
+  { nome: "Sport Recife", logo: "https://thumb.wikimedia.org/wikipedia/pt/thumb/1/1a/Sport-clube-recife.svg/250px-Sport-clube-recife.svg.png" },
+  { nome: "Santa Cruz", logo: "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/Santa_Cruz_Futebol_Clube_logo.svg/250px-Santa_Cruz_Futebol_Clube_logo.svg.png" },
+  { nome: "Náutico", logo: "https://thumb.wikimedia.org/wikipedia/pt/thumb/d/de/Simbolo-escudo-nautico.png/250px-Simbolo-escudo-nautico.png" },
+  { nome: "Flamengo", logo: "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/96/Clube_de_Regatas_do_Flamengo_logo.svg/250px-Clube_de_Regatas_do_Flamengo_logo.svg.png" },
+  { nome: "Corinthians", logo: "https://thumb.wikimedia.org/wikipedia/pt/thumb/b/b4/Corinthians_simbolo.png/250px-Corinthians_simbolo.png" },
+  { nome: "Palmeiras", logo: "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/60/SE_Palmeiras_2025_crest.png/250px-SE_Palmeiras_2025_crest.png" },
+  { nome: "São Paulo", logo: "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f4/S%C3%A3o_Paulo_Futebol_Clube_logo_%282022%29.svg/250px-S%C3%A3o_Paulo_Futebol_Clube_logo_%282022%29.svg.png" },
+  { nome: "Vasco da Gama", logo: "https://thumb.wikimedia.org/wikipedia/pt/thumb/8/8b/EscudoDoVascoDaGama.svg/250px-EscudoDoVascoDaGama.svg.png" },
+  { nome: "Real Madrid", logo: "https://thumb.wikimedia.org/wikipedia/pt/thumb/9/98/Real_Madrid.png/250px-Real_Madrid.png" },
+  { nome: "Barcelona", logo: "https://thumb.wikimedia.org/wikipedia/pt/thumb/4/43/FCBarcelona.svg/250px-FCBarcelona.svg.png" },
+  { nome: "Manchester City", logo: "https://thumb.wikimedia.org/wikipedia/pt/thumb/0/02/Manchester_City_Football_Club.png/250px-Manchester_City_Football_Club.png" },
+  { nome: "Brasil", logo: "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/32/Confedera%C3%A7%C3%A3o_Brasileira_de_Futebol_logo_%282020%29.svg/250px-Confedera%C3%A7%C3%A3o_Brasileira_de_Futebol_logo_%282020%29.svg.png" },
+  { nome: "Santos", logo: "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/35/Santos_logo.svg/250px-Santos_logo.svg.png" },
+  { nome: "PSG", logo: "https://thumb.wikimedia.org/wikipedia/en/thumb/a/a7/Paris_Saint-Germain_F.C..svg/250px-Paris_Saint-Germain_F.C..svg.png" },
+];
+const ORDEM_TIMES_PRINCIPAIS = new Map(TIMES_PRINCIPAIS.map(({ nome }, index) => [normalizeNome(nome), index]));
+
 type Ordenacao = "time" | "preco-asc" | "preco-desc" | "categoria" | "temporada-asc" | "temporada-desc";
 
 export default function Loja({ produtos, config }: { produtos: DbProduto[]; config: LojaConfig }) {
@@ -50,7 +68,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     ordemParam === "temporada-asc" ||
     ordemParam === "temporada-desc"
       ? ordemParam
-      : "time";
+      : filtroTime ? "temporada-desc" : "time";
   const precoMinParam = searchParams.get("precoMin");
   const precoMaxParam = searchParams.get("precoMax");
   const precoMin =
@@ -79,12 +97,82 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   const filterKey = searchParams.toString();
   const [pagination, setPagination] = useState({ key: filterKey, count: 12 });
   const visibleCount = pagination.key === filterKey ? pagination.count : 12;
-  const [linkCopiado, setLinkCopiado] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [showAllTimes, setShowAllTimes] = useState(false);
+  const [timesCanScroll, setTimesCanScroll] = useState(false);
+  const [timesCanScrollLeft, setTimesCanScrollLeft] = useState(false);
   const [heroState, setHeroState] = useState<{ current: number; previous: number | null }>({ current: 0, previous: null });
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const filterDrawerRef = useRef<HTMLDivElement>(null);
   const filterCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const timesScrollRef = useRef<HTMLElement>(null);
+  const timesScrollAnimationRef = useRef<number | null>(null);
+
+  const updateTimesScroll = useCallback(() => {
+    const strip = timesScrollRef.current;
+    if (!strip) return;
+    const cards = Array.from(strip.querySelectorAll<HTMLElement>("[data-team-card]"));
+    const lastCard = cards[cards.length - 1];
+    const viewportRight = strip.getBoundingClientRect().right;
+    setTimesCanScrollLeft(strip.scrollLeft > 1);
+    setTimesCanScroll(Boolean(lastCard && lastCard.getBoundingClientRect().right > viewportRight + 1));
+  }, []);
+
+  const animateTimesScroll = (target: number) => {
+    const strip = timesScrollRef.current;
+    if (!strip) return;
+
+    if (timesScrollAnimationRef.current !== null) {
+      window.cancelAnimationFrame(timesScrollAnimationRef.current);
+      timesScrollAnimationRef.current = null;
+    }
+
+    const nextTarget = Math.max(0, target);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      strip.scrollLeft = nextTarget;
+      return;
+    }
+
+    const start = strip.scrollLeft;
+    const distance = nextTarget - start;
+    if (Math.abs(distance) < 1) {
+      strip.scrollLeft = nextTarget;
+      return;
+    }
+
+    const startedAt = performance.now();
+    const duration = 420;
+    const frame = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - (1 - progress) ** 3;
+      strip.scrollLeft = start + distance * eased;
+      if (progress < 1) {
+        timesScrollAnimationRef.current = window.requestAnimationFrame(frame);
+      } else {
+        strip.scrollLeft = nextTarget;
+        timesScrollAnimationRef.current = null;
+      }
+    };
+
+    timesScrollAnimationRef.current = window.requestAnimationFrame(frame);
+  };
+
+  const scrollTimes = (direction: -1 | 1) => {
+    const strip = timesScrollRef.current;
+    if (!strip) return;
+    const cards = Array.from(strip.querySelectorAll<HTMLElement>("[data-team-card]"));
+    if (direction === 1) {
+      const viewportRight = strip.getBoundingClientRect().right;
+      const nextCard = cards.find((card) => card.getBoundingClientRect().right > viewportRight + 1);
+      if (!nextCard) return;
+      const leftBandWidth = window.matchMedia("(min-width: 640px)").matches ? 56 : 64;
+      animateTimesScroll(nextCard.offsetLeft - leftBandWidth);
+      return;
+    }
+
+    animateTimesScroll(0);
+  };
 
   useBodyScrollLock(showFilters);
 
@@ -92,6 +180,23 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     setShowFilters(false);
     filterButtonRef.current?.focus();
   };
+
+  useEffect(() => {
+    const strip = timesScrollRef.current;
+    if (!strip) return;
+
+    updateTimesScroll();
+    strip.addEventListener("scroll", updateTimesScroll, { passive: true });
+    window.addEventListener("resize", updateTimesScroll);
+    return () => {
+      if (timesScrollAnimationRef.current !== null) {
+        window.cancelAnimationFrame(timesScrollAnimationRef.current);
+        timesScrollAnimationRef.current = null;
+      }
+      strip.removeEventListener("scroll", updateTimesScroll);
+      window.removeEventListener("resize", updateTimesScroll);
+    };
+  }, [updateTimesScroll]);
 
   const limparBusca = (inputId: string) => {
     setSearchParams((current) => {
@@ -138,11 +243,11 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   }, [showFilters]);
 
   useEffect(() => {
-    if (linkCopiado) {
-      const timer = setTimeout(() => setLinkCopiado(false), 2000);
+    if (shareFeedback) {
+      const timer = setTimeout(() => setShareFeedback(null), 2000);
       return () => clearTimeout(timer);
     }
-  }, [linkCopiado]);
+  }, [shareFeedback]);
 
   const produtosNormalizados = useMemo(() => {
     return produtos.map((p) => ({
@@ -153,11 +258,16 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     }));
   }, [produtos]);
 
+  const todosTimes = useMemo(() => {
+    const times = produtosNormalizados.map((p) => p.time.trim()).filter(Boolean);
+    return Array.from(new Set(times)).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [produtosNormalizados]);
+
   // Cache prices per product — avoids recomputing on every filter/sort change
   const priceCache = useMemo(() => {
     const map = new Map<string, number>();
     for (const p of produtosNormalizados) {
-      const info = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time);
+      const info = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time, p.temporada);
       map.set(p.id, info.promo ?? info.base);
     }
     return map;
@@ -197,7 +307,32 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
     switch (ordenacao) {
       case "time":
-        res.sort((a, b) => a.time.localeCompare(b.time) || a.nome.localeCompare(b.nome));
+        if (
+          categoriaSelecionada !== "Todas" ||
+          filtroTime ||
+          filtroTipo ||
+          filtroBusca ||
+          precoMin !== undefined ||
+          precoMax !== undefined ||
+          ordemParam !== null
+        ) {
+          res.sort((a, b) => a.time.localeCompare(b.time, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR"));
+          break;
+        }
+        res.sort((a, b) => {
+          const anoA = parseAnoTemporada(a.temporada);
+          const anoB = parseAnoTemporada(b.temporada);
+          const rankA = anoA === config.ano_temporada_lancamento
+            ? ORDEM_TIMES_PRINCIPAIS.get(a.time) ?? TIMES_PRINCIPAIS.length
+            : TIMES_PRINCIPAIS.length;
+          const rankB = anoB === config.ano_temporada_lancamento
+            ? ORDEM_TIMES_PRINCIPAIS.get(b.time) ?? TIMES_PRINCIPAIS.length
+            : TIMES_PRINCIPAIS.length;
+          return rankA - rankB
+            || (rankA < TIMES_PRINCIPAIS.length && rankB < TIMES_PRINCIPAIS.length
+              ? a.nome.localeCompare(b.nome, "pt-BR") || anoB - anoA
+              : a.time.localeCompare(b.time, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR") || anoB - anoA);
+        });
         break;
       case "preco-asc":
         res.sort((a, b) => (precos.get(a.id) ?? 0) - (precos.get(b.id) ?? 0));
@@ -217,7 +352,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     }
 
     return res;
-  }, [produtosNormalizados, categoriaSelecionada, filtroTime, filtroTipo, filtroBusca, ordenacao, precoMin, precoMax, priceCache]);
+  }, [produtosNormalizados, categoriaSelecionada, filtroTime, filtroTipo, filtroBusca, ordenacao, ordemParam, precoMin, precoMax, config.ano_temporada_lancamento, priceCache]);
 
   const timesDisponiveis = useMemo(() => {
     let res = [...produtosNormalizados];
@@ -292,14 +427,14 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     ? getCachedImageUrl(heroImageSource, heroProduct.cached_image_urls, 0, "large")
     : "";
   const heroPrice = heroProduct
-    ? getPrecoProduto(heroProduct.tipo, config, heroProduct.preco_customizado, (heroProduct.promocao_tipo as PromocaoTipo) ?? undefined, heroProduct.promocao_valor, heroProduct.time)
+    ? getPrecoProduto(heroProduct.tipo, config, heroProduct.preco_customizado, (heroProduct.promocao_tipo as PromocaoTipo) ?? undefined, heroProduct.promocao_valor, heroProduct.time, heroProduct.temporada)
     : null;
   const heroPreviousImageSource = heroPreviousProduct ? parseImageUrls(heroPreviousProduct.imagem_urls)[0] : "";
   const heroPreviousImage = heroPreviousProduct && heroPreviousImageSource
     ? getCachedImageUrl(heroPreviousImageSource, heroPreviousProduct.cached_image_urls, 0, "large")
     : "";
   const heroPreviousPrice = heroPreviousProduct
-    ? getPrecoProduto(heroPreviousProduct.tipo, config, heroPreviousProduct.preco_customizado, (heroPreviousProduct.promocao_tipo as PromocaoTipo) ?? undefined, heroPreviousProduct.promocao_valor, heroPreviousProduct.time)
+    ? getPrecoProduto(heroPreviousProduct.tipo, config, heroPreviousProduct.preco_customizado, (heroPreviousProduct.promocao_tipo as PromocaoTipo) ?? undefined, heroPreviousProduct.promocao_valor, heroPreviousProduct.time, heroPreviousProduct.temporada)
     : null;
 
   useEffect(() => {
@@ -439,6 +574,90 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
         </ul>
 
       </div>
+
+      <section className="mx-auto max-w-7xl px-4 pb-4 pt-8 sm:px-6 sm:pb-4 lg:px-8" aria-labelledby="times-title">
+        <div className="mb-4 text-center sm:mb-5">
+          <h2 id="times-title" className="text-2xl font-black tracking-[-0.03em] text-primary sm:text-3xl">Escolha seu time</h2>
+          <p className="mt-2 text-sm text-text-muted">Encontre sua próxima camisa pelo escudo.</p>
+        </div>
+        <div className="relative -mx-4 sm:mx-0">
+          <nav ref={timesScrollRef} style={{ columnGap: "max(0.75rem, calc((100% - 1012px) / 10))" }} className="carousel-scroll relative flex flex-nowrap overflow-x-auto pb-2 pl-[2px] mr-12 sm:mr-14 sm:pl-0" aria-label="Escolha seu time">
+          {TIMES_PRINCIPAIS.map((time) => (
+            <Link
+              key={time.nome}
+              to={`/?time=${encodeURIComponent(time.nome)}#catalogo`}
+              data-team-card
+              className="group flex w-24 shrink-0 flex-col items-center rounded-2xl p-2 text-center transition-colors hover:bg-primary/5 sm:w-[92px]"
+            >
+              <span className="flex h-20 w-20 items-center justify-center rounded-full border border-border bg-card-bg p-2 shadow-card transition-transform group-hover:scale-105">
+                <img src={time.logo} alt="" width={72} height={72} loading="lazy" className="block h-14 w-14 max-h-full max-w-full object-contain" />
+              </span>
+              <span className="mt-2 text-xs font-bold leading-tight text-text-main">{time.nome}</span>
+            </Link>
+          ))}
+            <button
+              type="button"
+              onClick={() => setShowAllTimes((current) => !current)}
+              aria-expanded={showAllTimes}
+              aria-controls="todos-times-panel"
+              data-team-card
+              className="group flex w-24 shrink-0 flex-col items-center rounded-2xl p-2 text-center transition-colors hover:bg-primary/5 sm:w-[92px]"
+            >
+              <span className="flex h-20 w-20 items-center justify-center rounded-full border border-border bg-card-bg p-2 text-primary shadow-card transition-transform group-hover:scale-105">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                  <rect x="4" y="4" width="6" height="6" rx="1" />
+                  <rect x="14" y="4" width="6" height="6" rx="1" />
+                  <rect x="4" y="14" width="6" height="6" rx="1" />
+                  <rect x="14" y="14" width="6" height="6" rx="1" />
+                </svg>
+              </span>
+              <span className="mt-2 text-xs font-bold leading-tight text-text-main">{showAllTimes ? "Ocultar times" : "Ver todos"}</span>
+            </button>
+            <span aria-hidden="true" className="w-full shrink-0" />
+          </nav>
+          {timesCanScrollLeft && (
+            <button
+              type="button"
+              onClick={() => scrollTimes(-1)}
+              className="group pointer-events-auto absolute left-[15px] top-12 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card-bg/95 text-primary shadow-card backdrop-blur-sm transition-[transform,background-color,color] duration-200 ease-out hover:scale-105 active:scale-95 hover:bg-primary hover:text-white focus-visible:scale-105 focus-visible:bg-primary focus-visible:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 sm:left-1"
+              aria-label="Voltar times"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-200 ease-out group-hover:-translate-x-1 group-focus-visible:-translate-x-1" aria-hidden="true">
+                <path d="m15 5-7 7 7 7" />
+              </svg>
+            </button>
+          )}
+          {timesCanScroll && (
+            <button
+              type="button"
+              onClick={() => scrollTimes(1)}
+              className="group pointer-events-auto absolute right-[15px] top-12 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card-bg/95 text-primary shadow-card backdrop-blur-sm transition-[transform,background-color,color] duration-200 ease-out hover:scale-105 active:scale-95 hover:bg-primary hover:text-white focus-visible:scale-105 focus-visible:bg-primary focus-visible:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 sm:right-1"
+              aria-label="Ver mais times"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-200 ease-out group-hover:translate-x-1 group-focus-visible:translate-x-1" aria-hidden="true">
+                <path d="m9 5 7 7-7 7" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {showAllTimes && (
+          <div id="todos-times-panel" className="mt-4 rounded-2xl border border-border bg-bg-base p-4" aria-labelledby="todos-times-title">
+            <h3 id="todos-times-title" className="text-sm font-semibold text-primary">Todos os times</h3>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              {todosTimes.map((time) => (
+                <Link
+                  key={time}
+                  to={`/?time=${encodeURIComponent(time)}#catalogo`}
+                  onClick={() => setShowAllTimes(false)}
+                  className="rounded-xl border border-border bg-card-bg px-3 py-2 text-sm font-medium text-text-main transition-colors hover:border-primary/30 hover:bg-primary/5"
+                >
+                  {time}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
 
       <div className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-12 pt-4 sm:px-6 lg:px-8" id="catalogo">
         <div className="mb-5 flex items-end justify-between gap-4 sm:mb-7">
@@ -673,7 +892,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
               className="h-11 w-full rounded-lg border border-border bg-bg-base px-3 text-sm"
               aria-label="Ordenar produtos"
             >
-              <option value="time">Time / Nome</option>
+              <option value="time">Times em destaque</option>
               <option value="preco-asc">Menor preço</option>
               <option value="preco-desc">Maior preço</option>
               <option value="categoria">Categoria</option>
@@ -685,22 +904,41 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
         {filtrosAtivos && (
           <>
             <button
-              className="col-span-2 min-h-11 self-end whitespace-nowrap rounded-lg border border-accent px-3 text-xs font-bold text-accent hover:bg-accent/10 sm:col-span-1"
+              className="col-span-2 flex h-11 w-11 shrink-0 items-center justify-center self-end whitespace-nowrap rounded-lg border border-accent p-0 text-xs font-bold text-accent hover:bg-accent/10 sm:col-span-1"
               onClick={async () => {
+                const url = window.location.href;
                 try {
-                  await navigator.clipboard.writeText(window.location.href);
-                  setLinkCopiado(true);
-                } catch {
-                  setLinkCopiado(false);
+                  if (typeof navigator.share === "function") {
+                    await navigator.share({
+                      title: "RM Imports",
+                      text: "Confira estes produtos na RM Imports",
+                      url,
+                    });
+                    setShareFeedback("Compartilhado!");
+                    return;
+                  }
+
+                  await navigator.clipboard.writeText(url);
+                  setShareFeedback("Link copiado!");
+                } catch (error) {
+                  if (error && typeof error === "object" && "name" in error && error.name === "AbortError") return;
+                  setShareFeedback("Não foi possível compartilhar.");
                 }
               }}
-              aria-label="Copiar link dos filtros"
+              aria-label="Compartilhar filtros"
+              title="Compartilhar filtros"
             >
-              Copiar link dos filtros
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <path d="m8.59 13.51 6.83 3.98" />
+                <path d="m15.41 6.51-6.82 3.98" />
+              </svg>
             </button>
-            {linkCopiado && (
+            {shareFeedback && (
               <span className="self-center text-[10px] sm:text-xs text-accent" role="status" aria-live="polite">
-                Link copiado!
+                {shareFeedback}
               </span>
             )}
           </>
@@ -754,7 +992,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       ) : (
         <div key={filterKey} className="grid grid-cols-2 items-stretch gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))] sm:gap-5">
           {produtosFiltrados.slice(0, visibleCount).map((p, index) => {
-            const priceInfo = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time);
+            const priceInfo = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time, p.temporada);
             const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
 
             return (

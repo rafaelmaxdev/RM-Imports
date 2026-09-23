@@ -75,7 +75,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   const [cupomAplicado, setCupomAplicado] = useState<Cupom | null>(null);
   const [cupomErro, setCupomErro] = useState("");
   const [cupomLoading, setCupomLoading] = useState(false);
-  const totalComDesconto = cupomAplicado ? aplicarCupom(total, cupomAplicado) : total;
+  const subtotalBase = cart.reduce((sum, item) => sum + (item.precoBase ?? item.preco), 0);
+  const totalComDesconto = cupomAplicado ? aplicarCupom(total, cupomAplicado, subtotalBase) : total;
 
   // Fechar dropdown ao clicar fora + limpar debounce ao desmontar
   useEffect(() => {
@@ -414,14 +415,13 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
             <div className="px-6 py-4 border-t border-border">
               <div className="flex flex-col gap-0.5 mb-4">
                 {(() => {
-                  const subTotalBase = cart.reduce((s, i) => s + (i.precoBase ?? i.preco), 0);
-                  const promoSavings = subTotalBase - total;
+                  const promoSavings = subtotalBase - total;
                   return (
                     <>
                       {promoSavings > 0.01 && (
                         <div className="flex justify-between text-xs text-text-muted">
                           <span>Subtotal (sem promo)</span>
-                          <span>{formatarMoeda(subTotalBase)}</span>
+                          <span>{formatarMoeda(subtotalBase)}</span>
                         </div>
                       )}
                       {promoSavings > 0.01 && (
@@ -553,7 +553,12 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                         try {
                           const cupom = await validarCupom(cupomCodigo, total, endereco.telefone);
                           if (cupom) {
-                            setCupomAplicado(cupom);
+                            const totalComCupom = aplicarCupom(total, cupom, subtotalBase);
+                            if (total - totalComCupom <= 0.01) {
+                              setCupomErro("Este pedido já atingiu o limite de 20% de desconto.");
+                            } else {
+                              setCupomAplicado(cupom);
+                            }
                           } else {
                             setCupomErro("Cupom inválido ou expirado.");
                           }
@@ -714,14 +719,13 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
             <div className="px-6 py-4 border-t border-border">
               <div className="flex flex-col gap-0.5 mb-3">
                 {(() => {
-                  const subTotalBase = cart.reduce((s, i) => s + (i.precoBase ?? i.preco), 0);
-                  const promoSavings = subTotalBase - total;
+                  const promoSavings = subtotalBase - total;
                   return (
                     <>
                       {promoSavings > 0.01 && (
                         <div className="flex justify-between text-xs text-text-muted">
                           <span>Subtotal (sem promo)</span>
-                          <span>{formatarMoeda(subTotalBase)}</span>
+                          <span>{formatarMoeda(subtotalBase)}</span>
                         </div>
                       )}
                       {promoSavings > 0.01 && (
@@ -828,14 +832,13 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
             <div className="px-6 py-4 border-t border-border">
               <div className="flex flex-col gap-0.5 mb-3">
                 {(() => {
-                  const subTotalBase = cart.reduce((s, i) => s + (i.precoBase ?? i.preco), 0);
-                  const promoSavings = subTotalBase - total;
+                  const promoSavings = subtotalBase - total;
                   return (
                     <>
                       {promoSavings > 0.01 && (
                         <div className="flex justify-between text-xs text-text-muted">
                           <span>Subtotal (sem promo)</span>
-                          <span>{formatarMoeda(subTotalBase)}</span>
+                          <span>{formatarMoeda(subtotalBase)}</span>
                         </div>
                       )}
                       {promoSavings > 0.01 && (

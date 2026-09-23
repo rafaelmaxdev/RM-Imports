@@ -121,6 +121,8 @@ export interface LojaConfig {
   pronta_entrega_markup: number;
   custo_base: Record<string, number>;
   personalizacao_custo: Record<string, number>;
+  ano_temporada_lancamento: number;
+  desconto_temporada_anterior: Record<string, number>;
 }
 
 export const DEFAULT_CONFIG: LojaConfig = {
@@ -163,6 +165,19 @@ export const DEFAULT_CONFIG: LojaConfig = {
   desconto_global: null,
   promocoes_time: {},
   pronta_entrega_markup: 20,
+  ano_temporada_lancamento: 2026,
+  desconto_temporada_anterior: {
+    "Torcedor": 6.671,
+    "Jogador": 5.266,
+    "Retrô": 0,
+    "Manga Longa Torcedor": 0,
+    "Manga Longa Jogador": 0,
+    "Manga Longa Retrô": 0,
+    "Goleiro": 0,
+    "Treinamento": 0,
+    "Polo": 0,
+    "NBA": 0,
+  },
   custo_base: {
     "Torcedor": 8.50,
     "Jogador": 12,
@@ -198,6 +213,32 @@ export interface PromocaoInfo {
   discountLabel: string | null;
 }
 
+function getPrecoBaseSazonal(
+  tipo: string,
+  basePrice: number,
+  config: LojaConfig,
+  temporada?: string,
+): number {
+  const primeiroAno = typeof temporada === "string" ? temporada.match(/\d{4}/)?.[0] : undefined;
+  const desconto = config.desconto_temporada_anterior?.[tipo];
+
+  if (
+    tipo.includes("Retrô") ||
+    primeiroAno === undefined ||
+    typeof config.ano_temporada_lancamento !== "number" ||
+    !Number.isFinite(config.ano_temporada_lancamento) ||
+    Number(primeiroAno) >= config.ano_temporada_lancamento ||
+    typeof desconto !== "number" ||
+    !Number.isFinite(desconto) ||
+    desconto <= 0 ||
+    desconto >= 100
+  ) {
+    return basePrice;
+  }
+
+  return Math.round((basePrice * (1 - desconto / 100)) * 100) / 100;
+}
+
 export function getPrecoProduto(
   tipo: string,
   config: LojaConfig,
@@ -205,8 +246,9 @@ export function getPrecoProduto(
   promocaoTipo?: PromocaoTipo,
   promocaoValor?: number | null,
   time?: string,
+  temporada?: string,
 ): PromocaoInfo {
-  const basePrice = config.precos_base[tipo] ?? 89.90;
+  const basePrice = getPrecoBaseSazonal(tipo, config.precos_base[tipo] ?? 89.90, config, temporada);
 
   // 1. Individual product promo takes priority
   if (promocaoTipo === "porcentagem" && promocaoValor) {
@@ -473,8 +515,9 @@ export function calcularPreco(
   promocaoTipo?: PromocaoTipo,
   promocaoValor?: number | null,
   time?: string,
+  temporada?: string,
 ): number {
-  const { promo, base } = getPrecoProduto(tipo, config ?? DEFAULT_CONFIG, precoCustomizado, promocaoTipo, promocaoValor, time);
+  const { promo, base } = getPrecoProduto(tipo, config ?? DEFAULT_CONFIG, precoCustomizado, promocaoTipo, promocaoValor, time, temporada);
   let preco = promo ?? base;
   if (ADICIONAL_TAMANHO[tamanho]) preco += ADICIONAL_TAMANHO[tamanho];
   if (personalizado) preco += precoPersonalizacao(tipo);

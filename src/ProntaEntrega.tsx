@@ -190,6 +190,7 @@ function ProntaEntregaDetailModal({ product, config, onClose }: DetailModalProps
     product.promocaoTipo,
     product.promocaoValor,
     product.time,
+    product.temporada,
   );
   const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
   const peMarkup = config.pronta_entrega_markup ?? 20;
@@ -709,6 +710,7 @@ export default function ProntaEntrega() {
                 p.promocaoTipo,
                 p.promocaoValor,
                 p.time,
+                p.temporada,
               );
               const peMarkup = config!.pronta_entrega_markup ?? 20;
               const { base, promo, emPromocao, badge, discountLabel } = priceInfo;

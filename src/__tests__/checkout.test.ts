@@ -69,6 +69,18 @@ describe("Coupon application", () => {
     expect(total).toBe(25);
   });
 
+  it("mantém cupom de 10% sem promoção", () => {
+    expect(aplicarCupom(100, cupomPorcentagem, 100)).toBe(90);
+  });
+
+  it("limita promoção de 15% mais cupom de 10% a 20%", () => {
+    expect(aplicarCupom(85, cupomPorcentagem, 100)).toBe(80);
+  });
+
+  it("não aplica cupom quando a promoção já atingiu 20%", () => {
+    expect(aplicarCupom(80, cupomPorcentagem, 100)).toBe(80);
+  });
+
   it("formata moeda corretamente", () => {
     expect(formatarMoeda(129.90)).toContain("129,90");
     expect(formatarMoeda(0)).toContain("0,00");

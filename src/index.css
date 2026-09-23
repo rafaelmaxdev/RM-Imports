@@ -164,6 +164,18 @@ html {
   outline-offset: 2px;
 }
 
+button:not(:disabled),
+a[href],
+select,
+summary,
+label[for] {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 button:focus-visible,
 a:focus-visible {
   outline: 2px solid #e94560;

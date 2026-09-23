@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   calculateServerItemPrice,
   INVALID_PRODUCT_VARIANT_MESSAGE,
+  limitarDescontoCupom,
   normalizeBrazilPhone,
   type ServerCheckoutConfig,
   type ServerProductPricing,
@@ -166,6 +167,19 @@ function buildConfig(rows: unknown): ServerCheckoutConfig {
     promocoes_time: {},
     desconto_global: null,
     pronta_entrega_markup: 20,
+    ano_temporada_lancamento: 2026,
+    desconto_temporada_anterior: {
+      Torcedor: 6.671,
+      Jogador: 5.266,
+      Retrô: 0,
+      "Manga Longa Torcedor": 0,
+      "Manga Longa Jogador": 0,
+      "Manga Longa Retrô": 0,
+      Goleiro: 0,
+      Treinamento: 0,
+      Polo: 0,
+      NBA: 0,
+    },
   };
 
   if (!Array.isArray(rows)) return config;
@@ -190,6 +204,12 @@ function buildConfig(rows: unknown): ServerCheckoutConfig {
         break;
       case "pronta_entrega_markup":
         if (typeof rawRow.value === "number") config.pronta_entrega_markup = rawRow.value;
+        break;
+      case "ano_temporada_lancamento":
+        if (typeof rawRow.value === "number") config.ano_temporada_lancamento = rawRow.value;
+        break;
+      case "desconto_temporada_anterior":
+        config.desconto_temporada_anterior = asNumberRecord(rawRow.value) ?? config.desconto_temporada_anterior;
         break;
     }
   }
@@ -324,6 +344,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const subtotal = Math.round(orderItems.reduce((sum, item) => sum + item.preco, 0) * 100) / 100;
+    const subtotalBase = Math.round(orderItems.reduce((sum, item) => sum + item.precoBase, 0) * 100) / 100;
     let coupon: CouponReservation | null = null;
 
     if (couponCode) {
@@ -345,8 +366,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: COUPON_ERROR });
       }
 
-      const desconto = Math.round(rawCoupon.desconto * 100) / 100;
-      if (desconto < 0 || desconto > subtotal) {
+      const descontoSolicitado = Math.round(rawCoupon.desconto * 100) / 100;
+      if (descontoSolicitado < 0 || descontoSolicitado > subtotal) {
+        await releaseCoupon();
+        return res.status(400).json({ error: COUPON_ERROR });
+      }
+      const desconto = limitarDescontoCupom(descontoSolicitado, subtotal, subtotalBase);
+      if (desconto <= 0) {
         await releaseCoupon();
         return res.status(400).json({ error: COUPON_ERROR });
       }

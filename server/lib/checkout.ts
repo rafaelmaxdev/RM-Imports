@@ -1,6 +1,7 @@
 export interface ServerProductPricing {
   tipo: string;
   time?: string | null;
+  temporada?: string | null;
   preco_customizado?: number | null;
   promocao_tipo?: string | null;
   promocao_valor?: number | null;
@@ -36,6 +37,8 @@ export interface ServerCheckoutConfig {
   desconto_global?: number | null;
   promocoes_time?: Record<string, ServerTeamPromotion>;
   pronta_entrega_markup?: number | null;
+  ano_temporada_lancamento?: number;
+  desconto_temporada_anterior?: Record<string, number>;
 }
 
 const TAMANHOS = ["P", "M", "G", "GG", "G1", "G2", "G3"];
@@ -117,6 +120,11 @@ function roundCents(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+export function limitarDescontoCupom(descontoSolicitado: number, subtotal: number, subtotalBase: number): number {
+  const sobra = roundCents(Math.max(0, subtotalBase * 0.20 - (subtotalBase - subtotal)));
+  return Math.min(roundCents(Math.max(0, descontoSolicitado)), sobra);
+}
+
 function configuredPositiveNumber(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
@@ -129,12 +137,43 @@ function isValidDiscountPercentage(value: number | null | undefined): value is n
   return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 100;
 }
 
+function getServerSeasonalBasePrice(
+  tipo: string,
+  basePrice: number,
+  temporada: string | null | undefined,
+  config: ServerCheckoutConfig,
+): number {
+  const primeiroAno = typeof temporada === "string" ? temporada.match(/\d{4}/)?.[0] : undefined;
+  const desconto = config.desconto_temporada_anterior?.[tipo];
+
+  if (
+    tipo.includes("Retrô") ||
+    primeiroAno === undefined ||
+    typeof config.ano_temporada_lancamento !== "number" ||
+    !Number.isFinite(config.ano_temporada_lancamento) ||
+    Number(primeiroAno) >= config.ano_temporada_lancamento ||
+    typeof desconto !== "number" ||
+    !Number.isFinite(desconto) ||
+    desconto <= 0 ||
+    desconto >= 100
+  ) {
+    return basePrice;
+  }
+
+  return roundCents(basePrice * (1 - desconto / 100));
+}
+
 export function calculateServerItemPrice(
   product: ServerProductPricing,
   options: ServerItemPricingOptions,
   config: ServerCheckoutConfig,
 ): { preco: number; precoBase: number } {
-  const basePrice = configuredPositiveNumber(config.precos_base?.[product.tipo]) ?? 89.90;
+  const basePrice = getServerSeasonalBasePrice(
+    product.tipo,
+    configuredPositiveNumber(config.precos_base?.[product.tipo]) ?? 89.90,
+    product.temporada,
+    config,
+  );
   const customPrice = configuredPositiveNumber(product.preco_customizado);
   let unitPrice = basePrice;
   let priceBase = basePrice;

@@ -178,6 +178,10 @@ function configFromRows(data: { key: string; value: unknown }[]): LojaConfig {
       config.custo_base = row.value as Record<string, number>;
     } else if (row.key === "personalizacao_custo" && typeof row.value === "object") {
       config.personalizacao_custo = row.value as Record<string, number>;
+    } else if (row.key === "ano_temporada_lancamento" && typeof row.value === "number") {
+      config.ano_temporada_lancamento = row.value;
+    } else if (row.key === "desconto_temporada_anterior" && row.value !== null && typeof row.value === "object") {
+      config.desconto_temporada_anterior = row.value as Record<string, number>;
     }
   }
   return config;
@@ -190,7 +194,7 @@ export async function getAdminLojaConfig(): Promise<LojaConfig> {
 }
 
 export async function updateLojaConfig(
-  key: "precos_base" | "precos_promocao" | "promocao_ativa" | "desconto_global" | "promocoes_time" | "pronta_entrega_markup" | "custo_base" | "personalizacao_custo",
+  key: "precos_base" | "precos_promocao" | "promocao_ativa" | "desconto_global" | "promocoes_time" | "pronta_entrega_markup" | "custo_base" | "personalizacao_custo" | "ano_temporada_lancamento" | "desconto_temporada_anterior",
   value: Record<string, number> | Record<string, boolean> | number | null | Record<string, { tipo: string; valor: number | null; preco: number | null }>,
 ): Promise<void> {
   const { error } = await supabase
@@ -849,13 +853,16 @@ export async function validarCupom(codigo: string, totalPedido: number, telefone
   return (await res.json()) as Cupom;
 }
 
-export function aplicarCupom(total: number, cupom: Cupom): number {
-  if (cupom.tipo === "porcentagem") {
-    const desconto = total * (cupom.valor / 100);
-    const capped = cupom.desconto_maximo !== null ? Math.min(desconto, cupom.desconto_maximo) : desconto;
-    return Math.max(0, Math.round((total - capped) * 100) / 100);
+export function aplicarCupom(total: number, cupom: Cupom, subtotalBase?: number): number {
+  let desconto = cupom.tipo === "porcentagem" ? total * (cupom.valor / 100) : cupom.valor;
+  if (cupom.tipo === "porcentagem" && cupom.desconto_maximo !== null) {
+    desconto = Math.min(desconto, cupom.desconto_maximo);
   }
-  return Math.max(0, Math.round((total - cupom.valor) * 100) / 100);
+  if (subtotalBase !== undefined) {
+    const sobra = Math.round(Math.max(0, subtotalBase * 0.20 - (subtotalBase - total)) * 100) / 100;
+    desconto = Math.min(desconto, sobra);
+  }
+  return Math.max(0, Math.round((total - desconto) * 100) / 100);
 }
 
 export async function getCupomRevenue(codigo: string): Promise<{

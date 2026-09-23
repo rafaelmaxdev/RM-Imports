@@ -31,6 +31,50 @@ function categoriaEmPromocao(tipo: string, ativa = true): LojaConfig {
 // getPrecoProduto
 // ---------------------------------------------------------------------------
 describe("getPrecoProduto", () => {
+  const configComPrecosDeLancamento: LojaConfig = {
+    ...DEFAULT_CONFIG,
+    precos_base: {
+      ...DEFAULT_CONFIG.precos_base,
+      Torcedor: 149.90,
+      Jogador: 189.90,
+    },
+  };
+
+  it("keeps launch prices for current, future and invalid seasons", () => {
+    for (const temporada of [undefined, "2026/2027", "2027/2028", "25/26", "sem temporada"]) {
+      const r = getPrecoProduto("Torcedor", configComPrecosDeLancamento, null, undefined, null, undefined, temporada);
+      expect(r.base).toBe(149.90);
+    }
+  });
+
+  it("applies default previous-season discounts to Torcedor and Jogador", () => {
+    const torcedor = getPrecoProduto("Torcedor", configComPrecosDeLancamento, null, undefined, null, undefined, "2025/2026");
+    const jogador = getPrecoProduto("Jogador", configComPrecosDeLancamento, null, undefined, null, undefined, "2025/2026");
+
+    expect(torcedor.base).toBeCloseTo(139.90, 2);
+    expect(jogador.base).toBeCloseTo(179.90, 2);
+  });
+
+  it("does not discount Retrô products", () => {
+    const config = {
+      ...configComPrecosDeLancamento,
+      desconto_temporada_anterior: { ...DEFAULT_CONFIG.desconto_temporada_anterior, Retrô: 50 },
+    };
+    const r = getPrecoProduto("Manga Longa Retrô", config, null, undefined, null, undefined, "2025/2026");
+
+    expect(r.base).toBe(DEFAULT_CONFIG.precos_base["Manga Longa Retrô"]);
+  });
+
+  it.each([0, -1, 100, 101, Number.NaN])("ignores invalid seasonal discount %p", (desconto) => {
+    const config = {
+      ...configComPrecosDeLancamento,
+      desconto_temporada_anterior: { ...DEFAULT_CONFIG.desconto_temporada_anterior, Torcedor: desconto },
+    };
+    const r = getPrecoProduto("Torcedor", config, null, undefined, null, undefined, "2025/2026");
+
+    expect(r.base).toBe(149.90);
+  });
+
   // ── Individual product promos ──
 
   it("returns base when no promo info given and category promo is off", () => {

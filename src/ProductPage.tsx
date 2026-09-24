@@ -83,7 +83,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
     const images = parseImageUrls(produto.imagem_urls);
     const imageUrl = images[0]
       ? absoluteUrl(getCachedImageUrl(images[0], produto.cached_image_urls, 0, "large"))
-      : absoluteUrl("/logo.png");
+      : absoluteUrl("/rm-imports-icon.png");
     const structuredPriceInfo = getPrecoProduto(
       produto.tipo,
       config,
@@ -549,7 +549,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
               const relatedImages = parseImageUrls(related.imagem_urls);
               const relatedImage = relatedImages[0]
                 ? getCachedImageUrl(relatedImages[0], related.cached_image_urls, 0, "small")
-                : "/logo.png";
+                : "/rm-imports-icon.png";
               const relatedPriceInfo = getPrecoProduto(
                 related.tipo,
                 config,

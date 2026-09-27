@@ -6,6 +6,11 @@ import {
   normalizeBrazilPhone,
   type ServerCheckoutConfig,
 } from "../../server/lib/checkout";
+import {
+  creditReleasePeriod,
+  findApprovedPayment,
+  mapMercadoPagoPaymentType,
+} from "../../server/lib/payment-reconciliation";
 
 const config: ServerCheckoutConfig = {
   precos_base: { Torcedor: 129.90, Jogador: 169.90, NBA: 189.90 },
@@ -194,5 +199,78 @@ describe("validateProductVariant", () => {
     [{ tipo: "produto novo", feminino: false }, { tamanho: "G3", genero: "Masculino", personalizado: false }],
   ])("accepts valid variant %#", (product, options) => {
     expect(() => validateProductVariant(product, options)).not.toThrow();
+  });
+});
+
+describe("findApprovedPayment", () => {
+  const orderId = "UL-ABC12345";
+  const validPayment = {
+    id: "123456789",
+    status: "approved",
+    external_reference: orderId,
+    currency_id: "BRL",
+    transaction_amount: 129.90,
+    payment_type_id: "credit_card",
+  };
+
+  it("finds the first approved payment matching the order", () => {
+    expect(findApprovedPayment([
+      { ...validPayment, status: "pending" },
+      validPayment,
+    ], orderId, 129.90)).toEqual(validPayment);
+  });
+
+  it.each([
+    ["valor", { transaction_amount: 129.91 }],
+    ["moeda", { currency_id: "USD" }],
+    ["referência", { external_reference: "UL-OTHER1" }],
+    ["status", { status: "pending" }],
+  ])("rejects a payment with divergent %s", (_field, change) => {
+    expect(findApprovedPayment([
+      { ...validPayment, ...change },
+    ], orderId, 129.90)).toBeUndefined();
+  });
+});
+
+describe("mapMercadoPagoPaymentType", () => {
+  it.each([
+    ["credit_card", "credit_card"],
+    ["prepaid_card", "credit_card"],
+    ["debit_card", "debit_card"],
+    ["bank_transfer", "pix"],
+    ["ticket", "pix"],
+  ])("maps %s", (type, expected) => {
+    expect(mapMercadoPagoPaymentType(type)).toBe(expected);
+  });
+
+  it("rejects unknown payment types", () => {
+    expect(mapMercadoPagoPaymentType("account_money")).toBeUndefined();
+    expect(mapMercadoPagoPaymentType(42)).toBeUndefined();
+  });
+});
+
+describe("creditReleasePeriod", () => {
+  const approvedAt = "2026-01-01T00:00:00.000Z";
+  const payment = (moneyReleaseDate: unknown) => ({
+    payment_type_id: "credit_card",
+    date_approved: approvedAt,
+    money_release_date: moneyReleaseDate,
+  });
+
+  it.each([
+    ["2026-01-01T12:00:00.000Z", "immediate"],
+    ["2026-01-15T00:00:00.000Z", "14_days"],
+    ["2026-01-31T00:00:00.000Z", "30_days"],
+  ])("classifies a release on %s as %s", (moneyReleaseDate, expected) => {
+    expect(creditReleasePeriod(payment(moneyReleaseDate))).toBe(expected);
+  });
+
+  it("rejects missing, invalid, and non-credit-card dates", () => {
+    expect(creditReleasePeriod(payment(undefined))).toBeUndefined();
+    expect(creditReleasePeriod(payment("not-a-date"))).toBeUndefined();
+    expect(creditReleasePeriod({
+      ...payment("2026-01-02T00:00:00.000Z"),
+      payment_type_id: "debit_card",
+    })).toBeUndefined();
   });
 });

@@ -10,9 +10,15 @@ import {
   isAdminToken,
   verifyOrderAccessToken,
 } from "../../server/lib/security.js";
+import {
+  creditReleasePeriod,
+  findApprovedPayment,
+  mapMercadoPagoPaymentType,
+} from "../../server/lib/payment-reconciliation.js";
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const mpAccessToken = process.env.MP_ACCESS_TOKEN;
 
 const supabase = supabaseUrl && serviceRoleKey
   ? createClient(supabaseUrl, serviceRoleKey)
@@ -54,6 +60,100 @@ function publicOrder(order: Record<string, unknown>, accessToken: string) {
     endereco: typeof safe.endereco === "string" ? JSON.parse(safe.endereco) : safe.endereco,
     orderAccessToken: accessToken,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function reconcilePendingPayment(order: Record<string, unknown>) {
+  if (!mpAccessToken || order.status !== "pendente") return order;
+  if (typeof order.id !== "string" || !ORDER_ID_PATTERN.test(order.id)) return order;
+
+  const total = Number(order.total);
+  if (!Number.isFinite(total)) return order;
+  if (!supabase) return order;
+
+  let payload: unknown;
+  try {
+    const response = await fetch(
+      `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(order.id)}&sort=date_created&criteria=desc&limit=10`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${mpAccessToken}`,
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    if (!response.ok) throw new Error("Mercado Pago request failed");
+    payload = await response.json();
+  } catch {
+    console.warn("[order] payment reconciliation unavailable");
+    return order;
+  }
+
+  const results = isRecord(payload) ? payload.results : undefined;
+  const payment = findApprovedPayment(results, order.id, Number(order.total));
+  if (!payment) return order;
+
+  const updateData: Record<string, unknown> = {
+    status: "pago",
+    mp_payment_id: String(payment.id),
+  };
+  const paymentMethod = mapMercadoPagoPaymentType(payment.payment_type_id);
+  if (paymentMethod) updateData.payment_method = paymentMethod;
+  const releasePeriod = creditReleasePeriod(payment);
+  if (releasePeriod) updateData.credit_release_period = releasePeriod;
+
+  let updatedOrder: Record<string, unknown> | null;
+  let updateError: unknown;
+  try {
+    const result = await supabase
+      .from("pedidos")
+      .update(updateData)
+      .eq("id", order.id)
+      .eq("status", "pendente")
+      .select(PUBLIC_ORDER_FIELDS)
+      .maybeSingle();
+    updatedOrder = result.data as Record<string, unknown> | null;
+    updateError = result.error;
+  } catch {
+    console.warn("[order] payment reconciliation update failed");
+    return order;
+  }
+
+  if (updateError) {
+    console.warn("[order] payment reconciliation update failed");
+    return order;
+  }
+
+  if (!updatedOrder) {
+    try {
+      const { data: currentOrder } = await supabase
+        .from("pedidos")
+        .select(PUBLIC_ORDER_FIELDS)
+        .eq("id", order.id)
+        .maybeSingle();
+      return (currentOrder as Record<string, unknown> | null) ?? order;
+    } catch {
+      console.warn("[order] payment reconciliation reload failed");
+      return order;
+    }
+  }
+
+  try {
+    const { error: couponError } = await supabase.rpc("finalizar_uso_cupom", {
+      p_pedido_id: order.id,
+      p_status: "confirmado",
+    });
+    if (couponError) console.warn("[order] coupon confirmation failed");
+  } catch {
+    console.warn("[order] coupon confirmation failed");
+  }
+
+  return updatedOrder;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -131,10 +231,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (admin) {
     const { data: order } = await supabase.from("pedidos").select("*").eq("id", id).single();
     if (!order) return res.status(404).json({ error: "Order not found" });
+    const reconciledOrder = await reconcilePendingPayment(order);
     return res.status(200).json({
-      ...order,
-      itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens,
-      endereco: order.endereco ? (typeof order.endereco === "string" ? JSON.parse(order.endereco) : order.endereco) : null,
+      ...reconciledOrder,
+      itens: typeof reconciledOrder.itens === "string" ? JSON.parse(reconciledOrder.itens) : reconciledOrder.itens,
+      endereco: reconciledOrder.endereco ? (typeof reconciledOrder.endereco === "string" ? JSON.parse(reconciledOrder.endereco) : reconciledOrder.endereco) : null,
     });
   }
 
@@ -155,5 +256,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!order || (!tokenIsValid && order.telefone_normalizado !== phone)) {
     return res.status(404).json({ error: "Pedido não encontrado." });
   }
-  return res.status(200).json(publicOrder(order, createOrderAccessToken(order.id, serviceRoleKey)));
+  const reconciledOrder = await reconcilePendingPayment(order);
+  return res.status(200).json(publicOrder(reconciledOrder, createOrderAccessToken(order.id, serviceRoleKey)));
 }

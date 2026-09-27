@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { getPedidos } from "./lib/db";
+import { getPedidoById, getPedidos } from "./lib/db";
 import { clearCache } from "./lib/cache";
 import type { Order, PaymentMethod } from "./types";
 import { formatarMoeda } from "./types";
@@ -17,7 +17,15 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     clearCache("pedidos");
     async function load() {
       try {
-        const all = await getPedidos();
+        let all = await getPedidos();
+        const candidates = all
+          .filter((o) => o.status === "pendente" && !o.admin_order && !o.pronta_entrega && o.payment_method && o.mp_preference_id)
+          .slice(0, 10);
+        await Promise.allSettled(candidates.map((o) => getPedidoById(o.id)));
+        if (candidates.length > 0) {
+          clearCache("pedidos");
+          all = await getPedidos();
+        }
         setOrders(all);
       } catch (err) {
         console.error("Erro ao carregar pedidos:", err);

@@ -13,6 +13,7 @@ import {
 import {
   creditReleasePeriod,
   findApprovedPayment,
+  isMissingCreditReleasePeriodColumn,
   mapMercadoPagoPaymentType,
 } from "../../server/lib/payment-reconciliation.js";
 
@@ -110,13 +111,25 @@ async function reconcilePendingPayment(order: Record<string, unknown>) {
   let updatedOrder: Record<string, unknown> | null;
   let updateError: unknown;
   try {
-    const result = await supabase
+    let result = await supabase
       .from("pedidos")
       .update(updateData)
       .eq("id", order.id)
       .eq("status", "pendente")
       .select(PUBLIC_ORDER_FIELDS)
       .maybeSingle();
+
+    if (isMissingCreditReleasePeriodColumn(result.error) && releasePeriod) {
+      delete updateData.credit_release_period;
+      result = await supabase
+        .from("pedidos")
+        .update(updateData)
+        .eq("id", order.id)
+        .eq("status", "pendente")
+        .select(PUBLIC_ORDER_FIELDS)
+        .maybeSingle();
+    }
+
     updatedOrder = result.data as Record<string, unknown> | null;
     updateError = result.error;
   } catch {

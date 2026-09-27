@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
+import { isMissingCreditReleasePeriodColumn } from "../server/lib/payment-reconciliation.js";
 
 const mpAccessToken = process.env.MP_ACCESS_TOKEN;
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -204,11 +205,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else updateData.credit_release_period = "30_days";
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("pedidos")
     .update(updateData)
     .eq("id", externalReference)
     .select("id");
+
+  if (error && isMissingCreditReleasePeriodColumn(error) && "credit_release_period" in updateData) {
+    delete updateData.credit_release_period;
+    ({ data, error } = await supabase
+      .from("pedidos")
+      .update(updateData)
+      .eq("id", externalReference)
+      .select("id"));
+  }
 
   if (error) {
     // Status transition violations are permanent — order already advanced past this status

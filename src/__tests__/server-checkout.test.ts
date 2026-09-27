@@ -9,6 +9,7 @@ import {
 import {
   creditReleasePeriod,
   findApprovedPayment,
+  isMissingCreditReleasePeriodColumn,
   mapMercadoPagoPaymentType,
 } from "../../server/lib/payment-reconciliation";
 
@@ -272,5 +273,22 @@ describe("creditReleasePeriod", () => {
       ...payment("2026-01-02T00:00:00.000Z"),
       payment_type_id: "debit_card",
     })).toBeUndefined();
+  });
+});
+
+describe("isMissingCreditReleasePeriodColumn", () => {
+  it("identifies the missing credit release period column", () => {
+    expect(isMissingCreditReleasePeriodColumn({
+      code: "42703",
+      message: 'column "credit_release_period" does not exist',
+    })).toBe(true);
+  });
+
+  it.each([
+    { code: "42703", message: 'column "status" does not exist' },
+    { code: "23505", message: 'credit_release_period already exists' },
+    null,
+  ])("rejects unrelated errors: %j", (error) => {
+    expect(isMissingCreditReleasePeriodColumn(error)).toBe(false);
   });
 });

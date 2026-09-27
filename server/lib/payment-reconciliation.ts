@@ -30,6 +30,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+export function isMissingCreditReleasePeriodColumn(error: unknown): boolean {
+  return isRecord(error)
+    && error.code === "42703"
+    && typeof error.message === "string"
+    && error.message.includes("credit_release_period");
+}
+
 function hasValidPaymentId(value: unknown): boolean {
   if (typeof value === "string") return /^[0-9]{6,30}$/.test(value);
   return typeof value === "number"

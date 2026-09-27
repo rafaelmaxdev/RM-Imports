@@ -87,20 +87,20 @@ describe("Cart pricing: personalization", () => {
     expect(price).toBe(169.90 + ADICIONAL_TAMANHO["G3"] + precoPersonalizacao("Jogador"));
   });
 
-  it("uses R$20 personalization for Torcedor only", () => {
+  it("uses R$20 personalization for all types", () => {
     expect(precoPersonalizacao("Torcedor")).toBe(20.00);
     expect(calcularPreco("Torcedor", "M", true)).toBe(DEFAULT_CONFIG.precos_base.Torcedor + 20.00);
   });
 
-  it("uses R$25 personalization for Manga Longa Torcedor", () => {
-    expect(precoPersonalizacao("Manga Longa Torcedor")).toBe(25.00);
+  it("uses R$20 personalization for Manga Longa Torcedor", () => {
+    expect(precoPersonalizacao("Manga Longa Torcedor")).toBe(20.00);
   });
 
-  it("uses R$25 personalization for other types", () => {
-    expect(precoPersonalizacao("Jogador")).toBe(25.00);
-    expect(precoPersonalizacao("Retrô")).toBe(25.00);
-    expect(precoPersonalizacao("Polo")).toBe(25.00);
-    expect(precoPersonalizacao("NBA")).toBe(25.00);
+  it("uses R$20 personalization for other types", () => {
+    expect(precoPersonalizacao("Jogador")).toBe(20.00);
+    expect(precoPersonalizacao("Retrô")).toBe(20.00);
+    expect(precoPersonalizacao("Polo")).toBe(20.00);
+    expect(precoPersonalizacao("NBA")).toBe(20.00);
   });
 });
 

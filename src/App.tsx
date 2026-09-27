@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense, useRef } from "react";
 import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation } from "react-router-dom";
 import Loja from "./Loja";
 import Footer from "./Footer";
@@ -8,9 +8,10 @@ import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import { getProdutos, getLojaConfig, getAdminLojaConfig } from "./lib/db";
 import type { DbProduto } from "./lib/db";
 import type { OrderAddress, LojaConfig, PaymentMethod } from "./types";
-import { DEFAULT_CONFIG } from "./types";
+import { DEFAULT_CONFIG, formatarMoeda } from "./types";
 import { clearCache } from "./lib/cache";
 import { supabase } from "./lib/supabase";
+import rmImportsLogo from "./assets/rm-imports-logo-transparent.png";
 import "./index.css";
 
 const OrderConfirmation = lazy(() => import("./OrderConfirmation"));
@@ -30,6 +31,7 @@ const ProntaEntrega = lazy(() => import("./ProntaEntrega"));
 const MeusPedidos = lazy(() => import("./MeusPedidos"));
 const NotFound = lazy(() => import("./NotFound"));
 const ProductPage = lazy(() => import("./ProductPage"));
+const Policies = lazy(() => import("./Policies"));
 import ErrorBoundary from "./ErrorBoundary";
 const SizeChart = lazy(() => import("./SizeChart"));
 
@@ -79,10 +81,27 @@ function AppContent() {
   const [showCart, setShowCart] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const navigate = useNavigate();
-  const { cart, createOrder } = useCart();
+  const { cart, createOrder, lastAddedItem, dismissAddedItem, total } = useCart();
   const location = useLocation();
+  const closeAddedItemButtonRef = useRef<HTMLButtonElement>(null);
 
-  useBodyScrollLock(showMenu || showCart);
+  useBodyScrollLock(showMenu || showCart || Boolean(lastAddedItem));
+
+  useEffect(() => {
+    if (!lastAddedItem) return;
+    closeAddedItemButtonRef.current?.focus();
+  }, [lastAddedItem]);
+
+  useEffect(() => {
+    if (!lastAddedItem) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") dismissAddedItem();
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [lastAddedItem, dismissAddedItem]);
 
   useEffect(() => {
     if (loading) return;
@@ -128,7 +147,7 @@ function AppContent() {
           </button>
 
           <Link to="/" className="absolute left-1/2 flex -translate-x-1/2 items-center text-white no-underline transition-opacity hover:opacity-80 lg:static lg:translate-x-0" aria-label="RM Imports — início">
-            <img src="/logo.png" alt="RM Imports" width={84} height={48} className="h-10 w-[70px] object-contain lg:h-11 lg:w-[78px]" />
+            <img src={rmImportsLogo} alt="RM Imports" width={84} height={56} className="h-12 w-[72px] object-contain" />
           </Link>
 
           <div className="hidden items-center gap-1 lg:flex">
@@ -140,7 +159,10 @@ function AppContent() {
 
           <button
             className="relative flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-white/15 bg-white/8 text-white transition-all duration-200 hover:border-white/30 hover:bg-white/15"
-            onClick={() => setShowCart(true)}
+            onClick={() => {
+              dismissAddedItem();
+              setShowCart(true);
+            }}
             aria-label={`Carrinho${cart.length > 0 ? `, ${cart.length} ${cart.length === 1 ? 'item' : 'itens'}` : ''}`}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -160,7 +182,7 @@ function AppContent() {
         <div className="fixed inset-0 bg-black/60 z-[1001] animate-menu-overlay" onClick={() => setShowMenu(false)}>
           <div className="absolute bottom-0 left-0 top-0 flex w-[min(86vw,340px)] flex-col bg-primary text-white shadow-2xl animate-menu-panel" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
-              <img src="/logo.png" alt="RM Imports" className="h-11 w-[78px] object-contain" />
+              <img src={rmImportsLogo} alt="RM Imports" width={84} height={56} className="h-12 w-[72px] object-contain" />
               <button className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl text-white hover:bg-white/10" onClick={() => setShowMenu(false)} aria-label="Fechar menu">×</button>
             </div>
             <Link to="/" className="mx-3 mt-4 rounded-xl px-4 py-3.5 text-white no-underline transition-colors hover:bg-white/10 animate-menu-item" onClick={() => setShowMenu(false)}>
@@ -203,12 +225,108 @@ function AppContent() {
                 <Route path="/tamanhos" element={<SizeChart />} />
                 <Route path="/pronta-entrega" element={<ProntaEntrega />} />
                 <Route path="/meu-pedido" element={<MeusPedidos />} />
+                <Route path="/politica-de-entrega" element={<Policies kind="frete" />} />
+                <Route path="/politica-de-reembolso" element={<Policies kind="reembolso" />} />
+                <Route path="/politica-de-troca-e-devolucao" element={<Policies kind="trocas" />} />
+                <Route path="/politica-de-privacidade" element={<Policies kind="privacidade" />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </div>
           </Suspense>
         )}
       </main>
+
+      {lastAddedItem && (
+        <div
+          className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm sm:p-6"
+          onClick={dismissAddedItem}
+          role="presentation"
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-card-bg shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="added-item-title"
+          >
+            <div className="flex items-center justify-between border-b border-border px-5 py-4 sm:px-6">
+              <h2 id="added-item-title" className="m-0 text-xl font-black tracking-tight text-primary">
+                Adicionado ao carrinho
+              </h2>
+              <button
+                ref={closeAddedItemButtonRef}
+                type="button"
+                autoFocus
+                className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-bg-base text-text-muted transition-colors hover:text-accent"
+                onClick={dismissAddedItem}
+                aria-label="Fechar confirmação"
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                  <path d="M3 3L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M15 3L3 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
+              <div className="flex gap-4">
+                <img
+                  src={lastAddedItem.imagemUrl || "/rm-imports-icon.png"}
+                  alt={lastAddedItem.nome}
+                  width={96}
+                  height={96}
+                  className="h-24 w-24 shrink-0 rounded-xl object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="m-0 truncate text-base font-bold text-text-main">{lastAddedItem.nome}</h3>
+                  <dl className="mt-2 space-y-1 text-sm text-text-muted">
+                    <div><dt className="inline font-semibold">Tipo:</dt> <dd className="inline">{lastAddedItem.tipo}</dd></div>
+                    <div><dt className="inline font-semibold">Tamanho:</dt> <dd className="inline">{lastAddedItem.tamanho}</dd></div>
+                    {lastAddedItem.personalizado && (
+                      <div>
+                        <dt className="inline font-semibold">Personalização:</dt>{" "}
+                        <dd className="inline">
+                          {lastAddedItem.nomePersonalizado}
+                          {lastAddedItem.numeroPersonalizado ? ` #${lastAddedItem.numeroPersonalizado}` : ""}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                  <p className="mt-3 text-lg font-black text-accent">{formatarMoeda(lastAddedItem.preco)}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-border pt-4 text-sm">
+                <span className="font-semibold text-text-muted">Subtotal do carrinho</span>
+                <span className="text-right">
+                  <span className="block text-xs text-text-muted">{cart.length} {cart.length === 1 ? "item" : "itens"}</span>
+                  <span className="text-lg font-black text-primary">{formatarMoeda(total)}</span>
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  className="min-h-11 flex-1 cursor-pointer rounded-xl border border-border px-4 py-3 text-sm font-bold text-primary transition-colors hover:bg-bg-base"
+                  onClick={dismissAddedItem}
+                >
+                  Continuar comprando
+                </button>
+                <button
+                  type="button"
+                  className="min-h-11 flex-1 cursor-pointer rounded-xl bg-accent px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
+                  onClick={() => {
+                    dismissAddedItem();
+                    setShowCart(true);
+                  }}
+                >
+                  Ir para o carrinho
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCart && (
         <Suspense fallback={null}>

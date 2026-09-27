@@ -401,15 +401,11 @@ export function getPrecoProduto(
 }
 
 /** Preço da personalização por tipo de produto */
-export const PRECO_PERSONALIZACAO_BASE = 25.00;
-export const PRECO_PERSONALIZACAO_TORCEDOR = 20.00;
-
-/** Tipos de produto com preço de personalização reduzido (apenas Torcedor) */
-const TIPOS_PERSONALIZACAO_REDUZIDA = ["Torcedor"];
+export const PRECO_PERSONALIZACAO_BASE = 20.00;
 
 /** Retorna o preço da personalização de acordo com o tipo de produto */
-export function precoPersonalizacao(tipo: string): number {
-  if (TIPOS_PERSONALIZACAO_REDUZIDA.includes(tipo)) return PRECO_PERSONALIZACAO_TORCEDOR;
+export function precoPersonalizacao(_tipo: string): number {
+  void _tipo;
   return PRECO_PERSONALIZACAO_BASE;
 }
 

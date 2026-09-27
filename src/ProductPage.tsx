@@ -4,6 +4,7 @@ import type { DbProduto } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
 import { useCart } from "./CartContext";
 import ImageCarousel from "./ImageCarousel";
+import ImageLightbox from "./ImageLightbox";
 import { slugify } from "./lib/utils";
 import type { CartItem, LojaConfig, PromocaoTipo } from "./types";
 import { track } from "@vercel/analytics";
@@ -40,6 +41,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
   const produto = produtos.find((item) => item.id === id);
   const { addToCart } = useCart();
   const [genero, setGenero] = useState("Masculino");
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [tamanho, setTamanho] = useState("");
   const [personalizado, setPersonalizado] = useState(false);
   const [nomePersonalizado, setNomePersonalizado] = useState("");
@@ -179,6 +181,10 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
     setFeedback("");
   }, [produto?.id]);
 
+  useEffect(() => {
+    setLightboxIndex(null);
+  }, [genero, produto?.id]);
+
   if (!produto) {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
@@ -312,6 +318,12 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
             key={genero}
             images={imagensDoModelo}
             alt={produto.nome}
+            hoverZoom
+            onImageClick={(index) => {
+              if (window.matchMedia("(hover: none), (pointer: coarse)").matches) {
+                setLightboxIndex(index);
+              }
+            }}
             cachedImageUrls={modeloFemininoComImagens ? null : produto.cached_image_urls}
           />
         </div>
@@ -379,7 +391,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
                       key={t}
                       type="button"
                       aria-pressed={tamanho === t}
-                      className={`flex min-h-14 cursor-pointer flex-col items-center justify-center rounded-md border border-border bg-card-bg px-3 py-2 text-sm leading-tight transition-colors ${
+                      className={`flex h-16 w-[60px] shrink-0 cursor-pointer flex-col items-center justify-center rounded-md border border-border bg-card-bg px-1 py-2 text-sm leading-tight transition-colors ${
                         tamanho === t ? "border-primary bg-primary text-white" : ""
                       }`}
                        onClick={() => {
@@ -389,7 +401,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
                     >
                       <span>{t}</span>
                       {adicional > 0 && (
-                        <span className={tamanho === t ? "text-xs font-semibold text-white" : "text-xs font-semibold text-accent"}>
+                        <span className={`whitespace-nowrap ${tamanho === t ? "text-xs font-semibold text-white" : "text-xs font-semibold text-accent"}`}>
                           +{formatarMoeda(adicional)}
                         </span>
                       )}
@@ -471,7 +483,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
               </div>
             </div>
 
-            <p className="text-xs text-text-muted">Produção e entrega em até 30 dias • suporte via WhatsApp</p>
+            <p className="text-xs text-text-muted">Produção em até 7 dias úteis • entrega em até 30 dias úteis após a produção</p>
             <button
               type="button"
               className="min-h-12 w-full cursor-pointer rounded-xl bg-accent px-5 text-sm font-bold text-white transition-colors hover:bg-[#d93648] disabled:cursor-not-allowed disabled:opacity-50"
@@ -485,10 +497,28 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
           <div className="flex items-center justify-between gap-4 mt-4">
             <button
               type="button"
-              className="text-sm text-text-muted hover:text-accent underline cursor-pointer bg-transparent border-none p-0"
+              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-border bg-card-bg text-text-muted transition-colors hover:border-accent hover:text-accent"
               onClick={handleShare}
+              aria-label="Compartilhar produto"
+              title="Compartilhar produto"
             >
-              Compartilhar
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
             </button>
           </div>
           <p className="mt-3 text-xs text-text-muted">Confira as medidas antes de comprar.</p>
@@ -499,8 +529,8 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
           </ul>
         </section>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:col-start-1 lg:row-start-2">
-          <section className="rounded-2xl border border-border bg-card-bg p-5 shadow-card" aria-labelledby="product-details-title">
+        <div className="grid items-stretch gap-4 md:grid-cols-2 lg:col-start-1 lg:row-start-2">
+          <section className="h-full rounded-2xl border border-border bg-card-bg p-5 shadow-card" aria-labelledby="product-details-title">
             <h2 id="product-details-title" className="text-lg font-bold text-primary mb-3">Detalhes do produto</h2>
             <dl className="grid gap-2 text-sm">
               <div className="flex justify-between gap-4">
@@ -520,17 +550,24 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
                 <dd className="text-right font-medium text-text-main">{produto.tipo}</dd>
               </div>
               <div className="flex justify-between gap-4">
+                <dt className="text-text-muted">Acabamento do escudo</dt>
+                <dd className="min-w-0 break-words text-right font-medium text-text-main">
+                  {produto.tipo.includes("Jogador") ? "Aplicado por termotransferência" : "Bordado"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
                 <dt className="text-text-muted">Versões</dt>
                 <dd className="text-right font-medium text-text-main">{produto.feminino ? "Masculina e feminina" : "Masculina"}</dd>
               </div>
             </dl>
           </section>
 
-          <section className="rounded-2xl border border-border bg-card-bg p-5 shadow-card" aria-labelledby="delivery-details-title">
+          <section className="h-full rounded-2xl border border-border bg-card-bg p-5 shadow-card" aria-labelledby="delivery-details-title">
             <h2 id="delivery-details-title" className="text-lg font-bold text-primary mb-3">Entrega e pagamento</h2>
             <ul className="grid gap-2 text-sm text-text-main">
-              <li>Entrega grátis em Bezerros-PE.</li>
-              <li>Retirada em Caruaru.</li>
+              <li>Produção em até 7 dias úteis.</li>
+              <li>Entrega gratuita em Bezerros-PE em até 30 dias úteis após a produção.</li>
+              <li>Retirada em Caruaru-PE.</li>
               <li>Pagamento seguro e parcelamento via Mercado Pago.</li>
             </ul>
           </section>
@@ -596,6 +633,16 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
             })}
           </div>
         </section>
+      )}
+
+      {lightboxIndex !== null && (
+        <ImageLightbox
+          images={imagensDoModelo}
+          alt={produto.nome}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          cachedImageUrls={modeloFemininoComImagens ? null : produto.cached_image_urls}
+        />
       )}
 
     </div>

@@ -273,8 +273,8 @@ describe("calcularPreco", () => {
     expect(precoPersonalizacao("Torcedor")).toBe(20.00);
   });
 
-  it("uses R$25 personalization for Manga Longa Torcedor", () => {
-    expect(precoPersonalizacao("Manga Longa Torcedor")).toBe(25.00);
+  it("uses R$20 personalization for Manga Longa Torcedor", () => {
+    expect(precoPersonalizacao("Manga Longa Torcedor")).toBe(20.00);
   });
 
   it("adds both size surcharge and personalization", () => {

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, memo } from "react";
+import { useState, useRef, useCallback, useEffect, memo, type CSSProperties } from "react";
 import { type CachedImageMap, getCachedImageUrl } from "./types";
 
 interface ImageCarouselProps {
@@ -10,6 +10,8 @@ interface ImageCarouselProps {
   onImageClick?: (index: number) => void;
   /** Pre-cached image URLs for the product images */
   cachedImageUrls?: CachedImageMap | null;
+  /** Enables cursor-positioned zoom on fine-pointer devices */
+  hoverZoom?: boolean;
 }
 
 const PLACEHOLDER =
@@ -26,12 +28,14 @@ function ImageWithLoader({
   className,
   loading,
   fetchPriority,
+  style,
 }: {
   src: string;
   alt: string;
   className?: string;
   loading?: "lazy" | "eager";
   fetchPriority?: "high" | "low" | "auto";
+  style?: CSSProperties;
 }) {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
@@ -55,6 +59,7 @@ function ImageWithLoader({
         width={200}
         height={200}
         className={className}
+        style={style}
         draggable={false}
       />
     );
@@ -78,6 +83,7 @@ function ImageWithLoader({
         decoding="async"
         draggable={false}
         fetchPriority={fetchPriority}
+        style={style}
         onLoad={() => setLoaded(true)}
         onError={handleError}
       />
@@ -91,10 +97,21 @@ export default memo(function ImageCarousel({
   className = "",
   onImageClick,
   cachedImageUrls,
+  hoverZoom = false,
 }: ImageCarouselProps) {
   const [current, setCurrent] = useState(0);
+  const [mobileDotsOverflow, setMobileDotsOverflow] = useState(false);
+  const [showSwipeIndicator, setShowSwipeIndicator] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+  const mobileDotsRef = useRef<HTMLDivElement>(null);
+  const swipeIndicatorTimer = useRef<number | null>(null);
+  const didSwipe = useRef(false);
+  const [zoomStyle, setZoomStyle] = useState<CSSProperties>({
+    transform: "scale(1)",
+    transformOrigin: "50% 50%",
+    transition: "transform 450ms ease-in-out",
+  });
 
   const validImages = images.filter(Boolean);
 
@@ -105,6 +122,83 @@ export default memo(function ImageCarousel({
   const next = useCallback(() => {
     setCurrent((c) => (c < validImages.length - 1 ? c + 1 : 0));
   }, [validImages.length]);
+
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!hoverZoom || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    const transition = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "none"
+      : "transform 450ms ease-in-out";
+
+    setZoomStyle({
+      transform: "scale(1.55)",
+      transformOrigin: `${x}% ${y}%`,
+      transition,
+    });
+  };
+
+  const handleMouseLeave = () => {
+    if (!hoverZoom) return;
+
+    setZoomStyle({
+      transform: "scale(1)",
+      transformOrigin: "50% 50%",
+      transition: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "none"
+        : "transform 450ms ease-in-out",
+    });
+  };
+
+  useEffect(() => {
+    const viewport = mobileDotsRef.current;
+    if (!viewport) {
+      setMobileDotsOverflow(false);
+      return;
+    }
+
+    const updateOverflow = () => {
+      setMobileDotsOverflow(viewport.scrollWidth > viewport.clientWidth + 1);
+    };
+
+    updateOverflow();
+    window.addEventListener("resize", updateOverflow);
+    return () => window.removeEventListener("resize", updateOverflow);
+  }, [validImages.length]);
+
+  useEffect(() => {
+    const viewport = mobileDotsRef.current;
+    const dot = viewport?.querySelector<HTMLElement>(`[data-mobile-dot="${current}"]`);
+    if (!viewport || !dot) return;
+
+    const maxScroll = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+    const centeredScroll = dot.offsetLeft + dot.offsetWidth / 2 - viewport.clientWidth / 2;
+    viewport.scrollTo({
+      left: Math.max(0, Math.min(centeredScroll, maxScroll)),
+      behavior: "smooth",
+    });
+  }, [current, validImages.length]);
+
+  const revealSwipeIndicator = useCallback(() => {
+    setShowSwipeIndicator(true);
+    if (swipeIndicatorTimer.current !== null) {
+      window.clearTimeout(swipeIndicatorTimer.current);
+    }
+    swipeIndicatorTimer.current = window.setTimeout(() => {
+      setShowSwipeIndicator(false);
+      swipeIndicatorTimer.current = null;
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (swipeIndicatorTimer.current !== null) {
+        window.clearTimeout(swipeIndicatorTimer.current);
+      }
+    };
+  }, []);
 
   /* ---- No images ---- */
   if (validImages.length === 0) {
@@ -120,12 +214,15 @@ export default memo(function ImageCarousel({
     return (
       <div
         className={`aspect-square bg-gray-100 overflow-hidden relative cursor-zoom-in ${className}`}
+        onMouseMove={hoverZoom ? handleMouseMove : undefined}
+        onMouseLeave={hoverZoom ? handleMouseLeave : undefined}
         onClick={() => onImageClick?.(0)}
       >
         <ImageWithLoader
           src={getCachedImageUrl(validImages[0], cachedImageUrls, 0, "medium")}
           alt={alt}
           className="w-full h-full object-cover"
+          style={hoverZoom ? zoomStyle : undefined}
           loading="eager"
           fetchPriority="high"
         />
@@ -135,6 +232,7 @@ export default memo(function ImageCarousel({
 
   /* ---- Multiple images ---- */
   const handleTouchStart = (e: React.TouchEvent) => {
+    didSwipe.current = false;
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
   };
@@ -147,7 +245,9 @@ export default memo(function ImageCarousel({
       : 0;
     // Only register horizontal swipes (avoid interfering with vertical scroll)
     if (Math.abs(dx) > 40 && Math.abs(dx) > dy) {
+      didSwipe.current = true;
       if (dx > 0) next(); else prev();
+      revealSwipeIndicator();
     }
     touchStartX.current = null;
     touchStartY.current = null;
@@ -167,9 +267,17 @@ export default memo(function ImageCarousel({
   return (
     <div
       className={`relative aspect-square bg-gray-100 overflow-hidden group cursor-zoom-in ${className}`}
+      onMouseMove={hoverZoom ? handleMouseMove : undefined}
+      onMouseLeave={hoverZoom ? handleMouseLeave : undefined}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      onClick={() => onImageClick?.(current)}
+      onClick={() => {
+        if (didSwipe.current) {
+          didSwipe.current = false;
+          return;
+        }
+        onImageClick?.(current);
+      }}
     >
       {/* Sliding track */}
       <div
@@ -177,12 +285,13 @@ export default memo(function ImageCarousel({
         style={{ transform: `translate3d(-${current * 100}%, 0, 0)` }}
       >
         {validImages.map((url, i) => (
-          <div key={i} className="w-full h-full flex-shrink-0 relative">
+          <div key={i} className="w-full h-full flex-shrink-0 relative overflow-hidden">
             {shouldLoad(i) ? (
               <ImageWithLoader
                 src={getCachedImageUrl(url, cachedImageUrls, i, "medium")}
                 alt={`${alt} ${i + 1}`}
                 className="w-full h-full object-cover select-none"
+                style={hoverZoom && i === current ? zoomStyle : undefined}
                 loading={i === current ? "eager" : "lazy"}
                 fetchPriority={i === current ? "high" : "auto"}
               />
@@ -199,7 +308,7 @@ export default memo(function ImageCarousel({
       {/* Left arrow */}
       <button
         onClick={(e) => { e.stopPropagation(); prev(); }}
-        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-11 h-11 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-30"
+        className="absolute left-1 top-1/2 -translate-y-1/2 hidden sm:flex w-11 h-11 bg-white/85 hover:bg-white rounded-full items-center justify-center shadow-md sm:left-1.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer z-30"
         aria-label="Imagem anterior"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -210,7 +319,7 @@ export default memo(function ImageCarousel({
       {/* Right arrow */}
       <button
         onClick={(e) => { e.stopPropagation(); next(); }}
-        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-11 h-11 bg-white/85 hover:bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-30"
+        className="absolute right-1 top-1/2 -translate-y-1/2 hidden sm:flex w-11 h-11 bg-white/85 hover:bg-white rounded-full items-center justify-center shadow-md sm:right-1.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer z-30"
         aria-label="Próxima imagem"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -218,8 +327,45 @@ export default memo(function ImageCarousel({
         </svg>
       </button>
 
+      {showSwipeIndicator && (
+        <div className="pointer-events-none absolute right-2 top-2 z-30 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white sm:hidden">
+          {current + 1} / {validImages.length}
+        </div>
+      )}
+
+      {/* Mobile dot viewport */}
+      <div
+        ref={mobileDotsRef}
+        className="absolute bottom-2 left-1/2 z-30 flex w-full max-w-[calc(100%_-_1rem)] -translate-x-1/2 overflow-hidden sm:hidden"
+        style={mobileDotsOverflow && current < validImages.length - 1
+          ? {
+              maskImage: "linear-gradient(to right, black calc(100% - 1.25rem), transparent)",
+              WebkitMaskImage: "linear-gradient(to right, black calc(100% - 1.25rem), transparent)",
+            }
+          : undefined}
+      >
+        <div className="flex w-max min-w-full shrink-0 items-center justify-center gap-0">
+          {validImages.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              data-mobile-dot={i}
+              onClick={(e) => { e.stopPropagation(); setCurrent(i); }}
+              className={`shrink-0 rounded-full p-1.5 transition-all duration-200 cursor-pointer ${
+                i === current
+                  ? "text-white scale-125"
+                  : "text-white/60 hover:text-white/80"
+              }`}
+              aria-label={`Ir para imagem ${i + 1}`}
+            >
+              <span className="block h-1.5 w-1.5 rounded-full bg-current" />
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Dot indicators */}
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-0 z-30">
+      <div className="absolute bottom-2 left-1/2 hidden sm:flex z-30 -translate-x-1/2 gap-0">
         {validImages.map((_, i) => (
           <button
             key={i}

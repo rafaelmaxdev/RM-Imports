@@ -581,10 +581,30 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
 
               {endereco.deliveryMethod === "entrega" ? (
                 <>
-                  {/* Entrega fields — Rua first for Bezerros street search */}
+                  {/* Entrega fields — CEP first for automatic address lookup */}
                   <div className="p-2.5 bg-green-50 rounded-md border border-green-200">
                     <p className="text-xs text-green-800 font-semibold">🎉 Frete grátis — Entrega em Bezerros!</p>
-                    <p className="text-[11px] text-green-700 mt-0.5">Digite o nome da rua e selecione o endereço. CEP e bairro serão preenchidos automaticamente.</p>
+                    <p className="text-[11px] text-green-700 mt-0.5">Informe o CEP para preencher rua e bairro automaticamente.</p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="cart-cep" className="block text-sm font-semibold text-text-muted mb-1">CEP *</label>
+                    <div className="relative">
+                      <input
+                        id="cart-cep"
+                        type="text"
+                        value={endereco.cep}
+                        onChange={(e) => handleCepChange(e.target.value)}
+                        placeholder="00000-000"
+                        maxLength={9}
+                        className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg pr-9"
+                      />
+                      {cepLoading && (
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                      )}
+                    </div>
+                    {cepError && <p className="text-xs text-accent mt-1">{cepError}</p>}
+                    <p className="text-[11px] text-text-muted mt-0.5">Ao completar o CEP, buscamos o endereço automaticamente.</p>
                   </div>
 
                   <div className="flex gap-2">
@@ -655,25 +675,6 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                       placeholder="Preenchido automaticamente ao selecionar a rua"
                       className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                     />
-                  </div>
-                  <div>
-                    <label htmlFor="cart-cep" className="block text-sm font-semibold text-text-muted mb-1">CEP *</label>
-                    <div className="relative">
-                      <input
-                        id="cart-cep"
-                        type="text"
-                        value={endereco.cep}
-                        onChange={(e) => handleCepChange(e.target.value)}
-                        placeholder="Preenchido automaticamente"
-                        maxLength={9}
-                        className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg pr-9"
-                      />
-                      {cepLoading && (
-                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                      )}
-                    </div>
-                    {cepError && <p className="text-xs text-accent mt-1">{cepError}</p>}
-                    <p className="text-[11px] text-text-muted mt-0.5">Preenchido automaticamente ao selecionar a rua, ou digite manualmente</p>
                   </div>
                   <div className="flex gap-2">
                     <div className="flex-1">

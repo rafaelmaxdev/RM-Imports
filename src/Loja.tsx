@@ -5,7 +5,6 @@ const META_DESC = "RM Imports — Camisas de time e outros importados. Frete gr�
 const CURRENT_TIME = Date.now();
 import type { DbProduto } from "./lib/db";
 import { parseImageUrls } from "./lib/db";
-import ImageCarousel from "./ImageCarousel";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { formatarPreco, getCachedImageUrl, getPrecoProduto } from "./types";
 import { normalizeNome, normalizarBusca, parseAnoTemporada, slugify } from "./lib/utils";
@@ -14,6 +13,7 @@ import useBodyScrollLock from "./hooks/useBodyScrollLock";
 
 const CATEGORIAS = [
   "Todas",
+  "2026",
   "Brasileirão",
   "Bundesliga",
   "Eredivisie",
@@ -22,9 +22,15 @@ const CATEGORIAS = [
   "MLS",
   "NBA",
   "Premier League",
-  "Serie A",
   "Seleções",
-].sort((a, b) => (a === "Todas" ? -1 : b === "Todas" ? 1 : a.localeCompare(b)));
+  "Serie A",
+];
+
+function produtoNaCategoria(produto: Pick<DbProduto, "liga" | "temporada">, categoria: string) {
+  if (categoria === "Todas") return true;
+  if (categoria === "2026") return parseAnoTemporada(produto.temporada) === 2026;
+  return produto.liga === categoria;
+}
 
 const TIMES_PRINCIPAIS = [
   { nome: "Sport Recife", logo: "https://thumb.wikimedia.org/wikipedia/pt/thumb/1/1a/Sport-clube-recife.svg/250px-Sport-clube-recife.svg.png" },
@@ -55,7 +61,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     document.querySelector('meta[name="description"]')?.setAttribute("content", META_DESC);
   }, []);
 
-  const categoriaSelecionada = searchParams.get("liga") || "Todas";
+  const categoriaSelecionada = searchParams.get("temporada") === "2026" ? "2026" : searchParams.get("liga") || "Todas";
   const filtroTime = searchParams.get("time") || "";
   const filtroTipo = searchParams.get("tipo") || "";
   const filtroBusca = searchParams.get("busca") || "";
@@ -275,9 +281,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
   const produtosFiltrados = useMemo(() => {
     let res = [...produtosNormalizados];
-    if (categoriaSelecionada !== "Todas") {
-      res = res.filter((p) => p.liga === categoriaSelecionada);
-    }
+    res = res.filter((p) => produtoNaCategoria(p, categoriaSelecionada));
     if (filtroTime) {
       res = res.filter((p) => p.time === filtroTime);
     }
@@ -308,7 +312,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     switch (ordenacao) {
       case "time":
         if (
-          categoriaSelecionada !== "Todas" ||
+          (categoriaSelecionada !== "Todas" && categoriaSelecionada !== "2026") ||
           filtroTime ||
           filtroTipo ||
           filtroBusca ||
@@ -319,20 +323,40 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           res.sort((a, b) => a.time.localeCompare(b.time, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR"));
           break;
         }
-        res.sort((a, b) => {
-          const anoA = parseAnoTemporada(a.temporada);
-          const anoB = parseAnoTemporada(b.temporada);
-          const rankA = anoA === config.ano_temporada_lancamento
-            ? ORDEM_TIMES_PRINCIPAIS.get(a.time) ?? TIMES_PRINCIPAIS.length
-            : TIMES_PRINCIPAIS.length;
-          const rankB = anoB === config.ano_temporada_lancamento
-            ? ORDEM_TIMES_PRINCIPAIS.get(b.time) ?? TIMES_PRINCIPAIS.length
-            : TIMES_PRINCIPAIS.length;
-          return rankA - rankB
-            || (rankA < TIMES_PRINCIPAIS.length && rankB < TIMES_PRINCIPAIS.length
-              ? a.nome.localeCompare(b.nome, "pt-BR") || anoB - anoA
-              : a.time.localeCompare(b.time, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR") || anoB - anoA);
-        });
+        if (categoriaSelecionada === "Todas") {
+          const idsRepresentativos = new Set<string>();
+          for (const { nome } of TIMES_PRINCIPAIS) {
+            const candidatos = res.filter((p) => p.time === normalizeNome(nome) && parseAnoTemporada(p.temporada) === config.ano_temporada_lancamento);
+            if (candidatos.length === 0) continue;
+            const representante = candidatos.reduce((menor, produto) => {
+              const nomeCompare = produto.nome.localeCompare(menor.nome, "pt-BR");
+              return nomeCompare < 0 || (nomeCompare === 0 && produto.id.localeCompare(menor.id, "pt-BR") < 0) ? produto : menor;
+            });
+            idsRepresentativos.add(representante.id);
+          }
+          res.sort((a, b) => {
+            const aRepresentativo = idsRepresentativos.has(a.id);
+            const bRepresentativo = idsRepresentativos.has(b.id);
+            if (aRepresentativo !== bRepresentativo) return aRepresentativo ? -1 : 1;
+            if (aRepresentativo) return (ORDEM_TIMES_PRINCIPAIS.get(a.time) ?? TIMES_PRINCIPAIS.length) - (ORDEM_TIMES_PRINCIPAIS.get(b.time) ?? TIMES_PRINCIPAIS.length);
+            return a.time.localeCompare(b.time, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR") || parseAnoTemporada(b.temporada) - parseAnoTemporada(a.temporada);
+          });
+        } else {
+          res.sort((a, b) => {
+            const anoA = parseAnoTemporada(a.temporada);
+            const anoB = parseAnoTemporada(b.temporada);
+            const rankA = anoA === config.ano_temporada_lancamento
+              ? ORDEM_TIMES_PRINCIPAIS.get(a.time) ?? TIMES_PRINCIPAIS.length
+              : TIMES_PRINCIPAIS.length;
+            const rankB = anoB === config.ano_temporada_lancamento
+              ? ORDEM_TIMES_PRINCIPAIS.get(b.time) ?? TIMES_PRINCIPAIS.length
+              : TIMES_PRINCIPAIS.length;
+            return rankA - rankB
+              || (rankA < TIMES_PRINCIPAIS.length && rankB < TIMES_PRINCIPAIS.length
+                ? a.nome.localeCompare(b.nome, "pt-BR") || anoB - anoA
+                : a.time.localeCompare(b.time, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR") || anoB - anoA);
+          });
+        }
         break;
       case "preco-asc":
         res.sort((a, b) => (precos.get(a.id) ?? 0) - (precos.get(b.id) ?? 0));
@@ -356,18 +380,14 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
   const timesDisponiveis = useMemo(() => {
     let res = [...produtosNormalizados];
-    if (categoriaSelecionada !== "Todas") {
-      res = res.filter((p) => p.liga === categoriaSelecionada);
-    }
+    res = res.filter((p) => produtoNaCategoria(p, categoriaSelecionada));
     const times = res.map((p) => p.time);
     return Array.from(new Set(times)).sort((a, b) => a.localeCompare(b));
   }, [produtosNormalizados, categoriaSelecionada]);
 
   const tiposDisponiveis = useMemo(() => {
     let res = [...produtosNormalizados];
-    if (categoriaSelecionada !== "Todas") {
-      res = res.filter((p) => p.liga === categoriaSelecionada);
-    }
+    res = res.filter((p) => produtoNaCategoria(p, categoriaSelecionada));
     if (filtroTime) {
       res = res.filter((p) => p.time === filtroTime);
     }
@@ -467,10 +487,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,.1),transparent_28%),radial-gradient(circle_at_80%_85%,rgba(240,68,85,.18),transparent_30%)]" aria-hidden="true" />
           <div className="relative grid min-h-[470px] items-center lg:grid-cols-[1.05fr_.95fr]">
             <div className="px-6 py-10 sm:px-10 sm:py-14 lg:px-16 lg:py-20">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white/80">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent" /> Coleção 2026
-              </span>
-              <h1 id="hero-title" className="mt-5 max-w-2xl text-4xl font-black leading-[1.02] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
+              <h1 id="hero-title" className="max-w-2xl text-4xl font-black leading-[1.02] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
                 Vista o jogo.<br /><span className="text-white/55">Carregue a história.</span>
               </h1>
               <p className="mt-5 max-w-lg text-sm leading-6 text-white/70 sm:text-base sm:leading-7">
@@ -668,7 +685,8 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           </div>
           <span className="hidden shrink-0 text-sm font-semibold text-text-muted sm:block">{produtosFiltrados.length} produtos</span>
         </div>
-      <nav className="carousel-scroll -mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" aria-label="Filtrar por categoria">
+      <nav className="carousel-scroll -mx-4 mb-5 overflow-x-auto pb-1 sm:mx-0" aria-label="Filtrar por categoria">
+        <div className="flex w-max min-w-full justify-center gap-2 px-4 sm:px-0">
         {CATEGORIAS.map((cat) => (
           <button
             key={cat}
@@ -680,8 +698,16 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
             onClick={() => {
               setSearchParams((current) => {
                 const next = new URLSearchParams(current);
-                if (cat === "Todas") next.delete("liga");
-                else next.set("liga", cat);
+                if (cat === "Todas") {
+                  next.delete("liga");
+                  next.delete("temporada");
+                } else if (cat === "2026") {
+                  next.delete("liga");
+                  next.set("temporada", "2026");
+                } else {
+                  next.delete("temporada");
+                  next.set("liga", cat);
+                }
                 next.delete("time");
                 next.delete("tipo");
                 next.delete("busca");
@@ -692,6 +718,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
             {cat}
           </button>
         ))}
+        </div>
       </nav>
 
       <div className="mb-4 grid grid-cols-[1fr_auto] gap-2 sm:hidden">
@@ -950,6 +977,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
               setSearchParams((current) => {
                 const next = new URLSearchParams(current);
                 next.delete("liga");
+                next.delete("temporada");
                 next.delete("time");
                 next.delete("tipo");
                 next.delete("busca");
@@ -994,6 +1022,10 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           {produtosFiltrados.slice(0, visibleCount).map((p, index) => {
             const priceInfo = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time, p.temporada);
             const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
+            const productImages = parseImageUrls(p.imagem_urls);
+            const productImage = productImages.length > 0
+              ? getCachedImageUrl(productImages[0], p.cached_image_urls, 0, "medium")
+              : "/rm-imports-icon.png";
 
             return (
               <div
@@ -1026,11 +1058,16 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                   </span>
                 )}
 
-                <div className="relative aspect-[4/4.6] overflow-hidden bg-[#eeeeeb] sm:aspect-square">
-                  <ImageCarousel
-                    images={parseImageUrls(p.imagem_urls)}
+                <div className="relative aspect-square overflow-hidden bg-[#eeeeeb]">
+                  <img
+                    src={productImage}
                     alt={p.nome}
-                    cachedImageUrls={p.cached_image_urls}
+                    width={400}
+                    height={400}
+                    decoding="async"
+                    draggable={false}
+                    loading={index < 4 ? "eager" : "lazy"}
+                    className="w-full h-full object-cover"
                   />
                 </div>
 

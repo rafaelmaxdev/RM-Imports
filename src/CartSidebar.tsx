@@ -581,30 +581,10 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
 
               {endereco.deliveryMethod === "entrega" ? (
                 <>
-                  {/* Entrega fields — CEP first for automatic address lookup */}
+                  {/* Entrega fields — rua first, with CEP as an alternative lookup */}
                   <div className="p-2.5 bg-green-50 rounded-md border border-green-200">
-                    <p className="text-xs text-green-800 font-semibold">🎉 Frete grátis — Entrega em Bezerros!</p>
-                    <p className="text-[11px] text-green-700 mt-0.5">Informe o CEP para preencher rua e bairro automaticamente.</p>
-                  </div>
-
-                  <div>
-                    <label htmlFor="cart-cep" className="block text-sm font-semibold text-text-muted mb-1">CEP *</label>
-                    <div className="relative">
-                      <input
-                        id="cart-cep"
-                        type="text"
-                        value={endereco.cep}
-                        onChange={(e) => handleCepChange(e.target.value)}
-                        placeholder="00000-000"
-                        maxLength={9}
-                        className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg pr-9"
-                      />
-                      {cepLoading && (
-                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                      )}
-                    </div>
-                    {cepError && <p className="text-xs text-accent mt-1">{cepError}</p>}
-                    <p className="text-[11px] text-text-muted mt-0.5">Ao completar o CEP, buscamos o endereço automaticamente.</p>
+                    <p className="text-xs text-green-800 font-semibold">Entrega grátis em Bezerros-PE</p>
+                    <p className="text-[11px] text-green-700 mt-0.5">Digite sua rua para localizar o endereço. Se preferir, também pode buscar pelo CEP.</p>
                   </div>
 
                   <div className="flex gap-2">
@@ -640,7 +620,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                           ))}
                         </ul>
                       )}
-                      <p className="text-[11px] text-text-muted mt-0.5">Buscando ruas em Bezerros-PE</p>
+                      <p className="text-[11px] text-text-muted mt-0.5">Digite ao menos 3 letras e selecione uma sugestão para preencher bairro e CEP.</p>
                     </div>
                     <div className="w-20">
                       <label htmlFor="cart-numero" className="block text-sm font-semibold text-text-muted mb-1">Número *</label>
@@ -653,6 +633,25 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                         className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                       />
                     </div>
+                  </div>
+                  <div>
+                    <label htmlFor="cart-cep" className="block text-sm font-semibold text-text-muted mb-1">CEP *</label>
+                    <div className="relative">
+                      <input
+                        id="cart-cep"
+                        type="text"
+                        value={endereco.cep}
+                        onChange={(e) => handleCepChange(e.target.value)}
+                        placeholder="00000-000"
+                        maxLength={9}
+                        className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg pr-9"
+                      />
+                      {cepLoading && (
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                      )}
+                    </div>
+                    {cepError && <p className="text-xs text-accent mt-1">{cepError}</p>}
+                    <p className="text-[11px] text-text-muted mt-0.5">Preenchido ao selecionar a rua ou consulte pelo CEP.</p>
                   </div>
                   <div>
                     <label htmlFor="cart-complemento" className="block text-sm font-semibold text-text-muted mb-1">Complemento</label>

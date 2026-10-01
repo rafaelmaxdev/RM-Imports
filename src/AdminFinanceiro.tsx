@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
-import { getPedidos, getPacotes, getEstoque, getProdutos } from "./lib/db";
+import { Fragment, useState, useEffect } from "react";
+import { getPedidos, getPacotes, getEstoque, getProdutos, getLojaConfig } from "./lib/db";
 import type { Pacote, DbProduto } from "./lib/db";
-import type { Order, EstoqueItem } from "./types";
-import { formatarMoeda } from "./types";
+import type { Order, EstoqueItem, LojaConfig } from "./types";
+import { DEFAULT_CONFIG, formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
 import { MESES, getMPFeeRate } from "./lib/status";
 
@@ -14,6 +14,27 @@ interface ExtraCusto {
   data: string;
   cor: string;
 }
+
+interface PedidoCustoDetalhe {
+  reposicao: boolean;
+  produto: number;
+  produtoUSD?: number;
+  frete: number;
+  importacao: number;
+}
+
+interface ReposicaoPedidoDetalhe extends PedidoCustoDetalhe {
+  reposicao: true;
+}
+
+interface LucroPedidoDetalhe extends PedidoCustoDetalhe {
+  reposicao: false;
+  receita: number;
+  taxaMP: number;
+  lucro: number;
+}
+
+type PedidoDetalhe = ReposicaoPedidoDetalhe | LucroPedidoDetalhe;
 
 const EXTRA_KEY = "rm_custos_extras";
 
@@ -55,6 +76,7 @@ export default function AdminFinanceiro() {
   const [pacotes, setPacotes] = useState<Pacote[]>([]);
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [produtos, setProdutos] = useState<DbProduto[]>([]);
+  const [config, setConfig] = useState<LojaConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [extras, setExtras] = useState<ExtraCusto[]>([]);
 
@@ -75,16 +97,18 @@ export default function AdminFinanceiro() {
   const [extraCor, setExtraCor] = useState(CORES_PALETA[extras.length % CORES_PALETA.length]);
   const [buscaPedido, setBuscaPedido] = useState("");
   const [maxPedidos, setMaxPedidos] = useState(20);
+  const [lucroDetalheId, setLucroDetalheId] = useState<string | null>(null);
 
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getPedidos(), getPacotes(), getEstoque(), getProdutos()]).then(([o, p, e, pr]) => {
+    Promise.all([getPedidos(), getPacotes(), getEstoque(), getProdutos(), getLojaConfig()]).then(([o, p, e, pr, c]) => {
       if (cancelled) return;
       setOrders(o);
       setPacotes(p);
       setEstoque(e);
       setProdutos(pr);
+      setConfig(c);
     }).catch((err) => {
       if (!cancelled) console.error("[Financeiro]", err);
     }).finally(() => {
@@ -150,23 +174,73 @@ export default function AdminFinanceiro() {
   }).filter((a): a is number => a !== null && !isNaN(a)))].sort((a, b) => b - a);
   if (!anosDisponiveis.includes(anoFiltro) && anosDisponiveis.length > 0) setAnoFiltro(anosDisponiveis[0]);
 
-  const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && filtrarPorData(o, anoFiltro, mesFiltro));
-  const peVendas = orders.filter((o) => o.pronta_entrega && o.status === "entregue" && filtrarPorData(o, anoFiltro, mesFiltro));
+  const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && !o.reposicao && filtrarPorData(o, anoFiltro, mesFiltro));
+  const peVendas = orders.filter((o) => o.pronta_entrega && !o.reposicao && o.status === "entregue" && filtrarPorData(o, anoFiltro, mesFiltro));
+  const reposicoes = orders.filter((o) => o.reposicao && o.status !== "cancelado" && o.status !== "reembolsado" && filtrarPorData(o, anoFiltro, mesFiltro));
+  const pedidosExibidos = [...ativos, ...peVendas, ...reposicoes];
   const pedidosEmPacotes = new Set<string>();
-  // Prorate costs by non-admin orders only
+  // Prorate costs by sold orders, keeping the whole package as denominator.
   function prorateCost(cost: number, totalShirts: number, nonAdminShirts: number): number {
     if (totalShirts <= 0 || nonAdminShirts <= 0) return 0;
     return (cost / totalShirts) * nonAdminShirts;
   }
 
+  const custoPacotePorPedido = new Map<string, PedidoCustoDetalhe>();
   let custoPacote = 0, freteTotal = 0, taxaTotal = 0;
   for (const p of pacotes) {
     const pkgOrders = p.pedido_ids.map((id) => orders.find((o) => o.id === id)).filter((o): o is Order => !!o);
     const totalShirts = pkgOrders.reduce((s, o) => s + o.itens.length, 0);
-    const nonAdminShirts = pkgOrders.filter((o) => !o.admin_order).reduce((s, o) => s + o.itens.length, 0);
-    custoPacote += prorateCost(p.custo || 0, totalShirts, nonAdminShirts);
-    freteTotal += prorateCost(p.frete || 0, totalShirts, nonAdminShirts);
-    taxaTotal += prorateCost(p.taxa_importacao || 0, totalShirts, nonAdminShirts);
+    const nonAdminShirts = pkgOrders.filter((o) => !o.admin_order && !o.reposicao).reduce((s, o) => s + o.itens.length, 0);
+    const custoItemUSD = (item: Order["itens"][number]) =>
+      (config.custo_base[item.tipo] ?? 0) + (item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0);
+    const custoUSDTotal = pkgOrders.reduce(
+      (sum, order) => sum + order.itens.reduce((orderSum, item) => orderSum + custoItemUSD(item), 0),
+      0,
+    );
+    const dolarRate = p.dolar_rate || 0;
+
+    if (dolarRate > 0 && custoUSDTotal > 0 && totalShirts > 0) {
+      const custoUSDTotalPacote = typeof p.custo === "number" && p.custo > 0 ? p.custo / dolarRate : custoUSDTotal;
+      for (const order of pkgOrders) {
+        if (order.admin_order) continue;
+        const custoUSD = order.itens.reduce((sum, item) => sum + custoItemUSD(item), 0);
+        const atual = custoPacotePorPedido.get(order.id) || { reposicao: !!order.reposicao, produto: 0, frete: 0, importacao: 0 };
+        const produto = custoUSD * dolarRate;
+        const frete = (p.frete || 0) * custoUSD / custoUSDTotalPacote;
+        const importacao = (p.taxa_importacao || 0) * custoUSD / custoUSDTotalPacote;
+        custoPacotePorPedido.set(order.id, {
+          reposicao: atual.reposicao || !!order.reposicao,
+          produto: atual.produto + produto,
+          produtoUSD: (atual.produtoUSD || 0) + custoUSD,
+          frete: atual.frete + frete,
+          importacao: atual.importacao + importacao,
+        });
+        if (order.reposicao) continue;
+        custoPacote += produto;
+        freteTotal += frete;
+        taxaTotal += importacao;
+      }
+    } else {
+      if (typeof p.custo === "number" && p.custo > 0 && totalShirts > 0) {
+        const custoProdutoPorItem = p.custo / totalShirts;
+        const fretePorItem = (p.frete || 0) / totalShirts;
+        const importacaoPorItem = (p.taxa_importacao || 0) / totalShirts;
+        for (const order of pkgOrders) {
+          if (order.admin_order) continue;
+          const atual = custoPacotePorPedido.get(order.id) || { reposicao: !!order.reposicao, produto: 0, frete: 0, importacao: 0 };
+          const itens = order.itens.length;
+          custoPacotePorPedido.set(order.id, {
+            reposicao: atual.reposicao || !!order.reposicao,
+            produto: atual.produto + custoProdutoPorItem * itens,
+            frete: atual.frete + fretePorItem * itens,
+            importacao: atual.importacao + importacaoPorItem * itens,
+          });
+        }
+      }
+      custoPacote += prorateCost(p.custo || 0, totalShirts, nonAdminShirts);
+      freteTotal += prorateCost(p.frete || 0, totalShirts, nonAdminShirts);
+      taxaTotal += prorateCost(p.taxa_importacao || 0, totalShirts, nonAdminShirts);
+    }
   }
 
   for (const p of pacotes) {
@@ -178,14 +252,15 @@ export default function AdminFinanceiro() {
   const receitaPE = peVendas.reduce((s, o) => s + o.total, 0);
   const receitaTotal = receitaBruta + receitaPE;
   const receitaEmPacotes = ativos.filter((o) => pedidosEmPacotes.has(o.id)).reduce((s, o) => s + o.total, 0);
+  const vendasFinanceiras = [...ativos, ...peVendas];
 
-  const totalTaxasMP = ativos.reduce((sum, o) => {
+  const totalTaxasMP = vendasFinanceiras.reduce((sum, o) => {
     const rate = getMPFeeRate(o.payment_method, o.credit_release_period);
     return sum + o.total * rate;
   }, 0);
 
   const taxasMPPorTipo = new Map<string, number>();
-  for (const o of ativos) {
+  for (const o of vendasFinanceiras) {
     const rate = getMPFeeRate(o.payment_method, o.credit_release_period);
     const key = o.payment_method === "credit_card"
       ? `credit_${o.credit_release_period || "immediate"}`
@@ -194,7 +269,7 @@ export default function AdminFinanceiro() {
   }
 
   const taxasMPporMes = new Map<string, number>();
-  for (const o of ativos) {
+  for (const o of vendasFinanceiras) {
     const mes = o.data.slice(3);
     const rate = getMPFeeRate(o.payment_method, o.credit_release_period);
     taxasMPporMes.set(mes, (taxasMPporMes.get(mes) || 0) + o.total * rate);
@@ -210,17 +285,70 @@ export default function AdminFinanceiro() {
     }
   }
   let custoPE = 0;
+  const custoPEPorPedido = new Map<string, number>();
+  const custosPECompletos = new Set<string>();
   for (const venda of peVendas) {
+    // A origem no pacote já contém produto, frete e importação; usar o estoque aqui duplicaria o custo.
+    if (custoPacotePorPedido.has(venda.id)) continue;
+    let custoVenda = 0;
+    let custosConhecidos = true;
     for (const item of venda.itens) {
       const produtoId = produtoNomeMap.get(item.nome);
-      if (!produtoId) continue;
+      if (!produtoId) {
+        custosConhecidos = false;
+        continue;
+      }
       const key = `${produtoId}-${item.tamanho}-${!!item.personalizado}-${!!item.feminino}`;
-      custoPE += custoLookup.get(key) ?? 0;
+      const custoItem = custoLookup.get(key);
+      if (custoItem === undefined) {
+        custosConhecidos = false;
+        continue;
+      }
+      custoVenda += custoItem;
     }
+    custoPE += custoVenda;
+    custoPEPorPedido.set(venda.id, (custoPEPorPedido.get(venda.id) || 0) + custoVenda);
+    if (custosConhecidos) custosPECompletos.add(venda.id);
   }
 
   const custosTotais = custoPacote + freteTotal + taxaTotal + extraTotal + custoPE + totalTaxasMP;
   const lucro = receitaEmPacotes + receitaPE - custoPacote - freteTotal - taxaTotal - extraTotal - custoPE - totalTaxasMP;
+
+  function detalheLucroPedido(order: Order): PedidoDetalhe | null {
+    const custosPacote = custoPacotePorPedido.get(order.id);
+    if (custosPacote) {
+      if (order.reposicao) return { ...custosPacote, reposicao: true };
+      const taxaMP = order.total * getMPFeeRate(order.payment_method, order.credit_release_period);
+      return {
+        reposicao: false,
+        receita: order.total,
+        produto: custosPacote.produto,
+        ...(custosPacote.produtoUSD !== undefined ? { produtoUSD: custosPacote.produtoUSD } : {}),
+        frete: custosPacote.frete,
+        importacao: custosPacote.importacao,
+        taxaMP,
+        lucro: order.total - custosPacote.produto - custosPacote.frete - custosPacote.importacao - taxaMP,
+      };
+    }
+    if (order.reposicao) return null;
+    if (order.pronta_entrega) {
+      if (!custosPECompletos.has(order.id)) return null;
+      const taxaMP = order.payment_method
+        ? order.total * getMPFeeRate(order.payment_method, order.credit_release_period)
+        : 0;
+      const produto = custoPEPorPedido.get(order.id) || 0;
+      return {
+        reposicao: false,
+        receita: order.total,
+        produto,
+        frete: 0,
+        importacao: 0,
+        taxaMP,
+        lucro: order.total - produto - taxaMP,
+      };
+    }
+    return null;
+  }
 
   const pieData = [
     ...(totalTaxasMP > 0 ? [{ label: "Taxas MP", value: totalTaxasMP, color: "#14B8A6" }] : []),
@@ -494,8 +622,10 @@ export default function AdminFinanceiro() {
       <div className="mb-6 p-4 bg-card-bg rounded-lg border border-border">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h4 className="text-sm font-semibold text-text-muted">
-            Pedidos ({ativos.length + peVendas.length})
+            Pedidos ({pedidosExibidos.length})
             {peVendas.length > 0 && <span className="text-xs font-normal text-text-muted ml-2">({peVendas.length} diretas)</span>}
+            {reposicoes.length > 0 && <span className="text-xs font-normal text-text-muted ml-2">({reposicoes.length} estoque)</span>}
+            <span className={`text-xs font-normal ml-2 ${lucro >= 0 ? "text-green-600" : "text-red-600"}`}>Lucro total: {formatarMoeda(lucro)}</span>
           </h4>
           <input
             type="text"
@@ -513,46 +643,100 @@ export default function AdminFinanceiro() {
                 <th className="text-left py-2 px-3 font-semibold text-text-muted text-xs">Cliente</th>
                 <th className="text-left py-2 px-3 font-semibold text-text-muted text-xs">Itens</th>
                 <th className="text-right py-2 px-3 font-semibold text-text-muted text-xs">Total</th>
+                <th className="text-right py-2 px-3 font-semibold text-text-muted text-xs" title="Receita menos custos atribuídos ao pedido e taxa do Mercado Pago; não inclui custos extras globais.">Lucro estimado</th>
                 <th className="text-left py-2 px-3 font-semibold text-text-muted text-xs">Tipo</th>
                 <th className="py-2 px-3" />
               </tr>
             </thead>
             <tbody>
-              {[...ativos, ...peVendas].filter((o) => {
-                if (!buscaPedido.trim()) return true;
-                const q = buscaPedido.toLowerCase();
-                return o.id.toLowerCase().includes(q) || o.endereco?.nome?.toLowerCase().includes(q) || o.itens.some(i => i.nome.toLowerCase().includes(q));
-              }).slice(0, maxPedidos).map((o) => {
+              {pedidosExibidos.filter((o) => {
+                 if (!buscaPedido.trim()) return true;
+                 const q = buscaPedido.toLowerCase();
+                 return o.id.toLowerCase().includes(q) || o.endereco?.nome?.toLowerCase().includes(q) || o.itens.some(i => i.nome.toLowerCase().includes(q));
+               }).slice(0, maxPedidos).map((o) => {
                 const itemCounts = o.itens.reduce((acc, i) => {
                   const key = `${i.nome} (${i.tamanho})${i.feminino ? " Fem" : ""}`;
                   acc.set(key, (acc.get(key) || 0) + 1);
                   return acc;
                 }, new Map<string, number>());
+                const detalhe = detalheLucroPedido(o);
+                const detalheAberto = lucroDetalheId === o.id;
                 return (
-                <tr key={o.id} className="border-b border-border hover:bg-bg-base">
-                  <td className="py-2 px-3 text-xs font-mono text-text-muted">{o.id}</td>
-                  <td className="py-2 px-3">{o.endereco?.nome || "-"}</td>
-                  <td className="py-2 px-3 text-xs">{[...itemCounts.entries()].map(([item, count]) => <div key={item}>{count}x {item}</div>)}</td>
-                  <td className="py-2 px-3 text-right font-medium">{formatarMoeda(o.total)}</td>
-                  <td className="py-2 px-3">{o.pronta_entrega ? "Direta" : "Loja"}</td>
-                  <td className="py-2 px-3 text-right">
-                    <a href={`/pedido/${o.id}`} target="_blank" className="text-text-muted hover:text-accent text-sm no-underline" title="Ver detalhes">↗</a>
-                  </td>
-                </tr>
+                  <Fragment key={o.id}>
+                    <tr className="border-b border-border hover:bg-bg-base">
+                      <td className="py-2 px-3 text-xs font-mono text-text-muted">{o.id}</td>
+                      <td className="py-2 px-3">{o.endereco?.nome || "-"}</td>
+                      <td className="py-2 px-3 text-xs">{[...itemCounts.entries()].map(([item, count]) => <div key={item}>{count}x {item}</div>)}</td>
+                      <td className="py-2 px-3 text-right font-medium">{o.reposicao ? "—" : formatarMoeda(o.total)}</td>
+                      <td className={`py-2 px-3 text-right ${o.reposicao || detalhe === null || detalhe.reposicao ? "text-text-muted text-xs" : detalhe.lucro >= 0 ? "text-green-600" : "text-red-600"}`} title="Receita menos custos atribuídos ao pedido e taxa do Mercado Pago; não inclui custos extras globais.">
+                        <button
+                          type="button"
+                          className="cursor-pointer border-0 bg-transparent p-0 font-inherit focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                          aria-expanded={detalheAberto}
+                          aria-controls={`lucro-detalhe-${o.id}`}
+                          onClick={() => setLucroDetalheId(detalheAberto ? null : o.id)}
+                        >
+                          {o.reposicao ? "Não vendido" : detalhe === null ? "Aguardando custos" : detalhe.reposicao ? "Não vendido" : formatarMoeda(detalhe.lucro)}
+                        </button>
+                      </td>
+                      <td className="py-2 px-3">{o.reposicao ? "Estoque" : o.pronta_entrega ? "Direta" : "Loja"}</td>
+                      <td className="py-2 px-3 text-right">
+                        <a href={`/pedido/${o.id}`} target="_blank" className="text-text-muted hover:text-accent text-sm no-underline" title="Ver detalhes">↗</a>
+                      </td>
+                    </tr>
+                    {detalheAberto && (
+                      <tr className="border-b border-border">
+                        <td colSpan={7} className="px-3 pb-3">
+                          <div id={`lucro-detalhe-${o.id}`} className="rounded-md border border-border bg-bg-base p-3 text-xs">
+                            {detalhe?.reposicao ? (
+                              <>
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                  <div><div className="text-text-muted">Custo dos produtos</div><div className="font-medium">{formatarMoeda(detalhe.produto)}{detalhe.produtoUSD !== undefined ? ` (US$ ${detalhe.produtoUSD.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ""}</div></div>
+                                  <div><div className="text-text-muted">Frete rateado</div><div className="font-medium">{formatarMoeda(detalhe.frete)}</div></div>
+                                  <div><div className="text-text-muted">Taxa de importação rateada</div><div className="font-medium">{formatarMoeda(detalhe.importacao)}</div></div>
+                                  <div><div className="text-text-muted">Total investido</div><div className="font-semibold">{formatarMoeda(detalhe.produto + detalhe.frete + detalhe.importacao)}</div></div>
+                                </div>
+                                <p className="mt-3 text-text-muted">Item em estoque; o lucro será calculado quando a venda for registrada.</p>
+                              </>
+                            ) : detalhe && !detalhe.reposicao ? (
+                              <>
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                                  <div><div className="text-text-muted">Receita</div><div className="font-medium">+ {formatarMoeda(detalhe.receita)}</div></div>
+                                  <div><div className="text-text-muted">Custo dos produtos</div><div className="font-medium">− {formatarMoeda(detalhe.produto)}{detalhe.produtoUSD !== undefined ? ` (US$ ${detalhe.produtoUSD.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ""}</div></div>
+                                  <div><div className="text-text-muted">Frete rateado</div><div className="font-medium">− {formatarMoeda(detalhe.frete)}</div></div>
+                                  <div><div className="text-text-muted">Taxa de importação rateada</div><div className="font-medium">− {formatarMoeda(detalhe.importacao)}</div></div>
+                                  <div><div className="text-text-muted">Taxa Mercado Pago</div><div className="font-medium">− {formatarMoeda(detalhe.taxaMP)}</div></div>
+                                  <div><div className="text-text-muted">Resultado</div><div className={`font-semibold ${detalhe.lucro >= 0 ? "text-green-600" : "text-red-600"}`}>{detalhe.lucro >= 0 ? "= " : "= −"}{formatarMoeda(Math.abs(detalhe.lucro))}</div></div>
+                                </div>
+                                <p className="mt-3 text-text-muted">Fórmula: receita − produtos − frete − importação − taxa Mercado Pago = resultado.</p>
+                                <p className="mt-1 text-text-muted">Custos extras globais entram apenas no lucro total, pois não pertencem a um pedido específico.</p>
+                              </>
+                            ) : (
+                              <p className="text-text-muted">{o.reposicao
+                                ? "Item em estoque; o lucro será calculado quando a venda for registrada."
+                                : o.pronta_entrega
+                                ? "O custo desta variação não está preenchido em Estoque. Cadastre-o para calcular o lucro."
+                                : "O pedido ainda não está em um pacote com custo do produto preenchido."}</p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
-              })}
-              {ativos.length + peVendas.length === 0 && (
-                <tr><td colSpan={6} className="py-4 text-center text-text-muted text-xs">Nenhum pedido no período.</td></tr>
-              )}
+               })}
+               {pedidosExibidos.length === 0 && (
+                 <tr><td colSpan={7} className="py-4 text-center text-text-muted text-xs">Nenhum pedido no período.</td></tr>
+               )}
             </tbody>
           </table>
-          {[...ativos, ...peVendas].filter((o) => {
+          {pedidosExibidos.filter((o) => {
             if (!buscaPedido.trim()) return true;
             const q = buscaPedido.toLowerCase();
             return o.id.toLowerCase().includes(q) || o.endereco?.nome?.toLowerCase().includes(q) || o.itens.some(i => i.nome.toLowerCase().includes(q));
           }).length > maxPedidos && (
             <button onClick={() => setMaxPedidos(p => p + 20)} className="mt-3 w-full py-2 text-xs text-accent font-semibold bg-accent/5 border border-border rounded-md cursor-pointer hover:bg-accent/10 transition-colors">
-              Mostrar mais ({maxPedidos} de {[...ativos, ...peVendas].length})
+              Mostrar mais ({maxPedidos} de {pedidosExibidos.length})
             </button>
           )}
         </div>

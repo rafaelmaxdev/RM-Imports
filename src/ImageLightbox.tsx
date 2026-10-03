@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { type CachedImageMap, getCachedImageUrl } from "./types";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
 
@@ -204,7 +205,7 @@ export default function ImageLightbox({ images, alt, initialIndex, onClose, cach
 
   if (validImages.length === 0) return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[2000] bg-black/90 flex items-center justify-center"
       onClick={onClose}
@@ -296,6 +297,7 @@ export default function ImageLightbox({ images, alt, initialIndex, onClose, cach
           </div>
         </>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

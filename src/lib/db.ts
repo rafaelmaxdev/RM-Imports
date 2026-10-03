@@ -134,11 +134,7 @@ export async function getLojaConfig(): Promise<LojaConfig> {
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
   const cached = getCached<LojaConfig>(CACHE_KEY);
-  if (cached) {
-    // Stale-while-revalidate
-    if (isCacheStale(CACHE_KEY, CACHE_TTL)) {
-      fetchLojaConfigFromDb().then((data) => setCache(CACHE_KEY, data)).catch((err) => console.warn("[db] background refresh config failed:", err));
-    }
+  if (cached && !isCacheStale(CACHE_KEY, CACHE_TTL)) {
     return cached;
   }
 

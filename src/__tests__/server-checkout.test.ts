@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateServerItemPrice,
+  hasPromotionalDiscount,
   limitarDescontoCupom,
   validateProductVariant,
   normalizeBrazilPhone,
@@ -161,6 +162,68 @@ describe("calculateServerItemPrice", () => {
       { tamanho: "M", personalizado: false, prontaEntrega: true },
       { ...config, pronta_entrega_markup: -20 },
     )).toEqual({ preco: 129.90, precoBase: 129.90 });
+  });
+});
+
+describe("hasPromotionalDiscount", () => {
+  it("detects team, category, and global promotions from server prices", () => {
+    const teamPrice = calculateServerItemPrice(
+      { tipo: "Torcedor", time: "Time A" },
+      { tamanho: "M", personalizado: false },
+      { ...config, promocoes_time: { "Time A": { tipo: "porcentagem", valor: 10 } } },
+    );
+    const categoryPrice = calculateServerItemPrice(
+      { tipo: "Torcedor" },
+      { tamanho: "M", personalizado: false },
+      { ...config, promocao_ativa: { Torcedor: true } },
+    );
+    const globalPrice = calculateServerItemPrice(
+      { tipo: "Torcedor" },
+      { tamanho: "M", personalizado: false },
+      { ...config, desconto_global: 10 },
+    );
+
+    expect(hasPromotionalDiscount([teamPrice])).toBe(true);
+    expect(hasPromotionalDiscount([categoryPrice])).toBe(true);
+    expect(hasPromotionalDiscount([globalPrice])).toBe(true);
+  });
+
+  it("blocks a mixed cart but not full-price or missing-base items", () => {
+    const promotional = calculateServerItemPrice(
+      { tipo: "Torcedor", time: "Time A" },
+      { tamanho: "M", personalizado: false },
+      { ...config, promocoes_time: { "Time A": { tipo: "porcentagem", valor: 10 } } },
+    );
+    const fullPrice = calculateServerItemPrice(
+      { tipo: "Torcedor" },
+      { tamanho: "M", personalizado: false },
+      config,
+    );
+
+    expect(hasPromotionalDiscount([promotional, fullPrice])).toBe(true);
+    expect(hasPromotionalDiscount([fullPrice])).toBe(false);
+    expect(hasPromotionalDiscount([{ preco: 129.90 }])).toBe(false);
+  });
+
+  it("does not count a seasonal price already used as the base", () => {
+    const seasonalPrice = calculateServerItemPrice(
+      { tipo: "Torcedor", temporada: "2025/2026" },
+      { tamanho: "M", personalizado: false },
+      { ...config, precos_base: { ...config.precos_base, Torcedor: 149.90 } },
+    );
+
+    expect(seasonalPrice.preco).toBe(seasonalPrice.precoBase);
+    expect(hasPromotionalDiscount([seasonalPrice])).toBe(false);
+  });
+
+  it("only treats a custom price below the base as promotional", () => {
+    const options = { tamanho: "M", personalizado: false };
+    const lower = calculateServerItemPrice({ tipo: "NBA", preco_customizado: 159.90 }, options, config);
+    const equal = calculateServerItemPrice({ tipo: "NBA", preco_customizado: 189.90 }, options, config);
+    const higher = calculateServerItemPrice({ tipo: "NBA", preco_customizado: 199.90 }, options, config);
+
+    expect(hasPromotionalDiscount([lower])).toBe(true);
+    expect(hasPromotionalDiscount([equal, higher])).toBe(false);
   });
 });
 

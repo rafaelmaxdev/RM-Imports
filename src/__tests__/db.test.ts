@@ -1,5 +1,28 @@
-import { describe, it, expect } from "vitest";
-import { formatPedidoDateTime, parseImageUrls } from "../lib/db";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+import { DEFAULT_CONFIG } from "../types";
+import { getCached, isCacheStale, setCache } from "../lib/cache";
+import { supabase } from "../lib/supabase";
+import { formatPedidoDateTime, getLojaConfig, parseImageUrls } from "../lib/db";
+
+vi.mock("../lib/cache", () => ({
+  getCached: vi.fn(),
+  isCacheStale: vi.fn(),
+  setCache: vi.fn(),
+}));
+
+vi.mock("../lib/supabase", () => ({
+  supabase: { from: vi.fn() },
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+function mockConfigFetch(data: { key: string; value: unknown }[]) {
+  vi.mocked(supabase.from).mockReturnValue({
+    select: vi.fn().mockResolvedValue({ data, error: null }),
+  } as never);
+}
 
 describe("formatPedidoDateTime", () => {
   it("formats created_at in the Recife timezone", () => {
@@ -56,5 +79,31 @@ describe("parseImageUrls", () => {
 
   it("returns an empty array for undefined", () => {
     expect(parseImageUrls(undefined)).toEqual([]);
+  });
+});
+
+describe("getLojaConfig", () => {
+  it("fetches and caches config when the cache is stale", async () => {
+    const cachedConfig = { ...DEFAULT_CONFIG, desconto_global: 10 };
+    vi.mocked(getCached).mockReturnValue(cachedConfig);
+    vi.mocked(isCacheStale).mockReturnValue(true);
+    mockConfigFetch([{ key: "desconto_global", value: 20 }]);
+
+    const config = await getLojaConfig();
+
+    expect(config.desconto_global).toBe(20);
+    expect(setCache).toHaveBeenCalledWith("loja_config", config);
+    expect(supabase.from).toHaveBeenCalledWith("loja_config_publico");
+  });
+
+  it("returns fresh cached config without fetching", async () => {
+    const cachedConfig = { ...DEFAULT_CONFIG, desconto_global: 10 };
+    vi.mocked(getCached).mockReturnValue(cachedConfig);
+    vi.mocked(isCacheStale).mockReturnValue(false);
+
+    await expect(getLojaConfig()).resolves.toBe(cachedConfig);
+
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(setCache).not.toHaveBeenCalled();
   });
 });

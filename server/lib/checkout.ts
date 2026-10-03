@@ -57,6 +57,7 @@ const TAMANHOS_POR_TIPO: Record<string, string[]> = {
 };
 
 export const INVALID_PRODUCT_VARIANT_MESSAGE = "Tamanho, modelo ou personalização indisponível para este produto.";
+export const PROMOTION_COUPON_ERROR = "Cupons não podem ser combinados com produtos em promoção. Remova o cupom ou os produtos promocionais para continuar.";
 
 export function validateProductVariant(
   product: ServerProductVariantProduct,
@@ -118,6 +119,12 @@ export function normalizeBrazilPhone(value: string): string {
 
 function roundCents(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+export function hasPromotionalDiscount(
+  items: readonly { preco: number; precoBase?: number }[],
+): boolean {
+  return items.some((item) => roundCents(item.preco) < roundCents(item.precoBase ?? item.preco));
 }
 
 export function limitarDescontoCupom(descontoSolicitado: number, subtotal: number, subtotalBase: number): number {

@@ -3,8 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 import {
   calculateServerItemPrice,
   INVALID_PRODUCT_VARIANT_MESSAGE,
+  hasPromotionalDiscount,
   limitarDescontoCupom,
   normalizeBrazilPhone,
+  PROMOTION_COUPON_ERROR,
   type ServerCheckoutConfig,
   type ServerProductPricing,
   validateProductVariant,
@@ -346,6 +348,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const subtotal = Math.round(orderItems.reduce((sum, item) => sum + item.preco, 0) * 100) / 100;
     const subtotalBase = Math.round(orderItems.reduce((sum, item) => sum + item.precoBase, 0) * 100) / 100;
     let coupon: CouponReservation | null = null;
+
+    const hasIndividualQuantityPromotion = items.some((item) => {
+      const promotionType = productsById.get(item.productId)?.promocao_tipo;
+      return promotionType === "leve_pague" || promotionType === "leve_3_pague_2";
+    });
+    if (couponCode && (hasPromotionalDiscount(orderItems) || hasIndividualQuantityPromotion)) {
+      return res.status(400).json({ error: PROMOTION_COUPON_ERROR });
+    }
 
     if (couponCode) {
       const { data: couponData, error: couponError } = await supabase.rpc("reservar_cupom", {

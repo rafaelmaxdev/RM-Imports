@@ -4,6 +4,7 @@ import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import type { OrderAddress, PaymentMethod, Cupom } from "./types";
 import { formatarMoeda, yupooThumbnailUrl, getCachedImageUrl } from "./types";
 import { validarCupom, aplicarCupom } from "./lib/db";
+import { hasPromotionalDiscount, PROMOTION_COUPON_ERROR } from "../server/lib/checkout";
 
 interface CartSidebarProps {
   onClose: () => void;
@@ -76,7 +77,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   const [cupomErro, setCupomErro] = useState("");
   const [cupomLoading, setCupomLoading] = useState(false);
   const subtotalBase = cart.reduce((sum, item) => sum + (item.precoBase ?? item.preco), 0);
-  const totalComDesconto = cupomAplicado ? aplicarCupom(total, cupomAplicado, subtotalBase) : total;
+  const hasPromotion = hasPromotionalDiscount(cart);
+  const totalComDesconto = !hasPromotion && cupomAplicado ? aplicarCupom(total, cupomAplicado, subtotalBase) : total;
 
   // Fechar dropdown ao clicar fora + limpar debounce ao desmontar
   useEffect(() => {
@@ -207,6 +209,11 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
 
   async function handleConfirm() {
     if (finalizando) return;
+    if (hasPromotion && cupomAplicado) {
+      setCupomErro(PROMOTION_COUPON_ERROR);
+      setFinalizacaoErro(PROMOTION_COUPON_ERROR);
+      return;
+    }
 
     if (endereco.deliveryMethod === "entrega") {
       if (
@@ -234,10 +241,10 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
 
     setErro("");
     setFinalizacaoErro("");
-    const desconto = cupomAplicado ? total - totalComDesconto : 0;
+    const desconto = cupomAplicado && !hasPromotion ? total - totalComDesconto : 0;
     setFinalizando(true);
     try {
-      await onCheckout(endereco, paymentMethod, cupomAplicado ? { codigo: cupomAplicado.codigo, desconto } : undefined);
+      await onCheckout(endereco, paymentMethod, cupomAplicado && !hasPromotion ? { codigo: cupomAplicado.codigo, desconto } : undefined);
     } catch (err) {
       setFinalizacaoErro(err instanceof Error ? err.message : "Não foi possível finalizar o pedido.");
     } finally {
@@ -433,7 +440,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                     </>
                   );
                 })()}
-                {cupomAplicado && (
+                {cupomAplicado && !hasPromotion && (
                   <div className="flex justify-between text-xs text-green-600">
                     <span>Desconto do cupom {cupomAplicado.codigo}</span>
                     <span>-{formatarMoeda(total - totalComDesconto)}</span>
@@ -548,6 +555,10 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                       className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
                       disabled={cupomLoading || !cupomCodigo.trim() || endereco.telefone.replace(/\D/g, "").length < 10}
                       onClick={async () => {
+                        if (hasPromotion) {
+                          setCupomErro(PROMOTION_COUPON_ERROR);
+                          return;
+                        }
                         setCupomLoading(true);
                         setCupomErro("");
                         try {
@@ -573,7 +584,11 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                     </button>
                   </div>
                 )}
-                {cupomErro && <p className="text-xs text-accent mt-1">{cupomErro}</p>}
+                {(cupomErro || (hasPromotion && cupomAplicado)) && (
+                  <p className="text-xs text-accent mt-1" role="alert">
+                    {hasPromotion && cupomAplicado ? PROMOTION_COUPON_ERROR : cupomErro}
+                  </p>
+                )}
                 {endereco.telefone.replace(/\D/g, "").length < 10 && (
                   <p className="text-xs text-text-muted mt-1">Informe um telefone válido antes de aplicar o cupom.</p>
                 )}
@@ -737,7 +752,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                     </>
                   );
                 })()}
-                {cupomAplicado && (
+                {cupomAplicado && !hasPromotion && (
                   <div className="flex justify-between text-xs text-green-600">
                     <span>Desconto do cupom {cupomAplicado.codigo}</span>
                     <span>-{formatarMoeda(total - totalComDesconto)}</span>
@@ -768,6 +783,11 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
           <>
             <div className="flex-1 overflow-y-auto px-4 py-4">
               <p className="text-sm text-text-muted mb-4">Escolha a forma de pagamento:</p>
+              {hasPromotion && cupomAplicado && (
+                <div className="mb-4 p-3 bg-yellow-50 rounded-md border border-yellow-200 text-xs text-yellow-800" role="alert">
+                  {PROMOTION_COUPON_ERROR}
+                </div>
+              )}
               <div className="flex flex-col gap-2">
                 {paymentOptions.map((opt) => (
                   <button
@@ -850,7 +870,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                     </>
                   );
                 })()}
-                {cupomAplicado && (
+                {cupomAplicado && !hasPromotion && (
                   <div className="flex justify-between text-xs text-green-600">
                     <span>Desconto do cupom {cupomAplicado.codigo}</span>
                     <span>-{formatarMoeda(total - totalComDesconto)}</span>

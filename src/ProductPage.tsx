@@ -5,6 +5,7 @@ import { parseImageUrls } from "./lib/db";
 import { useCart } from "./CartContext";
 import ImageCarousel from "./ImageCarousel";
 import ImageLightbox from "./ImageLightbox";
+import pixLogo from "./assets/pix.svg";
 import { slugify } from "./lib/utils";
 import type { CartItem, LojaConfig, PromocaoTipo } from "./types";
 import { track } from "@vercel/analytics";
@@ -335,20 +336,24 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
           <h1 className="mb-4 text-3xl font-black leading-tight tracking-[-0.03em] text-primary sm:text-4xl">{produto.nome}</h1>
 
           <div className="mb-5">
-            {priceInfo.promo != null ? (
-              <div className="flex items-baseline gap-3">
-                <span className="text-3xl font-black tracking-tight text-accent">{formatarMoeda(priceInfo.promo)}</span>
-                <span className="text-text-muted line-through">{formatarMoeda(priceInfo.base)}</span>
-              </div>
-            ) : (
-              <span className="text-3xl font-black tracking-tight text-accent">{formatarMoeda(priceInfo.base)}</span>
-            )}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {priceInfo.promo != null ? (
+                <span className="text-3xl leading-none font-black tracking-tight text-accent">{formatarMoeda(priceInfo.promo)}</span>
+              ) : (
+                <span className="text-3xl leading-none font-black tracking-tight text-accent">{formatarMoeda(priceInfo.base)}</span>
+              )}
+              <span className="inline-flex items-center gap-1.5 text-sm leading-none font-semibold text-text-muted">
+                no Pix
+                <img src={pixLogo} alt="" aria-hidden="true" className="h-5 w-5 shrink-0" />
+              </span>
+              {priceInfo.promo != null && <span className="text-text-muted line-through">{formatarMoeda(priceInfo.base)}</span>}
+            </div>
             {priceInfo.emPromocao && priceInfo.discountLabel && (
               <span className="inline-block mt-2 text-xs font-bold px-2 py-1 bg-accent/15 text-accent rounded uppercase">
                 {priceInfo.discountLabel}
               </span>
             )}
-            <p className="mt-2 text-xs text-text-muted">Pagamento em até 12x via Mercado Pago</p>
+            <p className="mt-2 text-xs text-text-muted">Até 12x via Mercado Pago, sujeito a juros.</p>
           </div>
 
           <div className="space-y-5">

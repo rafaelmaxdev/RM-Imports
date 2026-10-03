@@ -319,11 +319,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
             images={imagensDoModelo}
             alt={produto.nome}
             hoverZoom
-            onImageClick={(index) => {
-              if (window.matchMedia("(hover: none), (pointer: coarse)").matches) {
-                setLightboxIndex(index);
-              }
-            }}
+            onImageClick={setLightboxIndex}
             cachedImageUrls={modeloFemininoComImagens ? null : produto.cached_image_urls}
           />
         </div>

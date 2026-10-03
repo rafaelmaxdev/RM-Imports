@@ -929,9 +929,29 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           </label>
 
         {filtrosAtivos && (
-          <>
+          <div className="col-span-2 flex w-full flex-wrap items-center gap-3 sm:basis-full">
             <button
-              className="col-span-2 flex h-11 w-11 shrink-0 items-center justify-center self-end whitespace-nowrap rounded-lg border border-accent p-0 text-xs font-bold text-accent hover:bg-accent/10 sm:col-span-1"
+              className="min-h-11 self-end whitespace-nowrap rounded-lg bg-primary px-3 text-xs font-bold text-white hover:opacity-90"
+              onClick={() => {
+                setSearchParams((current) => {
+                  const next = new URLSearchParams(current);
+                  next.delete("liga");
+                  next.delete("temporada");
+                  next.delete("time");
+                  next.delete("tipo");
+                  next.delete("busca");
+                  next.delete("ordem");
+                  next.delete("precoMin");
+                  next.delete("precoMax");
+                  return next;
+                });
+              }}
+              aria-label="Limpar filtros"
+            >
+              Limpar filtros
+            </button>
+            <button
+              className="flex h-11 w-11 shrink-0 items-center justify-center self-end whitespace-nowrap rounded-lg border border-accent p-0 text-xs font-bold text-accent hover:bg-accent/10"
               onClick={async () => {
                 const url = window.location.href;
                 try {
@@ -968,29 +988,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                 {shareFeedback}
               </span>
             )}
-          </>
-        )}
-        {filtrosAtivos && (
-          <button
-            className="col-span-2 min-h-11 self-end whitespace-nowrap rounded-lg bg-primary px-3 text-xs font-bold text-white hover:opacity-90 sm:col-span-1"
-            onClick={() => {
-              setSearchParams((current) => {
-                const next = new URLSearchParams(current);
-                next.delete("liga");
-                next.delete("temporada");
-                next.delete("time");
-                next.delete("tipo");
-                next.delete("busca");
-                next.delete("ordem");
-                next.delete("precoMin");
-                next.delete("precoMax");
-                return next;
-              });
-            }}
-            aria-label="Limpar filtros"
-          >
-            Limpar filtros
-          </button>
+          </div>
         )}
         <button type="button" onClick={closeFilters} className="col-span-2 mt-1 min-h-12 rounded-xl bg-accent text-sm font-bold text-white sm:hidden">
           Ver {produtosFiltrados.length} produtos

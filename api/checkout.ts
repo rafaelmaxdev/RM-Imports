@@ -394,8 +394,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const now = new Date();
     const row = {
       id: orderId,
-      data: now.toLocaleDateString("pt-BR"),
-      hora: now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      data: now.toLocaleDateString("pt-BR", { timeZone: "America/Recife" }),
+      hora: now.toLocaleTimeString("pt-BR", { timeZone: "America/Recife", hour: "2-digit", minute: "2-digit" }),
       itens: orderItems,
       total,
       status: "pendente",

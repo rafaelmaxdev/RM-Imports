@@ -296,11 +296,35 @@ export interface DbPedido {
   created_at: string;
 }
 
+export function formatPedidoDateTime({
+  created_at,
+  data,
+  hora,
+}: {
+  created_at?: string | null;
+  data: string;
+  hora: string;
+}): { data: string; hora: string } {
+  if (!created_at) return { data, hora };
+
+  const date = new Date(created_at);
+  if (Number.isNaN(date.getTime())) return { data, hora };
+
+  return {
+    data: date.toLocaleDateString("pt-BR", { timeZone: "America/Recife" }),
+    hora: date.toLocaleTimeString("pt-BR", {
+      timeZone: "America/Recife",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
+}
+
 function dbPedidoToOrder(db: DbPedido): import("../types").Order {
+  const dateTime = formatPedidoDateTime(db);
   return {
     id: db.id,
-    data: db.data,
-    hora: db.hora,
+    ...dateTime,
     itens: typeof db.itens === "string" ? JSON.parse(db.itens) : db.itens,
     total: db.total,
     status: db.status as import("../types").Order["status"],
@@ -379,8 +403,14 @@ export async function getPedidoById(id: string, phone?: string): Promise<import(
     if (!res.ok) throw new Error(`Failed to fetch order: ${res.status}`);
     const data = await res.json();
     if (typeof data.orderAccessToken === "string") saveOrderAccessToken(id, data.orderAccessToken);
+    const dateTime = formatPedidoDateTime({
+      created_at: data.created_at,
+      data: data.data,
+      hora: data.hora,
+    });
     return {
       ...data,
+      ...dateTime,
       itens: data.itens ? (typeof data.itens === "string" ? JSON.parse(data.itens) : data.itens) : [],
       endereco: data.endereco
         ? (typeof data.endereco === "string" ? JSON.parse(data.endereco) : data.endereco)

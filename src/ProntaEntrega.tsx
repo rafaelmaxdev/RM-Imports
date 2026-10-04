@@ -18,6 +18,8 @@ import {
 import { normalizarBusca } from "./lib/utils";
 import { TIPO_SHORT } from "./lib/status";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
+import usePromotionClock from "./hooks/usePromotionClock";
+import PromotionCountdown from "./PromotionCountdown";
 
 // ── Grouped product ──
 
@@ -120,10 +122,11 @@ function groupEstoqueItems(estoque: EstoqueItem[], produtos: DbProduto[]): Group
 interface DetailModalProps {
   product: GroupedProduct;
   config: LojaConfig;
+  now: number;
   onClose: () => void;
 }
 
-function ProntaEntregaDetailModal({ product, config, onClose }: DetailModalProps) {
+function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModalProps) {
   const { addToCart } = useCart();
 
 
@@ -315,6 +318,11 @@ function ProntaEntregaDetailModal({ product, config, onClose }: DetailModalProps
                 {discountLabel || badge}
               </span>
             )}
+            {priceInfo.endsAt && promo != null && promo < base && (
+              <div className="mt-2">
+                <PromotionCountdown endsAt={priceInfo.endsAt} now={now} />
+              </div>
+            )}
           </div>
 
           {/* Gender selection (only for products with feminino flag) */}
@@ -468,6 +476,8 @@ function ProntaEntregaDetailModal({ product, config, onClose }: DetailModalProps
 // ── Page component ──
 
 export default function ProntaEntrega() {
+  const now = usePromotionClock();
+
   useEffect(() => {
     document.title = "Pronta Entrega — RM Imports";
     document.querySelector('meta[name="description"]')?.setAttribute("content", "Camisas em estoque prontas para envio imediato. Consulte tamanhos e disponibilidade.");
@@ -898,6 +908,7 @@ export default function ProntaEntrega() {
         <ProntaEntregaDetailModal
           product={produtoSelecionado}
           config={config}
+          now={now}
           onClose={() => setProdutoSelecionado(null)}
         />
       )}

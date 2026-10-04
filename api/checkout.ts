@@ -168,6 +168,7 @@ function buildConfig(rows: unknown): ServerCheckoutConfig {
     promocao_ativa: {},
     promocoes_time: {},
     desconto_global: null,
+    desconto_global_ends_at: null,
     pronta_entrega_markup: 20,
     ano_temporada_lancamento: 2026,
     desconto_temporada_anterior: {
@@ -203,6 +204,9 @@ function buildConfig(rows: unknown): ServerCheckoutConfig {
         break;
       case "desconto_global":
         if (typeof rawRow.value === "number") config.desconto_global = rawRow.value;
+        break;
+      case "desconto_global_ends_at":
+        if (rawRow.value === null || typeof rawRow.value === "string") config.desconto_global_ends_at = rawRow.value;
         break;
       case "pronta_entrega_markup":
         if (typeof rawRow.value === "number") config.pronta_entrega_markup = rawRow.value;

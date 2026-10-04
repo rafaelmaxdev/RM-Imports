@@ -1,3 +1,5 @@
+import { isPromotionActive } from "./promotions.js";
+
 export interface ServerProductPricing {
   tipo: string;
   time?: string | null;
@@ -28,6 +30,7 @@ export interface ServerTeamPromotion {
   tipo: string;
   valor?: number | null;
   preco?: number | null;
+  ends_at?: string | null;
 }
 
 export interface ServerCheckoutConfig {
@@ -35,6 +38,7 @@ export interface ServerCheckoutConfig {
   precos_promocao?: Record<string, number>;
   promocao_ativa?: Record<string, boolean>;
   desconto_global?: number | null;
+  desconto_global_ends_at?: string | null;
   promocoes_time?: Record<string, ServerTeamPromotion>;
   pronta_entrega_markup?: number | null;
   ano_temporada_lancamento?: number;
@@ -210,10 +214,10 @@ export function calculateServerItemPrice(
   }
 
   const teamPromotion = product.time ? config.promocoes_time?.[product.time] : undefined;
-  if (!resolved && teamPromotion?.tipo === "porcentagem" && isValidDiscountPercentage(teamPromotion.valor)) {
+  if (!resolved && isPromotionActive(teamPromotion?.ends_at) && teamPromotion?.tipo === "porcentagem" && isValidDiscountPercentage(teamPromotion.valor)) {
     unitPrice = roundCents(basePrice - basePrice * (teamPromotion.valor / 100));
     resolved = true;
-  } else if (!resolved && teamPromotion?.tipo === "novo_preco") {
+  } else if (!resolved && isPromotionActive(teamPromotion?.ends_at) && teamPromotion?.tipo === "novo_preco") {
     const teamPrice = configuredPositiveNumber(teamPromotion.preco);
     if (teamPrice !== null) {
       unitPrice = teamPrice;
@@ -226,7 +230,7 @@ export function calculateServerItemPrice(
     resolved = true;
   }
 
-  if (!resolved && isValidDiscountPercentage(config.desconto_global)) {
+  if (!resolved && isPromotionActive(config.desconto_global_ends_at) && isValidDiscountPercentage(config.desconto_global)) {
     unitPrice = roundCents(basePrice - basePrice * (config.desconto_global / 100));
   }
 

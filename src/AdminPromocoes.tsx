@@ -4,6 +4,53 @@ import type { DbProduto } from "./lib/db";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { TIPOS_CATEGORIA, DEFAULT_CONFIG, formatarMoeda, getCachedImageUrl } from "./types";
 import { normalizarBusca } from "./lib/utils";
+import { isPromotionActive, promotionEndFromDate } from "../server/lib/promotions";
+
+const RECIFE_TIME_ZONE = "America/Recife";
+
+function dateInputFromEndsAt(endsAt?: string | null): string {
+  if (!endsAt) return "";
+  const timestamp = Date.parse(endsAt);
+  if (!Number.isFinite(timestamp)) return "";
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: RECIFE_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(timestamp - 1));
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return values.year && values.month && values.day
+    ? `${values.year.padStart(4, "0")}-${values.month.padStart(2, "0")}-${values.day.padStart(2, "0")}`
+    : "";
+}
+
+function formatPromoDeadline(endsAt?: string | null): string {
+  if (!endsAt) return "Sem prazo";
+  const timestamp = Date.parse(endsAt);
+  if (!Number.isFinite(timestamp)) return "Data inválida";
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: RECIFE_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(timestamp - 1));
+}
+
+function getPromotionEnd(date: string): string | null {
+  const endsAt = promotionEndFromDate(date);
+  if (endsAt !== null) {
+    const timestamp = Date.parse(endsAt);
+    if (!Number.isFinite(timestamp) || timestamp <= Date.now()) {
+      throw new RangeError("A data de validade já passou.");
+    }
+  }
+  return endsAt;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Erro ao converter a data de validade.";
+}
 
 interface AdminPromocoesProps {
   produtos: DbProduto[];
@@ -40,13 +87,21 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
   const [teamPromoTipo, setTeamPromoTipo] = useState("");
   const [teamPromoValor, setTeamPromoValor] = useState("");
   const [teamPromoPreco, setTeamPromoPreco] = useState("");
+  const [teamPromoEndsAt, setTeamPromoEndsAt] = useState("");
+  const [teamPromoName, setTeamPromoName] = useState("");
   const [savingTeam, setSavingTeam] = useState(false);
+  const [teamMessage, setTeamMessage] = useState("");
+  const [teamError, setTeamError] = useState("");
   const [teamListSearch, setTeamListSearch] = useState("");
   const [teamListLimit, setTeamListLimit] = useState(6);
 
   // Site-wide promo state
   const [sitewidePct, setSitewidePct] = useState("");
+  const [sitewideEndDate, setSitewideEndDate] = useState(() => dateInputFromEndsAt(config.desconto_global_ends_at));
+  const [sitewideName, setSitewideName] = useState(config.desconto_global_nome ?? "");
   const [savingSitewide, setSavingSitewide] = useState(false);
+  const [globalMessage, setGlobalMessage] = useState("");
+  const [globalError, setGlobalError] = useState("");
 
   // PE markup state
   const [peMarkupValue, setPeMarkupValue] = useState("");
@@ -83,7 +138,217 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
       pc[tipo] = String(config.personalizacao_custo[tipo]);
     }
     setPersonalizacaoCusto(pc);
+    setSitewideEndDate(dateInputFromEndsAt(config.desconto_global_ends_at));
+    setSitewideName(config.desconto_global_nome ?? "");
   }, [config]);
+
+  function selectTeam(time: string) {
+    const promo = config.promocoes_time?.[time];
+    setSelectedTeam(time);
+    setTeamSearch(time);
+    setTeamPromoTipo(promo?.tipo ?? "");
+    setTeamPromoValor(promo?.valor != null ? String(promo.valor) : "");
+    setTeamPromoPreco(promo?.preco != null ? String(promo.preco) : "");
+    setTeamPromoEndsAt(dateInputFromEndsAt(promo?.ends_at));
+    setTeamPromoName(promo?.nome ?? "");
+    setTeamError("");
+  }
+
+  async function handleApplyTeamPromo() {
+    let endsAt: string | null;
+    let valor: number | null = null;
+    let preco: number | null = null;
+    try {
+      endsAt = getPromotionEnd(teamPromoEndsAt);
+      if (!teamPromoTipo) throw new RangeError("Selecione o tipo de promoção.");
+      if (teamPromoTipo === "porcentagem") {
+        valor = parseFloat(teamPromoValor);
+        if (!Number.isFinite(valor) || valor < 1 || valor > 99) {
+          throw new RangeError("O desconto deve ser entre 1% e 99%.");
+        }
+      } else if (teamPromoTipo === "novo_preco") {
+        preco = parseFloat(teamPromoPreco);
+        if (!Number.isFinite(preco) || preco <= 0) {
+          throw new RangeError("O novo preço deve ser maior que zero.");
+        }
+      } else {
+        throw new RangeError("Tipo de promoção inválido.");
+      }
+    } catch (err) {
+      setTeamError(getErrorMessage(err));
+      return;
+    }
+
+    setTeamError("");
+    setSavingTeam(true);
+    try {
+      const nome = teamPromoName.trim() || null;
+      await setPromocaoTime(selectedTeam, teamPromoTipo, valor, preco, endsAt, teamPromoName);
+      setConfig((prev) => ({
+        ...prev,
+        promocoes_time: {
+          ...(prev.promocoes_time ?? {}),
+          [selectedTeam]: { tipo: teamPromoTipo, valor, preco, ends_at: endsAt, nome },
+        },
+      }));
+      setTeamPromoName(nome ?? "");
+      setTeamMessage(`Promoção aplicada a ${selectedTeam}!`);
+      setTimeout(() => setTeamMessage(""), 4000);
+    } catch (err) {
+      console.error("Erro ao aplicar promoção por time:", err);
+      setTeamError("Erro ao aplicar promoção.");
+    } finally {
+      setSavingTeam(false);
+    }
+  }
+
+  async function handleSaveTeamValidity() {
+    const promo = config.promocoes_time?.[selectedTeam];
+    if (!promo) return;
+
+    let endsAt: string | null;
+    try {
+      endsAt = getPromotionEnd(teamPromoEndsAt);
+    } catch (err) {
+      setTeamError(getErrorMessage(err));
+      return;
+    }
+
+    setTeamError("");
+    setSavingTeam(true);
+    try {
+      const nome = teamPromoName.trim() || null;
+      await setPromocaoTime(selectedTeam, promo.tipo, promo.valor, promo.preco, endsAt, teamPromoName);
+      setConfig((prev) => ({
+        ...prev,
+        promocoes_time: {
+          ...(prev.promocoes_time ?? {}),
+          [selectedTeam]: { ...promo, ends_at: endsAt, nome },
+        },
+      }));
+      setTeamPromoTipo(promo.tipo);
+      setTeamPromoValor(promo.valor != null ? String(promo.valor) : "");
+      setTeamPromoPreco(promo.preco != null ? String(promo.preco) : "");
+      setTeamPromoEndsAt(dateInputFromEndsAt(endsAt));
+      setTeamPromoName(nome ?? "");
+      setTeamMessage(`Nome e validade da promoção de ${selectedTeam} salvos.`);
+      setTimeout(() => setTeamMessage(""), 4000);
+    } catch (err) {
+      console.error("Erro ao salvar validade da promoção por time:", err);
+      setTeamError("Erro ao salvar validade da promoção.");
+    } finally {
+      setSavingTeam(false);
+    }
+  }
+
+  async function handleRemoveTeamPromo(time: string) {
+    setTeamError("");
+    setSavingTeam(true);
+    try {
+      await removePromocaoTime(time);
+      setConfig((prev) => {
+        const promocoes = { ...(prev.promocoes_time ?? {}) };
+        delete promocoes[time];
+        return { ...prev, promocoes_time: promocoes };
+      });
+      if (time === selectedTeam) {
+        setTeamPromoTipo("");
+        setTeamPromoValor("");
+        setTeamPromoPreco("");
+        setTeamPromoEndsAt("");
+        setTeamPromoName("");
+      }
+      setTeamMessage(`Promoção removida de ${time}.`);
+      setTimeout(() => setTeamMessage(""), 4000);
+    } catch (err) {
+      console.error("Erro ao remover promoção por time:", err);
+      setTeamError("Erro ao remover promoção.");
+    } finally {
+      setSavingTeam(false);
+    }
+  }
+
+  async function handleApplySitewide() {
+    let pct: number;
+    let endsAt: string | null;
+    try {
+      pct = parseFloat(sitewidePct);
+      if (!Number.isFinite(pct) || pct < 1 || pct > 99) {
+        throw new RangeError("Desconto deve ser entre 1% e 99%.");
+      }
+      endsAt = getPromotionEnd(sitewideEndDate);
+    } catch (err) {
+      setGlobalError(getErrorMessage(err));
+      return;
+    }
+
+    setGlobalError("");
+    setSavingSitewide(true);
+    try {
+      const nome = sitewideName.trim() || null;
+      await setDescontoGlobal(pct, endsAt, sitewideName);
+      setConfig((prev) => ({ ...prev, desconto_global: pct, desconto_global_ends_at: endsAt, desconto_global_nome: nome }));
+      setSitewideName(nome ?? "");
+      setGlobalMessage(`Desconto de ${pct}% aplicado a todos os produtos!`);
+      setSitewidePct("");
+      setTimeout(() => setGlobalMessage(""), 4000);
+    } catch (err) {
+      console.error("Erro ao aplicar desconto site-wide:", err);
+      setGlobalError("Erro ao aplicar desconto.");
+    } finally {
+      setSavingSitewide(false);
+    }
+  }
+
+  async function handleSaveGlobalValidity() {
+    const pct = config.desconto_global;
+    if (pct == null) return;
+
+    let endsAt: string | null;
+    try {
+      if (!Number.isFinite(pct) || pct < 1 || pct > 99) {
+        throw new RangeError("O desconto salvo deve ser entre 1% e 99%.");
+      }
+      endsAt = getPromotionEnd(sitewideEndDate);
+    } catch (err) {
+      setGlobalError(getErrorMessage(err));
+      return;
+    }
+
+    setGlobalError("");
+    setSavingSitewide(true);
+    try {
+      const nome = sitewideName.trim() || null;
+      await setDescontoGlobal(pct, endsAt, sitewideName);
+      setConfig((prev) => ({ ...prev, desconto_global_ends_at: endsAt, desconto_global_nome: nome }));
+      setSitewideName(nome ?? "");
+      setGlobalMessage("Nome e validade do desconto site-wide salvos.");
+      setTimeout(() => setGlobalMessage(""), 4000);
+    } catch (err) {
+      console.error("Erro ao salvar validade do desconto site-wide:", err);
+      setGlobalError("Erro ao salvar validade do desconto.");
+    } finally {
+      setSavingSitewide(false);
+    }
+  }
+
+  async function handleRemoveSitewide() {
+    setGlobalError("");
+    setSavingSitewide(true);
+    try {
+      await removeDescontoGlobal();
+      setConfig((prev) => ({ ...prev, desconto_global: null, desconto_global_ends_at: null, desconto_global_nome: null }));
+      setSitewideEndDate("");
+      setSitewideName("");
+      setGlobalMessage("Desconto site-wide removido.");
+      setTimeout(() => setGlobalMessage(""), 4000);
+    } catch (err) {
+      console.error("Erro ao remover desconto site-wide:", err);
+      setGlobalError("Erro ao remover desconto.");
+    } finally {
+      setSavingSitewide(false);
+    }
+  }
 
   async function handleTogglePromo(tipo: string, ativa: boolean) {
     try {
@@ -513,66 +778,81 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
         <h4 className="text-lg font-bold text-primary mb-2">🌐 Promoção Site-wide</h4>
         <p className="text-sm text-text-muted mb-4">
           Aplica um desconto percentual em <strong>todos</strong> os produtos. Não sobrescreve promoções individuais ou por time.
-          {config.desconto_global && (
-            <span className="block mt-1 text-accent font-semibold">Atualmente: {config.desconto_global}% OFF em todos os produtos</span>
+          {config.desconto_global != null && (
+            <span className={`block mt-1 font-semibold ${isPromotionActive(config.desconto_global_ends_at) ? "text-accent" : "text-text-muted"}`}>
+              Cadastrado: {config.desconto_global_nome ? `${config.desconto_global_nome} — ` : ""}{config.desconto_global}% OFF ({isPromotionActive(config.desconto_global_ends_at) ? "ativa" : "Encerrada"})
+            </span>
           )}
         </p>
-        <div className="flex gap-2 items-end">
-          <div className="flex-1">
-            <label className="block text-xs font-semibold text-text-muted mb-1">Desconto (%)</label>
+        {globalMessage && (
+          <div className="mb-3 px-3 py-2 bg-green-100 text-green-800 rounded-md text-sm font-medium">
+            {globalMessage}
+          </div>
+        )}
+        {globalError && (
+          <div role="alert" className="mb-3 px-3 py-2 bg-red-100 text-red-800 rounded-md text-sm font-medium">
+            {globalError}
+          </div>
+        )}
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-text-muted mb-1">Nome da campanha (opcional)</label>
             <input
-              type="number"
-              min="1"
-              max="99"
-              value={sitewidePct}
-              onChange={(e) => setSitewidePct(e.target.value)}
-              placeholder="Ex: 15"
+              type="text"
+              maxLength={100}
+              value={sitewideName}
+              onChange={(e) => { setSitewideName(e.target.value); setGlobalError(""); }}
+              placeholder="Ex.: Santa subiu, preço caiu"
               className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
             />
           </div>
-          <button
-            className="px-4 py-2 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
-            disabled={savingSitewide || !sitewidePct}
-            onClick={async () => {
-              setSavingSitewide(true);
-              try {
-                const pct = parseFloat(sitewidePct);
-                if (pct < 1 || pct > 99) { setMessage("Desconto deve ser entre 1% e 99%."); return; }
-                await setDescontoGlobal(pct);
-                setConfig(prev => ({ ...prev, desconto_global: pct }));
-                setMessage(`Desconto de ${pct}% aplicado a todos os produtos!`);
-                setSitewidePct("");
-              } catch (err) {
-                console.error("Erro ao aplicar desconto site-wide:", err);
-                setMessage("Erro ao aplicar desconto.");
-              } finally {
-                setSavingSitewide(false);
-                setTimeout(() => setMessage(""), 4000);
-              }
-            }}
-          >
-            {savingSitewide ? "Aplicando..." : "Aplicar a Todos"}
-          </button>
-          <button
-            className="px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
-            disabled={savingSitewide}
-            onClick={async () => {
-              setSavingSitewide(true);
-              try {
-                await removeDescontoGlobal();
-                setConfig(prev => ({ ...prev, desconto_global: null }));
-                setMessage("Desconto site-wide removido.");
-              } catch (err) {
-                console.error("Erro ao remover desconto site-wide:", err);
-                setMessage("Erro ao remover desconto.");
-              } finally {
-                setSavingSitewide(false);
-                setTimeout(() => setMessage(""), 4000);
-              }
-            }}
-          >
-            Remover Todas
-          </button>
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="block text-xs font-semibold text-text-muted mb-1">Desconto (%)</label>
+              <input
+                type="number"
+                min="1"
+                max="99"
+                value={sitewidePct}
+                onChange={(e) => setSitewidePct(e.target.value)}
+                placeholder="Ex: 15"
+                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+              />
+            </div>
+            <button
+              className="px-4 py-2 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+              disabled={savingSitewide || !sitewidePct}
+              onClick={handleApplySitewide}
+            >
+              {savingSitewide ? "Aplicando..." : "Aplicar a Todos"}
+            </button>
+            <button
+              className="px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+              disabled={savingSitewide}
+              onClick={handleRemoveSitewide}
+            >
+              Remover Todas
+            </button>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-muted mb-1">Válida até (inclusive)</label>
+            <input
+              type="date"
+              value={sitewideEndDate}
+              onChange={(e) => { setSitewideEndDate(e.target.value); setGlobalError(""); }}
+              className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+            />
+            <p className="mt-1 text-xs text-text-muted">Opcional. Até 23:59 no horário de Pernambuco.</p>
+          </div>
+          {config.desconto_global != null && (
+            <button
+              className="w-full py-2 text-sm font-semibold bg-blue-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+              disabled={savingSitewide}
+              onClick={handleSaveGlobalValidity}
+            >
+              {savingSitewide ? "Salvando..." : "Salvar nome e validade"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -701,7 +981,18 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
           Aplica ou remove promoção de todos os produtos de um time. Não sobrescreve promoções individuais de produtos.
         </p>
 
-        {/* Active team promos list — from config */}
+        {teamMessage && (
+          <div className="mb-3 px-3 py-2 bg-green-100 text-green-800 rounded-md text-sm font-medium">
+            {teamMessage}
+          </div>
+        )}
+        {teamError && (
+          <div role="alert" className="mb-3 px-3 py-2 bg-red-100 text-red-800 rounded-md text-sm font-medium">
+            {teamError}
+          </div>
+        )}
+
+        {/* Team promos list — from config */}
         {(() => {
           const teamPromos = config.promocoes_time ?? {};
           let entries = Object.entries(teamPromos).sort((a, b) => a[0].localeCompare(b[0]));
@@ -721,7 +1012,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
 
           return totalTeams > 0 ? (
             <div className="mb-4">
-              <h5 className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">Times com promoção ativa ({totalTeams})</h5>
+              <h5 className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">Promoções por time (ativas e encerradas) ({totalTeams})</h5>
               {totalTeams > 6 && (
                 <input
                   type="text"
@@ -736,35 +1027,33 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
                   const label = info.tipo === "porcentagem" ? `${info.valor}% OFF`
                     : info.tipo === "novo_preco" ? `R$ ${info.preco}`
                     : info.tipo;
+                  const ativa = isPromotionActive(info.ends_at);
                   const count = produtos.filter(p => p.time === time).length;
                   return (
-                    <div key={time} className="flex items-center justify-between px-3 py-2 bg-accent/5 border border-accent/20 rounded-md">
+                    <div key={time} className={`flex items-center justify-between px-3 py-2 border rounded-md ${ativa ? "bg-accent/5 border-accent/20" : "bg-gray-50 border-gray-200"}`}>
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium truncate">{time}</span>
-                        <span className="text-xs text-accent ml-2 font-semibold">{label}</span>
+                        <button
+                          type="button"
+                          className="text-sm font-medium truncate text-left hover:text-accent cursor-pointer"
+                           onClick={() => selectTeam(time)}
+                         >
+                           {time}
+                         </button>
+                         {typeof info.nome === "string" && info.nome.trim() && (
+                           <div className="text-xs font-bold text-primary mt-0.5">{info.nome.trim()}</div>
+                         )}
+                         <span className={`text-xs ml-2 font-semibold ${ativa ? "text-accent" : "text-text-muted"}`}>{label}</span>
                         <span className="text-xs text-text-muted ml-1">({count})</span>
+                        <div className="text-xs text-text-muted mt-0.5">
+                          <span className={ativa ? "text-accent font-semibold" : "font-semibold"}>{ativa ? "Ativa" : "Encerrada"}</span>
+                          <span className="ml-2">{info.ends_at ? `Até ${formatPromoDeadline(info.ends_at)}` : "Sem prazo"}</span>
+                        </div>
                       </div>
                       <button
+                        type="button"
                         className="px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 flex-shrink-0"
                         disabled={savingTeam}
-                        onClick={async () => {
-                          setSavingTeam(true);
-                          try {
-                            await removePromocaoTime(time);
-                            setConfig(prev => {
-                              const promocoes = { ...(prev.promocoes_time ?? {}) };
-                              delete promocoes[time];
-                              return { ...prev, promocoes_time: promocoes };
-                            });
-                            setMessage(`Promoção removida de ${time}.`);
-                          } catch (err) {
-                            console.error("Erro ao remover promoção:", err);
-                            setMessage("Erro ao remover promoção.");
-                          } finally {
-                            setSavingTeam(false);
-                            setTimeout(() => setMessage(""), 4000);
-                          }
-                        }}
+                        onClick={() => handleRemoveTeamPromo(time)}
                       >
                         Remover
                       </button>
@@ -791,7 +1080,16 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
             <input
               type="text"
               value={teamSearch}
-              onChange={(e) => { setTeamSearch(e.target.value); setSelectedTeam(""); }}
+              onChange={(e) => {
+                setTeamSearch(e.target.value);
+                setSelectedTeam("");
+                setTeamPromoTipo("");
+                 setTeamPromoValor("");
+                 setTeamPromoPreco("");
+                 setTeamPromoEndsAt("");
+                 setTeamPromoName("");
+                 setTeamError("");
+              }}
               placeholder="Buscar time..."
               className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
             />
@@ -811,9 +1109,10 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
                     const promoCount = teamProducts.filter(p => p.promocao).length;
                     return (
                       <button
+                        type="button"
                         key={t}
                         className="w-full text-left px-3 py-2 text-sm hover:bg-accent/10 cursor-pointer transition-colors border-none bg-transparent"
-                        onClick={() => { setSelectedTeam(t); setTeamSearch(t); }}
+                        onClick={() => selectTeam(t)}
                       >
                         {t} <span className="text-text-muted">({teamProducts.length} produtos{promoCount > 0 ? `, ${promoCount} em promo` : ""})</span>
                       </button>
@@ -826,52 +1125,70 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
 
           {selectedTeam && (() => {
             const teamProducts = produtos.filter(p => p.time === selectedTeam);
-            const teamPromoAtiva = config.promocoes_time?.[selectedTeam];
+            const teamPromo = config.promocoes_time?.[selectedTeam];
+            const teamPromoAtiva = teamPromo ? isPromotionActive(teamPromo.ends_at) : false;
             return (
               <>
                 <div className="p-3 bg-bg-base rounded-md border border-border">
                   <div className="text-sm font-medium text-primary">
                     {selectedTeam} — {teamProducts.length} produtos
-                    {teamPromoAtiva && (
-                      <span className="text-accent ml-2">(em promoção)</span>
+                    {teamPromo && (
+                      <span className={`ml-2 ${teamPromoAtiva ? "text-accent" : "text-text-muted"}`}>
+                        ({teamPromoAtiva ? "promoção ativa" : "promoção encerrada"})
+                      </span>
                     )}
                   </div>
                 </div>
 
-                {/* Remove button — always visible when team has active promos */}
-                {teamPromoAtiva && (
+                {/* Remove button — visible while the record exists, including expired promos */}
+                {teamPromo && (
                   <button
+                    type="button"
                     className="w-full py-2.5 text-sm font-semibold bg-red-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
                     disabled={savingTeam}
-                    onClick={async () => {
-                      setSavingTeam(true);
-                      try {
-                        await removePromocaoTime(selectedTeam);
-                        setConfig(prev => {
-                          const promocoes = { ...(prev.promocoes_time ?? {}) };
-                          delete promocoes[selectedTeam];
-                          return { ...prev, promocoes_time: promocoes };
-                        });
-                        setMessage(`Promoção removida de ${selectedTeam}.`);
-                      } catch (err) {
-                        console.error("Erro ao remover promoção por time:", err);
-                        setMessage("Erro ao remover promoção.");
-                      } finally {
-                        setSavingTeam(false);
-                        setTimeout(() => setMessage(""), 4000);
-                      }
-                    }}
+                    onClick={() => handleRemoveTeamPromo(selectedTeam)}
                   >
                     {savingTeam ? "Removendo..." : `Remover promoção de ${selectedTeam}`}
                   </button>
                 )}
 
-                {/* Apply section */}
-                <div className="border-t border-border pt-3">
-                  <div className="text-xs font-semibold text-text-muted mb-2">Aplicar nova promoção</div>
+                 {/* Apply section */}
+                 <div className="border-t border-border pt-3">
+                   <div className="text-xs font-semibold text-text-muted mb-2">Aplicar nova promoção</div>
+                   <div className="mb-2">
+                     <label className="block text-xs font-semibold text-text-muted mb-1">Nome da campanha (opcional)</label>
+                     <input
+                       type="text"
+                       maxLength={100}
+                       value={teamPromoName}
+                       onChange={(e) => { setTeamPromoName(e.target.value); setTeamError(""); }}
+                       placeholder="Ex.: Santa subiu, preço caiu"
+                       className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                     />
+                   </div>
+                   <div className="mb-2">
+                    <label className="block text-xs font-semibold text-text-muted mb-1">Válida até (inclusive)</label>
+                    <input
+                      type="date"
+                      value={teamPromoEndsAt}
+                      onChange={(e) => { setTeamPromoEndsAt(e.target.value); setTeamError(""); }}
+                      className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                    />
+                    <p className="mt-1 text-xs text-text-muted">Opcional. Até 23:59 no horário de Pernambuco.</p>
+                  </div>
+                  {teamPromo && (
+                    <button
+                      type="button"
+                      className="w-full mb-2 py-2 text-sm font-semibold bg-blue-500 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+                      disabled={savingTeam}
+                      onClick={handleSaveTeamValidity}
+                    >
+                       {savingTeam ? "Salvando..." : "Salvar nome e validade"}
+                    </button>
+                  )}
                   <select
                     value={teamPromoTipo}
-                    onChange={(e) => { setTeamPromoTipo(e.target.value); setTeamPromoValor(""); setTeamPromoPreco(""); }}
+                    onChange={(e) => { setTeamPromoTipo(e.target.value); setTeamPromoValor(""); setTeamPromoPreco(""); setTeamError(""); }}
                     className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                   >
                     <option value="">Tipo de promoção</option>
@@ -885,7 +1202,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
                       min="1"
                       max="99"
                       value={teamPromoValor}
-                      onChange={(e) => setTeamPromoValor(e.target.value)}
+                      onChange={(e) => { setTeamPromoValor(e.target.value); setTeamError(""); }}
                       placeholder="Desconto em % (ex: 20)"
                       className="w-full mt-2 px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                     />
@@ -896,7 +1213,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
                       type="number"
                       step="0.01"
                       value={teamPromoPreco}
-                      onChange={(e) => setTeamPromoPreco(e.target.value)}
+                      onChange={(e) => { setTeamPromoPreco(e.target.value); setTeamError(""); }}
                       placeholder="Novo preço (ex: 99.90)"
                       className="w-full mt-2 px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
                     />
@@ -904,31 +1221,10 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
 
                   {teamPromoTipo && (
                     <button
+                      type="button"
                       className="w-full mt-2 py-2 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
                       disabled={savingTeam || (teamPromoTipo === "porcentagem" && !teamPromoValor) || (teamPromoTipo === "novo_preco" && !teamPromoPreco)}
-                      onClick={async () => {
-                        setSavingTeam(true);
-                        try {
-                          const valor = teamPromoTipo === "porcentagem" ? parseFloat(teamPromoValor) : null;
-                          const preco = teamPromoTipo === "novo_preco" ? parseFloat(teamPromoPreco) : null;
-                          await setPromocaoTime(selectedTeam, teamPromoTipo, valor, preco);
-                          setConfig(prev => ({
-                            ...prev,
-                            promocoes_time: { ...(prev.promocoes_time ?? {}), [selectedTeam]: { tipo: teamPromoTipo, valor, preco } }
-                          }));
-                          const label = teamPromoTipo === "porcentagem" ? `${teamPromoValor}% OFF` : `R$ ${teamPromoPreco}`;
-                          setMessage(`Promoção ${label} aplicada a ${selectedTeam}!`);
-                          setTeamPromoTipo("");
-                          setTeamPromoValor("");
-                          setTeamPromoPreco("");
-                        } catch (err) {
-                          console.error("Erro ao aplicar promoção por time:", err);
-                          setMessage("Erro ao aplicar promoção.");
-                        } finally {
-                          setSavingTeam(false);
-                          setTimeout(() => setMessage(""), 4000);
-                        }
-                      }}
+                      onClick={handleApplyTeamPromo}
                     >
                       {savingTeam ? "Aplicando..." : "Aplicar ao Time"}
                     </button>

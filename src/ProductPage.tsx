@@ -18,6 +18,8 @@ import {
   tamanhosDisponiveis,
   TIPOS_SEM_PERSONALIZACAO,
 } from "./types";
+import usePromotionClock from "./hooks/usePromotionClock";
+import PromotionCountdown from "./PromotionCountdown";
 
 const OG_PROPERTIES = ["og:title", "og:description", "og:image"] as const;
 
@@ -37,6 +39,7 @@ function productUrl(produto: DbProduto): string {
 
 export default function ProductPage({ produtos, config }: { produtos: DbProduto[]; config: LojaConfig }) {
   const { id } = useParams<{ id: string; slug?: string }>();
+  const now = usePromotionClock();
   const location = useLocation();
   const navigate = useNavigate();
   const produto = produtos.find((item) => item.id === id);
@@ -255,6 +258,8 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
   const adicionalTam = ADICIONAL_TAMANHO[tamanho] || 0;
   const adicionalPers = personalizacaoAtiva ? precoPersonalizacao(produto.tipo) : 0;
   const precoFinal = (priceInfo.promo ?? priceInfo.base) + adicionalTam + adicionalPers;
+  const hasRealDiscount = priceInfo.promo != null && priceInfo.promo < priceInfo.base;
+  const hasTimedPromotion = Boolean(priceInfo.endsAt && hasRealDiscount);
   const formularioCompleto = Boolean(
     tamanho && (!personalizacaoAtiva || (nomePersonalizado.trim() && numeroPersonalizado.trim())),
   );
@@ -301,19 +306,42 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
       <button
         type="button"
         onClick={() => navigate(returnPath)}
-        className="mb-3 text-sm text-accent hover:underline cursor-pointer bg-transparent border-none p-0"
+        className="group mb-3 inline-flex min-h-11 items-center gap-2 rounded-full border border-border bg-card-bg px-4 text-sm font-semibold text-primary transition-colors hover:border-primary hover:bg-primary hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
       >
-        ← Voltar
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className="transition-transform group-hover:-translate-x-0.5 motion-reduce:transform-none"
+        >
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        Voltar
       </button>
       <nav className="flex flex-wrap items-center gap-2 text-sm text-text-muted mb-5" aria-label="Breadcrumb">
         <Link to="/" className="text-accent hover:underline">Loja</Link>
         <span aria-hidden="true">/</span>
-        <span>{produto.liga}</span>
+        {produto.liga ? (
+          <Link
+            to={`/?liga=${encodeURIComponent(produto.liga)}#catalogo`}
+            className="text-text-muted hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          >
+            {produto.liga}
+          </Link>
+        ) : (
+          <span>{produto.liga}</span>
+        )}
         <span aria-hidden="true">/</span>
         <span className="text-text-main" aria-current="page">{produto.nome}</span>
       </nav>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[1.08fr_.92fr] lg:gap-12">
+      <div className="grid items-start gap-6 lg:grid-cols-[1.08fr_.92fr] lg:grid-rows-[min-content_1fr] lg:gap-x-12 lg:gap-y-6">
         <div className="overflow-hidden rounded-2xl border border-border bg-[#eeeeeb] shadow-card sm:rounded-3xl lg:col-start-1 lg:row-start-1">
           <ImageCarousel
             key={genero}
@@ -326,34 +354,75 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
         </div>
 
         <section className="lg:sticky lg:top-24 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:rounded-3xl lg:border lg:border-border lg:bg-card-bg lg:p-7 lg:shadow-card">
-          <div className="flex flex-wrap gap-2 mb-3 text-xs">
-            <span className="rounded-md bg-primary/7 px-2 py-1 font-bold text-primary">{produto.time}</span>
-            <span className="rounded-md bg-primary/7 px-2 py-1 font-bold text-primary">{produto.liga}</span>
-            <span className="rounded-md bg-primary/7 px-2 py-1 font-bold text-primary">{produto.tipo}</span>
-            <span className="rounded-md bg-primary/7 px-2 py-1 font-bold text-primary">{produto.temporada}</span>
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="min-w-0 flex-1 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-md bg-primary/7 px-2 py-1 font-bold text-primary">{produto.time}</span>
+              <span className="rounded-md bg-primary/7 px-2 py-1 font-bold text-primary">{produto.liga}</span>
+              <span className="rounded-md bg-primary/7 px-2 py-1 font-bold text-primary">{produto.tipo}</span>
+              <span className="rounded-md bg-primary/7 px-2 py-1 font-bold text-primary">{produto.temporada}</span>
+            </div>
+            <button
+              type="button"
+              className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border bg-card-bg text-text-muted transition-colors hover:border-accent hover:text-accent"
+              onClick={handleShare}
+              aria-label="Compartilhar produto"
+              title="Compartilhar produto"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+            </button>
           </div>
 
           <h1 className="mb-4 text-3xl font-black leading-tight tracking-[-0.03em] text-primary sm:text-4xl">{produto.nome}</h1>
 
           <div className="mb-5">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {priceInfo.promo != null ? (
-                <span className="text-3xl leading-none font-black tracking-tight text-accent">{formatarMoeda(priceInfo.promo)}</span>
-              ) : (
-                <span className="text-3xl leading-none font-black tracking-tight text-accent">{formatarMoeda(priceInfo.base)}</span>
+            <div className="min-w-0">
+              {hasRealDiscount && (
+                <div className="mb-0.5 flex items-center gap-2">
+                  <span className="text-sm leading-none text-text-muted line-through">{formatarMoeda(priceInfo.base)}</span>
+                  {priceInfo.discountLabel && (
+                    <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                      {priceInfo.discountLabel}
+                    </span>
+                  )}
+                </div>
               )}
-              <span className="inline-flex items-center gap-1.5 text-sm leading-none font-semibold text-text-muted">
-                no Pix
-                <img src={pixLogo} alt="" aria-hidden="true" className="h-5 w-5 shrink-0" />
-              </span>
-              {priceInfo.promo != null && <span className="text-text-muted line-through">{formatarMoeda(priceInfo.base)}</span>}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-3xl leading-none font-black tracking-tight text-accent">
+                  {formatarMoeda(priceInfo.promo ?? priceInfo.base)}
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-sm leading-none font-semibold text-text-muted">
+                  no Pix
+                  <img src={pixLogo} alt="" aria-hidden="true" className="h-5 w-5 shrink-0" />
+                </span>
+                {priceInfo.emPromocao && !hasRealDiscount && priceInfo.discountLabel && (
+                  <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                    {priceInfo.discountLabel}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-text-muted">Até 12x via Mercado Pago, sujeito a juros.</p>
+              {hasTimedPromotion && (
+                <div className="mt-2">
+                  <PromotionCountdown endsAt={priceInfo.endsAt} now={now} />
+                </div>
+              )}
             </div>
-            {priceInfo.emPromocao && priceInfo.discountLabel && (
-              <span className="inline-block mt-2 text-xs font-bold px-2 py-1 bg-accent/15 text-accent rounded uppercase">
-                {priceInfo.discountLabel}
-              </span>
-            )}
-            <p className="mt-2 text-xs text-text-muted">Até 12x via Mercado Pago, sujeito a juros.</p>
           </div>
 
           <div className="space-y-5">
@@ -402,7 +471,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
                     >
                       <span>{t}</span>
                       {adicional > 0 && (
-                        <span className={`whitespace-nowrap ${tamanho === t ? "text-xs font-semibold text-white" : "text-xs font-semibold text-accent"}`}>
+                         <span className={`whitespace-nowrap ${tamanho === t ? "text-[10px] font-semibold text-white" : "text-[10px] font-semibold text-accent"}`}>
                           +{formatarMoeda(adicional)}
                         </span>
                       )}
@@ -484,49 +553,24 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
               </div>
             </div>
 
-            <p className="text-xs text-text-muted">Produção em até 7 dias úteis • entrega em até 30 dias úteis após a produção</p>
-            <button
-              type="button"
-              className="min-h-12 w-full cursor-pointer rounded-xl bg-accent px-5 text-sm font-bold text-white transition-colors hover:bg-[#d93648] disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={handleAddToCart}
-              disabled={!formularioCompleto}
-            >
-              {ctaLabel}
-            </button>
+            <div className="space-y-2">
+              <p className="text-xs text-text-muted">Produção em até 7 dias úteis • entrega em até 30 dias úteis após a produção</p>
+              <button
+                type="button"
+                className="min-h-12 w-full cursor-pointer rounded-xl bg-accent px-5 text-sm font-bold text-white transition-colors hover:bg-[#d93648] disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleAddToCart}
+                disabled={!formularioCompleto}
+              >
+                {ctaLabel}
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between gap-4 mt-4">
-            <button
-              type="button"
-              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-border bg-card-bg text-text-muted transition-colors hover:border-accent hover:text-accent"
-              onClick={handleShare}
-              aria-label="Compartilhar produto"
-              title="Compartilhar produto"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="18" cy="5" r="3" />
-                <circle cx="6" cy="12" r="3" />
-                <circle cx="18" cy="19" r="3" />
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-              </svg>
-            </button>
-          </div>
-          <p className="mt-3 text-xs text-text-muted">Confira as medidas antes de comprar.</p>
-          <p className="min-h-5 mt-3 text-sm text-primary" aria-live="polite">{feedback}</p>
-          <ul className="mt-4 grid grid-cols-2 gap-2 text-xs font-semibold text-text-muted" aria-label="Benefícios">
-            <li className="rounded-xl bg-bg-base p-3"><strong className="mb-1 block text-primary">Pagamento seguro</strong>Via Mercado Pago</li>
-           <li className="rounded-xl bg-bg-base p-3"><strong className="mb-1 block text-primary">Entrega grátis</strong>Em Bezerros-PE</li>
+          <p className="mt-2 text-xs text-text-muted">Confira as medidas antes de comprar.</p>
+          <p className={feedback ? "mt-2 text-sm text-primary" : "text-sm text-primary"} aria-live="polite">{feedback}</p>
+          <ul className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold text-text-muted" aria-label="Benefícios">
+             <li className="rounded-xl bg-bg-base p-2.5"><strong className="mb-1 block text-primary">Pagamento seguro</strong>Via Mercado Pago</li>
+            <li className="rounded-xl bg-bg-base p-2.5"><strong className="mb-1 block text-primary">Entrega grátis</strong>Em Bezerros-PE</li>
           </ul>
         </section>
 

@@ -10,6 +10,9 @@ import { formatarPreco, getCachedImageUrl, getPrecoProduto } from "./types";
 import { normalizeNome, normalizarBusca, parseAnoTemporada, slugify } from "./lib/utils";
 import { TIPO_SHORT } from "./lib/status";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
+import usePromotionClock from "./hooks/usePromotionClock";
+import PromotionCountdown from "./PromotionCountdown";
+import { isPromotionActive } from "../server/lib/promotions";
 
 const CATEGORIAS = [
   "Todas",
@@ -55,6 +58,7 @@ type Ordenacao = "time" | "preco-asc" | "preco-desc" | "categoria" | "temporada-
 export default function Loja({ produtos, config }: { produtos: DbProduto[]; config: LojaConfig }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const now = usePromotionClock();
 
   useEffect(() => {
     document.title = "RM Imports";
@@ -271,13 +275,61 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
 
   // Cache prices per product — avoids recomputing on every filter/sort change
   const priceCache = useMemo(() => {
+    void now;
     const map = new Map<string, number>();
     for (const p of produtosNormalizados) {
       const info = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time, p.temporada);
       map.set(p.id, info.promo ?? info.base);
     }
     return map;
-  }, [produtosNormalizados, config]);
+  }, [produtosNormalizados, config, now]);
+
+  const ofertas = useMemo(() => {
+    const times = Object.entries(config.promocoes_time ?? {}).flatMap(([time, promotion]) => {
+      if (!isPromotionActive(promotion.ends_at, now)) return [];
+
+      const teamProducts = produtosNormalizados.filter(
+        (product) => product.time === time || product.time === normalizeNome(time),
+      );
+      if (teamProducts.length === 0) return [];
+
+      const displayTime = teamProducts[0].time;
+      const team = TIMES_PRINCIPAIS.find(({ nome }) => normalizeNome(nome) === displayTime);
+      const campaignName = typeof promotion.nome === "string" ? promotion.nome.trim() : "";
+      const common = {
+        time: displayTime,
+        logo: team?.logo,
+        endsAt: promotion.ends_at ?? null,
+        productCount: teamProducts.length,
+        ...(campaignName ? { campaignName } : {}),
+      };
+
+      if (promotion.tipo === "porcentagem") {
+        if (typeof promotion.valor !== "number" || !Number.isFinite(promotion.valor) || promotion.valor <= 0 || promotion.valor >= 100) return [];
+        return [{ ...common, label: `${promotion.valor}% OFF` }];
+      }
+
+      if (promotion.tipo !== "novo_preco" || typeof promotion.preco !== "number" || !Number.isFinite(promotion.preco) || promotion.preco <= 0) return [];
+      return [{ ...common, label: `A partir de ${formatarPreco(promotion.preco)}` }];
+    });
+
+    const globalPercent = config.desconto_global;
+    const globalCampaignName = typeof config.desconto_global_nome === "string" ? config.desconto_global_nome.trim() : "";
+    const global = typeof globalPercent === "number"
+      && Number.isFinite(globalPercent)
+      && globalPercent > 0
+      && globalPercent < 100
+      && produtosNormalizados.length > 0
+      && isPromotionActive(config.desconto_global_ends_at, now)
+      ? {
+          percent: globalPercent,
+          endsAt: config.desconto_global_ends_at ?? null,
+          ...(globalCampaignName ? { campaignName: globalCampaignName } : {}),
+        }
+      : null;
+
+    return { times, global };
+  }, [config, now, produtosNormalizados]);
 
   const produtosFiltrados = useMemo(() => {
     let res = [...produtosNormalizados];
@@ -501,6 +553,53 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                   Ver pronta entrega
                 </Link>
               </div>
+              {(ofertas.global || ofertas.times.length > 0) && (
+                <section className="mt-6 min-w-0 border-t border-white/15 pt-5" aria-labelledby="ofertas-title">
+                  <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <h2 id="ofertas-title" className="text-xs font-bold text-white/80 sm:text-sm">Promoções ativas</h2>
+                    <p className="text-[10px] text-white/50">Em produtos participantes</p>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    {ofertas.global && (
+                      <article className="flex min-w-0 flex-col gap-2 rounded-xl border border-white/15 bg-white/5 p-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-black text-white">%</span>
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-bold leading-tight text-white">
+                              {ofertas.global.campaignName || "Ofertas na loja"} — <span>{ofertas.global.percent}% OFF</span>
+                            </h3>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-end justify-between gap-2">
+                          {ofertas.global.endsAt ? <PromotionCountdown endsAt={ofertas.global.endsAt} now={now} compact /> : <span className="text-xs font-semibold text-accent">Oferta ativa</span>}
+                          <Link to="/#catalogo" className="ml-auto self-end text-right text-sm font-bold text-white hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary">Ver camisas →</Link>
+                        </div>
+                      </article>
+                    )}
+
+                    {ofertas.times.map((offer) => (
+                      <article key={offer.time} className="flex min-w-0 flex-col gap-2 rounded-xl border border-white/15 bg-white/5 p-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                           <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/15 bg-white/90 p-1 text-xs font-black text-primary">
+                             {offer.logo ? <img src={offer.logo} alt="" width={40} height={40} loading="lazy" className="h-full w-full object-contain" /> : offer.time.slice(0, 2).toUpperCase()}
+                           </span>
+                           <div className="min-w-0">
+                             {offer.campaignName && <p className="text-white text-sm font-bold">{offer.campaignName}</p>}
+                             <h3 className="truncate text-sm font-bold text-white">{offer.time}</h3>
+                            <p className="mt-1 text-sm font-semibold text-accent">{offer.label}</p>
+                            <p className="text-[10px] text-white/55">{offer.productCount} {offer.productCount === 1 ? "produto" : "produtos"} disponíveis</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-end justify-between gap-2">
+                          {offer.endsAt ? <PromotionCountdown endsAt={offer.endsAt} now={now} compact /> : <span className="text-xs font-semibold text-accent">Oferta ativa</span>}
+                          <Link to={`/?time=${encodeURIComponent(offer.time)}#catalogo`} className="ml-auto self-end text-right text-sm font-bold text-white hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary">Ver camisas →</Link>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
             {heroProduct && heroImage && (
               <div

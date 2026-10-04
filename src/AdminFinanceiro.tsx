@@ -37,6 +37,15 @@ interface LucroPedidoDetalhe extends PedidoCustoDetalhe {
 type PedidoDetalhe = ReposicaoPedidoDetalhe | LucroPedidoDetalhe;
 
 const EXTRA_KEY = "rm_custos_extras";
+const STATUS_VENDAS_FINANCEIRAS: readonly Order["status"][] = [
+  "pago",
+  "enviado_fornecedor",
+  "em_producao",
+  "a_caminho",
+  "em_estoque",
+  "em_entrega",
+  "entregue",
+];
 
 function loadExtras(): ExtraCusto[] {
   try { return JSON.parse(localStorage.getItem(EXTRA_KEY) || "[]"); }
@@ -174,15 +183,23 @@ export default function AdminFinanceiro() {
   }).filter((a): a is number => a !== null && !isNaN(a)))].sort((a, b) => b - a);
   if (!anosDisponiveis.includes(anoFiltro) && anosDisponiveis.length > 0) setAnoFiltro(anosDisponiveis[0]);
 
-  const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && !o.reposicao && filtrarPorData(o, anoFiltro, mesFiltro));
+  const ativos = orders.filter((o) => STATUS_VENDAS_FINANCEIRAS.includes(o.status) && !o.admin_order && !o.pronta_entrega && !o.reposicao && filtrarPorData(o, anoFiltro, mesFiltro));
   const peVendas = orders.filter((o) => o.pronta_entrega && !o.reposicao && o.status === "entregue" && filtrarPorData(o, anoFiltro, mesFiltro));
   const reposicoes = orders.filter((o) => o.reposicao && o.status !== "cancelado" && o.status !== "reembolsado" && filtrarPorData(o, anoFiltro, mesFiltro));
   const pedidosExibidos = [...ativos, ...peVendas, ...reposicoes];
+  const vendasFinanceiras = [...ativos, ...peVendas];
+  const idsVendasFinanceiras = new Set(vendasFinanceiras.map((o) => o.id));
+  const idsPedidosPagosElegiveis = new Set(
+    orders
+      .filter((o) => STATUS_VENDAS_FINANCEIRAS.includes(o.status) && !o.admin_order && !o.pronta_entrega && !o.reposicao)
+      .map((o) => o.id),
+  );
+  const idsComCustoFinanceiro = new Set([...idsVendasFinanceiras, ...idsPedidosPagosElegiveis]);
   const pedidosEmPacotes = new Set<string>();
   // Prorate costs by sold orders, keeping the whole package as denominator.
-  function prorateCost(cost: number, totalShirts: number, nonAdminShirts: number): number {
-    if (totalShirts <= 0 || nonAdminShirts <= 0) return 0;
-    return (cost / totalShirts) * nonAdminShirts;
+  function prorateCost(cost: number, totalShirts: number, eligibleShirts: number): number {
+    if (totalShirts <= 0 || eligibleShirts <= 0) return 0;
+    return (cost / totalShirts) * eligibleShirts;
   }
 
   const custoPacotePorPedido = new Map<string, PedidoCustoDetalhe>();
@@ -190,7 +207,8 @@ export default function AdminFinanceiro() {
   for (const p of pacotes) {
     const pkgOrders = p.pedido_ids.map((id) => orders.find((o) => o.id === id)).filter((o): o is Order => !!o);
     const totalShirts = pkgOrders.reduce((s, o) => s + o.itens.length, 0);
-    const nonAdminShirts = pkgOrders.filter((o) => !o.admin_order && !o.reposicao).reduce((s, o) => s + o.itens.length, 0);
+    const pedidosElegiveis = pkgOrders.filter((o) => idsComCustoFinanceiro.has(o.id) && !o.admin_order && !o.reposicao);
+    const pedidosElegiveisShirts = pedidosElegiveis.reduce((s, o) => s + o.itens.length, 0);
     const custoItemUSD = (item: Order["itens"][number]) =>
       (config.custo_base[item.tipo] ?? 0) + (item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0);
     const custoUSDTotal = pkgOrders.reduce(
@@ -215,7 +233,7 @@ export default function AdminFinanceiro() {
           frete: atual.frete + frete,
           importacao: atual.importacao + importacao,
         });
-        if (order.reposicao) continue;
+        if (order.reposicao || !idsComCustoFinanceiro.has(order.id)) continue;
         custoPacote += produto;
         freteTotal += frete;
         taxaTotal += importacao;
@@ -237,9 +255,9 @@ export default function AdminFinanceiro() {
           });
         }
       }
-      custoPacote += prorateCost(p.custo || 0, totalShirts, nonAdminShirts);
-      freteTotal += prorateCost(p.frete || 0, totalShirts, nonAdminShirts);
-      taxaTotal += prorateCost(p.taxa_importacao || 0, totalShirts, nonAdminShirts);
+      custoPacote += prorateCost(p.custo || 0, totalShirts, pedidosElegiveisShirts);
+      freteTotal += prorateCost(p.frete || 0, totalShirts, pedidosElegiveisShirts);
+      taxaTotal += prorateCost(p.taxa_importacao || 0, totalShirts, pedidosElegiveisShirts);
     }
   }
 
@@ -252,8 +270,6 @@ export default function AdminFinanceiro() {
   const receitaPE = peVendas.reduce((s, o) => s + o.total, 0);
   const receitaTotal = receitaBruta + receitaPE;
   const receitaEmPacotes = ativos.filter((o) => pedidosEmPacotes.has(o.id)).reduce((s, o) => s + o.total, 0);
-  const vendasFinanceiras = [...ativos, ...peVendas];
-
   const totalTaxasMP = vendasFinanceiras.reduce((sum, o) => {
     const rate = getMPFeeRate(o.payment_method, o.credit_release_period);
     return sum + o.total * rate;

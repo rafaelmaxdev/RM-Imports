@@ -5,6 +5,16 @@ import type { Order, PaymentMethod } from "./types";
 import { formatarMoeda } from "./types";
 import { PAYMENT_LABELS } from "./lib/status";
 
+const STATUS_VENDAS_FINANCEIRAS: readonly Order["status"][] = [
+  "pago",
+  "enviado_fornecedor",
+  "em_producao",
+  "a_caminho",
+  "em_estoque",
+  "em_entrega",
+  "entregue",
+];
+
 interface AdminDashboardProps {
   onNavigate?: (tab: "pedidos" | "financeiro" | "estoque") => void;
 }
@@ -78,7 +88,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     paymentCount,
     statusCount,
   } = useMemo(() => {
-    const ativos = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado" && !o.admin_order && !o.pronta_entrega && o.status !== "pendente" && filtrarPorData(o));
+    const ativos = orders.filter((o) => STATUS_VENDAS_FINANCEIRAS.includes(o.status) && !o.admin_order && !o.pronta_entrega && !o.reposicao && filtrarPorData(o));
     const peVendas = orders.filter((o) => o.pronta_entrega && !o.reposicao && o.status === "entregue" && filtrarPorData(o));
     const adminOrders = orders.filter((o) => o.admin_order && !o.pronta_entrega && o.status !== "cancelado" && o.status !== "reembolsado" && o.status !== "pendente" && filtrarPorData(o));
     const revenue = ativos.reduce((s, o) => s + o.total, 0) + peVendas.reduce((s, o) => s + o.total, 0);

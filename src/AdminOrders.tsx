@@ -47,6 +47,7 @@ export default function AdminOrders() {
   const ultimoTotalRef = useRef(0);
 
   const loadOrders = useCallback(async (isRefresh = false) => {
+    const startedAt = Date.now();
     if (isRefresh) setRefreshing(true);
     try {
       const all = await getPedidos();
@@ -55,7 +56,10 @@ export default function AdminOrders() {
       console.error("Erro ao carregar pedidos:", err instanceof Error ? err.message : err);
     } finally {
       setLoading(false);
-      setRefreshing(false);
+      if (isRefresh) {
+        await new Promise((resolve) => setTimeout(resolve, Math.max(0, 500 - (Date.now() - startedAt))));
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -201,10 +205,11 @@ export default function AdminOrders() {
             }`}
             onClick={() => loadOrders(true)}
             disabled={refreshing}
+            aria-busy={refreshing}
           >
             {refreshing ? (
               <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block animate-spin">↻</span> Atualizando…
+                <span className="inline-block animate-spin motion-reduce:animate-none" aria-hidden="true">↻</span> Atualizando…
               </span>
             ) : (
               "↻ Atualizar"

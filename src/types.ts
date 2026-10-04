@@ -1,3 +1,5 @@
+import { isPromotionActive } from "../server/lib/promotions";
+
 export interface CartItem {
   productId: string;
   nome: string;
@@ -117,7 +119,9 @@ export interface LojaConfig {
   precos_promocao: Record<string, number>;
   promocao_ativa: Record<string, boolean>;
   desconto_global?: number | null;
-  promocoes_time?: Record<string, { tipo: string; valor: number | null; preco: number | null }>;
+  desconto_global_ends_at?: string | null;
+  desconto_global_nome?: string | null;
+  promocoes_time?: Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null }>;
   pronta_entrega_markup: number;
   custo_base: Record<string, number>;
   personalizacao_custo: Record<string, number>;
@@ -163,6 +167,8 @@ export const DEFAULT_CONFIG: LojaConfig = {
     "NBA": false,
   },
   desconto_global: null,
+  desconto_global_ends_at: null,
+  desconto_global_nome: null,
   promocoes_time: {},
   pronta_entrega_markup: 20,
   ano_temporada_lancamento: 2026,
@@ -211,6 +217,7 @@ export interface PromocaoInfo {
   promocaoValor: number | null;
   badge: string | null;
   discountLabel: string | null;
+  endsAt?: string | null;
 }
 
 function getPrecoBaseSazonal(
@@ -331,7 +338,7 @@ export function getPrecoProduto(
   // 3. Team-level promo
   if (time && config.promocoes_time?.[time]) {
     const teamPromo = config.promocoes_time[time];
-    if (teamPromo.tipo === "porcentagem" && teamPromo.valor) {
+    if (isPromotionActive(teamPromo.ends_at) && teamPromo.tipo === "porcentagem" && teamPromo.valor) {
       const desconto = basePrice * (teamPromo.valor / 100);
       const promoPrice = Math.round((basePrice - desconto) * 100) / 100;
       return {
@@ -342,9 +349,10 @@ export function getPrecoProduto(
         promocaoValor: teamPromo.valor,
         badge: "PROMO",
         discountLabel: `${teamPromo.valor}% OFF`,
+        endsAt: teamPromo.ends_at ?? null,
       };
     }
-    if (teamPromo.tipo === "novo_preco" && teamPromo.preco != null) {
+    if (isPromotionActive(teamPromo.ends_at) && teamPromo.tipo === "novo_preco" && teamPromo.preco != null) {
       const discountPercent = Math.round(((basePrice - teamPromo.preco) / basePrice) * 100);
       return {
         base: basePrice,
@@ -354,6 +362,7 @@ export function getPrecoProduto(
         promocaoValor: null,
         badge: "PROMO",
         discountLabel: `${discountPercent}% OFF`,
+        endsAt: teamPromo.ends_at ?? null,
       };
     }
   }
@@ -375,7 +384,7 @@ export function getPrecoProduto(
   }
 
   // 5. Global site-wide discount
-  if (config.desconto_global && config.desconto_global > 0) {
+  if (isPromotionActive(config.desconto_global_ends_at) && config.desconto_global && config.desconto_global > 0) {
     const desconto = basePrice * (config.desconto_global / 100);
     const promoPrice = Math.round((basePrice - desconto) * 100) / 100;
     return {
@@ -386,6 +395,7 @@ export function getPrecoProduto(
       promocaoValor: config.desconto_global,
       badge: "PROMO",
       discountLabel: `${config.desconto_global}% OFF`,
+      endsAt: config.desconto_global_ends_at ?? null,
     };
   }
 

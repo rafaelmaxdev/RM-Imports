@@ -121,7 +121,7 @@ export interface LojaConfig {
   desconto_global?: number | null;
   desconto_global_ends_at?: string | null;
   desconto_global_nome?: string | null;
-  promocoes_time?: Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null }>;
+  promocoes_time?: Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null; substituir_nome_time?: boolean }>;
   pronta_entrega_markup: number;
   custo_base: Record<string, number>;
   personalizacao_custo: Record<string, number>;

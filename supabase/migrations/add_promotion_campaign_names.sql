@@ -31,7 +31,7 @@ USING (key IN (
 -- Supply the existing campaign's name without replacing its discount/deadline.
 UPDATE public.loja_config
 SET value = jsonb_set(value, '{Santa Cruz,nome}',
-  '"Santa subiu, preço caiu"'::jsonb)
+  '"SANTA SUBIU, PREÇO CAIU!"'::jsonb)
 WHERE key = 'promocoes_time'
   AND jsonb_typeof(value -> 'Santa Cruz') = 'object'
   AND COALESCE(value #>> '{Santa Cruz,nome}', '') = '';

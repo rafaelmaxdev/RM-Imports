@@ -89,6 +89,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
   const [teamPromoPreco, setTeamPromoPreco] = useState("");
   const [teamPromoEndsAt, setTeamPromoEndsAt] = useState("");
   const [teamPromoName, setTeamPromoName] = useState("");
+  const [teamSubstituirNome, setTeamSubstituirNome] = useState(true);
   const [savingTeam, setSavingTeam] = useState(false);
   const [teamMessage, setTeamMessage] = useState("");
   const [teamError, setTeamError] = useState("");
@@ -151,6 +152,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
     setTeamPromoPreco(promo?.preco != null ? String(promo.preco) : "");
     setTeamPromoEndsAt(dateInputFromEndsAt(promo?.ends_at));
     setTeamPromoName(promo?.nome ?? "");
+    setTeamSubstituirNome(promo?.substituir_nome_time !== false);
     setTeamError("");
   }
 
@@ -183,12 +185,12 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
     setSavingTeam(true);
     try {
       const nome = teamPromoName.trim() || null;
-      await setPromocaoTime(selectedTeam, teamPromoTipo, valor, preco, endsAt, teamPromoName);
+      await setPromocaoTime(selectedTeam, teamPromoTipo, valor, preco, endsAt, teamPromoName, teamSubstituirNome);
       setConfig((prev) => ({
         ...prev,
         promocoes_time: {
           ...(prev.promocoes_time ?? {}),
-          [selectedTeam]: { tipo: teamPromoTipo, valor, preco, ends_at: endsAt, nome },
+          [selectedTeam]: { tipo: teamPromoTipo, valor, preco, ends_at: endsAt, nome, substituir_nome_time: teamSubstituirNome },
         },
       }));
       setTeamPromoName(nome ?? "");
@@ -218,12 +220,12 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
     setSavingTeam(true);
     try {
       const nome = teamPromoName.trim() || null;
-      await setPromocaoTime(selectedTeam, promo.tipo, promo.valor, promo.preco, endsAt, teamPromoName);
+      await setPromocaoTime(selectedTeam, promo.tipo, promo.valor, promo.preco, endsAt, teamPromoName, teamSubstituirNome);
       setConfig((prev) => ({
         ...prev,
         promocoes_time: {
           ...(prev.promocoes_time ?? {}),
-          [selectedTeam]: { ...promo, ends_at: endsAt, nome },
+          [selectedTeam]: { ...promo, ends_at: endsAt, nome, substituir_nome_time: teamSubstituirNome },
         },
       }));
       setTeamPromoTipo(promo.tipo);
@@ -257,6 +259,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
         setTeamPromoPreco("");
         setTeamPromoEndsAt("");
         setTeamPromoName("");
+        setTeamSubstituirNome(true);
       }
       setTeamMessage(`Promoção removida de ${time}.`);
       setTimeout(() => setTeamMessage(""), 4000);
@@ -1088,6 +1091,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
                  setTeamPromoPreco("");
                  setTeamPromoEndsAt("");
                  setTeamPromoName("");
+                 setTeamSubstituirNome(true);
                  setTeamError("");
               }}
               placeholder="Buscar time..."
@@ -1157,15 +1161,24 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
                    <div className="text-xs font-semibold text-text-muted mb-2">Aplicar nova promoção</div>
                    <div className="mb-2">
                      <label className="block text-xs font-semibold text-text-muted mb-1">Nome da campanha (opcional)</label>
-                     <input
-                       type="text"
-                       maxLength={100}
+                      <input
+                        type="text"
+                        maxLength={100}
                        value={teamPromoName}
                        onChange={(e) => { setTeamPromoName(e.target.value); setTeamError(""); }}
-                       placeholder="Ex.: Santa subiu, preço caiu"
-                       className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
-                     />
-                   </div>
+                        placeholder="Ex.: Santa subiu, preço caiu"
+                        className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                      />
+                      <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-text-muted">
+                        <input
+                          type="checkbox"
+                          checked={teamSubstituirNome}
+                          onChange={(e) => setTeamSubstituirNome(e.target.checked)}
+                        />
+                        Substituir nome do time pelo nome da campanha
+                      </label>
+                      <p className="mt-1 text-xs text-text-muted">Se não houver nome de campanha, o nome do time será exibido.</p>
+                    </div>
                    <div className="mb-2">
                     <label className="block text-xs font-semibold text-text-muted mb-1">Válida até (inclusive)</label>
                     <input

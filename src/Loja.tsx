@@ -8,6 +8,7 @@ import { parseImageUrls } from "./lib/db";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { formatarPreco, getCachedImageUrl, getPrecoProduto } from "./types";
 import { normalizeNome, normalizarBusca, parseAnoTemporada, slugify } from "./lib/utils";
+import { promotionLabels } from "./lib/promotionLabels";
 import { TIPO_SHORT } from "./lib/status";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import usePromotionClock from "./hooks/usePromotionClock";
@@ -301,6 +302,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
         logo: team?.logo,
         endsAt: promotion.ends_at ?? null,
         productCount: teamProducts.length,
+        substituirNomeTime: promotion.substituir_nome_time !== false,
         ...(campaignName ? { campaignName } : {}),
       };
 
@@ -578,25 +580,28 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                       </article>
                     )}
 
-                    {ofertas.times.map((offer) => (
-                      <article key={offer.time} className="flex min-w-0 flex-col gap-2 rounded-xl border border-white/15 bg-white/5 p-3">
+                    {ofertas.times.map((offer) => {
+                      const labels = promotionLabels(offer.time, offer.campaignName, offer.substituirNomeTime);
+                      return (
+                      <article key={offer.time} className="flex min-w-0 flex-col gap-3 rounded-xl border border-white/15 bg-white/5 p-3">
                         <div className="flex min-w-0 items-center gap-3">
                            <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/15 bg-white/90 p-1 text-xs font-black text-primary">
                              {offer.logo ? <img src={offer.logo} alt="" width={40} height={40} loading="lazy" className="h-full w-full object-contain" /> : offer.time.slice(0, 2).toUpperCase()}
                            </span>
                            <div className="min-w-0">
-                             {offer.campaignName && <p className="text-white text-sm font-bold">{offer.campaignName}</p>}
-                             <h3 className="truncate text-sm font-bold text-white">{offer.time}</h3>
-                            <p className="mt-1 text-sm font-semibold text-accent">{offer.label}</p>
-                            <p className="text-[10px] text-white/55">{offer.productCount} {offer.productCount === 1 ? "produto" : "produtos"} disponíveis</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-end justify-between gap-2">
-                          {offer.endsAt ? <PromotionCountdown endsAt={offer.endsAt} now={now} compact /> : <span className="text-xs font-semibold text-accent">Oferta ativa</span>}
-                          <Link to={`/?time=${encodeURIComponent(offer.time)}#catalogo`} className="ml-auto self-end text-right text-sm font-bold text-white hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary">Ver camisas →</Link>
-                        </div>
-                      </article>
-                    ))}
+                               <h3 className="truncate text-sm leading-tight font-bold text-white">{labels.title}</h3>
+                              {labels.subtitle && <p className="truncate text-xs font-semibold text-white/70">{labels.subtitle}</p>}
+                              <p className="mt-0.5 text-sm leading-tight font-semibold text-accent">{offer.label}</p>
+                             <p className="text-[10px] text-white/55">{offer.productCount} {offer.productCount === 1 ? "produto" : "produtos"} disponíveis</p>
+                           </div>
+                         </div>
+                         <div className="flex flex-wrap items-end justify-between gap-2">
+                           {offer.endsAt ? <PromotionCountdown endsAt={offer.endsAt} now={now} compact /> : <span className="text-xs font-semibold text-accent">Oferta ativa</span>}
+                           <Link to={`/?time=${encodeURIComponent(offer.time)}#catalogo`} aria-label={`Ver camisas do ${offer.time}`} className="ml-auto self-end text-right text-sm font-bold text-white hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary">Ver camisas →</Link>
+                         </div>
+                       </article>
+                      );
+                    })}
                   </div>
                 </section>
               )}

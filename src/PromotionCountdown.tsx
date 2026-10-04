@@ -76,7 +76,7 @@ export default function PromotionCountdown({ endsAt, now, compact = false, disco
 
   if (compact) {
     return (
-      <div className="inline-flex max-w-full flex-wrap items-start gap-2">
+      <div className="inline-flex max-w-full flex-wrap items-start gap-x-2 gap-y-1">
         <span className="w-full text-[10px] font-semibold text-white/70">Termina em</span>
         <div className="flex max-w-full flex-nowrap gap-2">
           {values.map(([value, label]) => (

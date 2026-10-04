@@ -171,7 +171,7 @@ function configFromRows(data: { key: string; value: unknown }[]): LojaConfig {
     } else if (row.key === "desconto_global_nome" && (row.value === null || typeof row.value === "string")) {
       config.desconto_global_nome = row.value;
     } else if (row.key === "promocoes_time" && typeof row.value === "object") {
-      config.promocoes_time = row.value as Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null }>;
+      config.promocoes_time = row.value as Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null; substituir_nome_time?: boolean }>;
     } else if (row.key === "pronta_entrega_markup") {
       config.pronta_entrega_markup = row.value as number;
     } else if (row.key === "custo_base" && typeof row.value === "object") {
@@ -195,7 +195,7 @@ export async function getAdminLojaConfig(): Promise<LojaConfig> {
 
 export async function updateLojaConfig(
   key: "precos_base" | "precos_promocao" | "promocao_ativa" | "desconto_global" | "desconto_global_ends_at" | "desconto_global_nome" | "promocoes_time" | "pronta_entrega_markup" | "custo_base" | "personalizacao_custo" | "ano_temporada_lancamento" | "desconto_temporada_anterior",
-  value: Record<string, number> | Record<string, boolean> | number | string | null | Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null }>,
+  value: Record<string, number> | Record<string, boolean> | number | string | null | Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null; substituir_nome_time?: boolean }>,
 ): Promise<void> {
   const { error } = await supabase
     .from("loja_config")
@@ -241,12 +241,16 @@ export async function setPromocaoTime(
   precoCustomizado: number | null,
   endsAt?: string | null,
   nome?: string | null,
+  substituirNomeTime = true,
 ): Promise<void> {
+  if (typeof substituirNomeTime !== "boolean") {
+    throw new TypeError("substituirNomeTime deve ser booleano.");
+  }
   const normalizedName = normalizeCampaignName(nome);
   const { data: configData, error: configError } = await supabase.from("loja_config").select("value").eq("key", "promocoes_time").single();
   if (configError && configError.code !== "PGRST116") throw configError;
-  const current = configData?.value as Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null }> | null ?? {};
-  current[time] = { tipo: promocaoTipo, valor: promocaoValor, preco: precoCustomizado, ends_at: endsAt ?? null, nome: normalizedName };
+  const current = configData?.value as Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null; substituir_nome_time?: boolean }> | null ?? {};
+  current[time] = { tipo: promocaoTipo, valor: promocaoValor, preco: precoCustomizado, ends_at: endsAt ?? null, nome: normalizedName, substituir_nome_time: substituirNomeTime };
   const { error } = await supabase.from("loja_config").upsert({ key: "promocoes_time", value: current }, { onConflict: "key" });
   if (error) throw error;
   const { clearCache } = await import("./cache");
@@ -257,7 +261,7 @@ export async function setPromocaoTime(
 export async function removePromocaoTime(time: string): Promise<void> {
   const { data: configData, error: configError } = await supabase.from("loja_config").select("value").eq("key", "promocoes_time").single();
   if (configError && configError.code !== "PGRST116") throw configError;
-  const current = configData?.value as Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null }> | null ?? {};
+  const current = configData?.value as Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null; substituir_nome_time?: boolean }> | null ?? {};
   delete current[time];
   const { error } = await supabase.from("loja_config").upsert({ key: "promocoes_time", value: current }, { onConflict: "key" });
   if (error) throw error;

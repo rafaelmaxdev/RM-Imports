@@ -8,6 +8,7 @@ import {
   isAdminToken,
   verifyOrderAccessToken,
 } from "../server/lib/security.js";
+import { buildMercadoPagoPreferenceContext, normalizeMPDeviceId } from "../server/lib/mp-preference-context.js";
 
 const mpAccessToken = process.env.MP_ACCESS_TOKEN;
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -53,8 +54,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const body = req.body as { orderId?: unknown; orderAccessToken?: unknown } | null;
+    const body = req.body as { orderId?: unknown; orderAccessToken?: unknown; deviceId?: unknown } | null;
     const orderId = body?.orderId;
+    const deviceId = normalizeMPDeviceId(body?.deviceId);
     if (typeof orderId !== "string" || !/^UL-[A-Z2-9]{8}$/.test(orderId)) {
       console.error("Missing orderId");
       return res.status(400).json({ error: "Invalid orderId" });
@@ -68,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Verify order exists and is pending
     const { data: order, error: orderError } = await supabase
       .from("pedidos")
-      .select("id, status, total, payment_method, mp_preference_id")
+      .select("id, status, total, payment_method, mp_preference_id, itens, endereco")
       .eq("id", orderId)
       .single();
 
@@ -133,16 +135,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const orderUrl = `${baseUrl}/pedido/${orderId}`;
+    const context = buildMercadoPagoPreferenceContext({
+      orderId,
+      itens: order.itens,
+      endereco: order.endereco,
+    });
 
     const result = await preference.create({
       body: {
         items: [{
           id: orderId,
-          title: `Pedido ${orderId}`,
+          ...context.item,
           quantity: 1,
           unit_price: total,
           currency_id: "BRL",
         }],
+        ...(context.payer ? { payer: context.payer } : {}),
         external_reference: orderId,
         back_urls: {
           success: orderUrl,
@@ -152,10 +160,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         auto_return: "approved",
         notification_url: `${baseUrl}/api/mp-webhook`,
         payment_methods: paymentMethods,
+        statement_descriptor: "RM IMPORTS",
         expires: true,
         date_of_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       },
-      requestOptions: { idempotencyKey: `preference-${orderId}` },
+      requestOptions: {
+        idempotencyKey: `preference-${orderId}`,
+        ...(deviceId ? { meliSessionId: deviceId } : {}),
+      },
     });
 
     // Persist preference ID to the order (idempotent — only sets if not already set)

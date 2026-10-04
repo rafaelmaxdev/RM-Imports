@@ -3,6 +3,7 @@ import type { CartItem, Order, OrderAddress, PaymentMethod } from "./types";
 import { gerarId } from "./types";
 import { saveOrderAccessToken } from "./lib/orderAccess";
 import { track } from "@vercel/analytics";
+import { getMPDeviceSessionId } from "./lib/mpDevice";
 
 interface CartContextType {
   cart: CartItem[];
@@ -56,10 +57,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const createMPPreference = useCallback(
     async (orderId: string, orderAccessToken: string): Promise<{ preferenceId: string; initPoint: string } | null> => {
       try {
+        const deviceId = await getMPDeviceSessionId();
         const res = await fetch("/api/create-preference", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId, orderAccessToken }),
+          body: JSON.stringify({ orderId, orderAccessToken, ...(deviceId ? { deviceId } : {}) }),
         });
 
         if (!res.ok) {

@@ -5,6 +5,7 @@ import type { OrderAddress, PaymentMethod, Cupom } from "./types";
 import { formatarMoeda, yupooThumbnailUrl, getCachedImageUrl } from "./types";
 import { validarCupom, aplicarCupom } from "./lib/db";
 import { hasPromotionalDiscount, PROMOTION_COUPON_ERROR } from "../server/lib/checkout";
+import { ensureMPDeviceScript } from "./lib/mpDevice";
 
 interface CartSidebarProps {
   onClose: () => void;
@@ -82,6 +83,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
 
   // Fechar dropdown ao clicar fora + limpar debounce ao desmontar
   useEffect(() => {
+    ensureMPDeviceScript();
+
     function handleClickOutside(e: MouseEvent) {
       if (ruaRef.current && !ruaRef.current.contains(e.target as Node)) {
         setShowSugestoes(false);

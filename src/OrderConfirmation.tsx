@@ -7,6 +7,7 @@ import { initMercadoPago, Wallet } from "@mercadopago/sdk-react";
 import { STATUS_CONFIG, PAYMENT_LABELS } from "./lib/status";
 import { getOrderAccessToken } from "./lib/orderAccess";
 import { track } from "@vercel/analytics";
+import { ensureMPDeviceScript, getMPDeviceSessionId } from "./lib/mpDevice";
 
 const MP_PUBLIC_KEY = import.meta.env.VITE_MP_PUBLIC_KEY;
 if (MP_PUBLIC_KEY) initMercadoPago(MP_PUBLIC_KEY);
@@ -28,6 +29,10 @@ export default function OrderConfirmation() {
   const mpStatus = searchParams.get("status");
   const mpCollectionStatus = searchParams.get("collection_status");
 
+  useEffect(() => {
+    ensureMPDeviceScript();
+  }, []);
+
   const needsPayment = !!(order?.status === "pendente" && order?.payment_method && !confirmed);
 
   // Only show Wallet if we actually have a preference ID
@@ -46,12 +51,14 @@ export default function OrderConfirmation() {
     try {
       const orderAccessToken = order.orderAccessToken || getOrderAccessToken(order.id);
       if (!orderAccessToken) throw new Error("Confirme o pedido novamente usando seu telefone.");
+      const deviceId = await getMPDeviceSessionId();
       const res = await fetch("/api/create-preference", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId: order.id,
           orderAccessToken,
+          ...(deviceId ? { deviceId } : {}),
         }),
       });
       if (!res.ok) {

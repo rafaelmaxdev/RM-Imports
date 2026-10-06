@@ -11,6 +11,7 @@ import {
   type ServerProductPricing,
   validateProductVariant,
 } from "../server/lib/checkout.js";
+import { normalizeBuyerIdentity } from "../server/lib/buyer-identity.js";
 import { clientIp, consumeRateLimit, createOrderAccessToken } from "../server/lib/security.js";
 
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -272,6 +273,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (!isObject(req.body)) throw new ValidationError("Corpo inválido.");
 
+    let buyer: { email: string; cpf: string } | undefined;
+    if (req.body.buyer !== undefined) {
+      try {
+        buyer = normalizeBuyerIdentity(req.body.buyer);
+      } catch (error: unknown) {
+        throw new ValidationError(error instanceof Error ? error.message : "Dados do comprador inválidos.");
+      }
+    }
+
     const orderId = text(req.body.orderId, "ID do pedido", 20);
     orderIdForCleanup = orderId;
     if (!/^UL-[A-Z2-9]{8}$/.test(orderId)) throw new ValidationError("ID do pedido inválido.");
@@ -440,6 +450,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (isDuplicateError(insertError)) return res.status(409).json({ error: "Este pedido já existe." });
       console.error("[api/checkout] failed to insert order");
       return res.status(500).json({ error: "Não foi possível criar o pedido." });
+    }
+
+    if (buyer) {
+      let paymentDataError = false;
+      try {
+        const { error } = await supabase.from("pedido_payment_buyers").insert({
+          pedido_id: order.id,
+          ...buyer,
+        });
+        paymentDataError = Boolean(error);
+      } catch {
+        paymentDataError = true;
+      }
+
+      if (paymentDataError) {
+        await releaseCoupon();
+        try {
+          const { error: rollbackError } = await supabase.from("pedidos").delete().eq("id", order.id);
+          if (rollbackError) console.error("[api/checkout] failed to rollback order after payment data failure");
+        } catch {
+          console.error("[api/checkout] failed to rollback order after payment data failure");
+        }
+        console.error("[api/checkout] failed to save payment data");
+        return res.status(500).json({ error: "Não foi possível salvar os dados do pagamento. Tente novamente." });
+      }
     }
 
     if (row.pronta_entrega) {

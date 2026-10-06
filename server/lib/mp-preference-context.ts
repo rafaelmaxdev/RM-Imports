@@ -1,4 +1,5 @@
 import { normalizeBrazilPhone } from "./checkout.js";
+import { normalizeBuyerIdentity } from "./buyer-identity.js";
 
 const FASHION_CATEGORY_ID = "fashion";
 const MAX_ITEMS = 20;
@@ -6,6 +7,7 @@ const MAX_TITLE_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 500;
 const MP_DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]+$/;
 const MAX_MP_DEVICE_ID_LENGTH = 256;
+const INVALID_BUYER_MESSAGE = "Dados do comprador inválidos.";
 
 type JsonObject = Record<string, unknown>;
 
@@ -27,6 +29,11 @@ export interface MercadoPagoPreferenceItemMetadata {
 export interface MercadoPagoPreferencePayer {
   name?: string;
   surname?: string;
+  email?: string;
+  identification?: {
+    type: "CPF";
+    number: string;
+  };
   phone?: {
     area_code: string;
     number: string;
@@ -34,7 +41,7 @@ export interface MercadoPagoPreferencePayer {
   address?: {
     zip_code: string;
     street_name: string;
-    street_number: number;
+    street_number: string;
   };
 }
 
@@ -48,6 +55,7 @@ export interface MercadoPagoPreferenceContextInput {
   itens: unknown;
   endereco?: unknown;
   nome?: unknown;
+  buyer?: unknown;
 }
 
 interface UsableItem {
@@ -169,7 +177,7 @@ function buildAddress(value: JsonObject): MercadoPagoPreferencePayer["address"] 
   return {
     zip_code: zipCode,
     street_name: streetName,
-    street_number: streetNumber,
+    street_number: String(streetNumber),
   };
 }
 
@@ -192,8 +200,24 @@ function buildPayer(endereco: unknown, orderName: unknown): MercadoPagoPreferenc
 export function buildMercadoPagoPreferenceContext(
   input: MercadoPagoPreferenceContextInput,
 ): MercadoPagoPreferenceContext {
+  let buyer: { email: string; cpf: string } | undefined;
+  if (input.buyer !== undefined) {
+    try {
+      buyer = normalizeBuyerIdentity(input.buyer);
+    } catch {
+      throw new Error(INVALID_BUYER_MESSAGE);
+    }
+  }
+
+  const payer = buildPayer(input.endereco, input.nome);
   return {
     item: buildItemMetadata(input.orderId, input.itens),
-    payer: buildPayer(input.endereco, input.nome),
+    payer: buyer
+      ? {
+          ...(payer ?? {}),
+          email: buyer.email,
+          identification: { type: "CPF", number: buyer.cpf },
+        }
+      : payer,
   };
 }

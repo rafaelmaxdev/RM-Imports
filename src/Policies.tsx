@@ -217,9 +217,10 @@ const POLICIES: Record<PolicyKind, Policy> = {
         heading: "Dados que podemos receber",
         content: (
           <p>
-            Podemos receber nome, telefone, endereço, itens e informações do pedido, além das mensagens trocadas com o
-            suporte. O pagamento é processado pelo Mercado Pago, e a loja não armazena o número completo nem a senha do
-            cartão.
+            Podemos receber nome, telefone, endereço, e-mail, CPF, itens e informações do pedido, além das mensagens
+            trocadas com o suporte. O e-mail e o CPF são coletados para processar o pagamento e ajudar na análise de
+            segurança e prevenção a fraudes. O pagamento é processado pelo Mercado Pago, e a loja não armazena o número
+            completo nem a senha do cartão.
           </p>
         ),
       },
@@ -236,9 +237,10 @@ const POLICIES: Record<PolicyKind, Policy> = {
         heading: "Compartilhamento necessário",
         content: (
           <p>
-            Compartilhamos somente o mínimo necessário com o Mercado Pago, com o Supabase e a infraestrutura que sustenta a
-            loja, e com fornecedores ou serviços de logística quando isso for necessário para atender o pedido. A RM Imports
-            não vende dados pessoais.
+            O e-mail e o CPF são compartilhados com o Mercado Pago para processar o pagamento e ajudar na análise de
+            segurança. Compartilhamos somente o mínimo necessário com o Mercado Pago, com o Supabase e a infraestrutura que
+            sustenta a loja, e com fornecedores ou serviços de logística quando isso for necessário para atender o pedido. O
+            e-mail e o CPF não aparecem em registros públicos do pedido. A RM Imports não vende dados pessoais.
           </p>
         ),
       },
@@ -256,8 +258,9 @@ const POLICIES: Record<PolicyKind, Policy> = {
         heading: "Segurança e retenção",
         content: (
           <p>
-            Adotamos cuidados compatíveis com a operação para proteger os dados contra acesso indevido. As informações são
-            mantidas pelo período necessário às finalidades do atendimento e pelo tempo exigido para cumprir obrigações legais.
+            Os dados de identificação usados no checkout são tratados em áreas restritas do backend. O acesso é limitado às
+            finalidades do atendimento, do pagamento, da segurança e às obrigações legais aplicáveis.
+            As informações são mantidas pelo período necessário a essas finalidades e ao cumprimento das obrigações legais.
           </p>
         ),
       },

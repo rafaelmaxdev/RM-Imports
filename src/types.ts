@@ -47,6 +47,8 @@ export interface OrderAddress {
   estado: string;
   cep: string;
   telefone: string;
+  email?: string;
+  cpf?: string;
   deliveryMethod: "entrega" | "retirada" | "venda_direta";
 }
 

@@ -52,6 +52,45 @@ describe("buildMercadoPagoPreferenceContext", () => {
     });
   });
 
+  it("normalizes private buyer identity for Mercado Pago", () => {
+    const context = buildMercadoPagoPreferenceContext({
+      orderId,
+      itens: [],
+      endereco: { nome: "Maria Silva", deliveryMethod: "retirada" },
+      buyer: { email: "  Buyer@example.com ", cpf: "529.982.247-25" },
+    });
+
+    expect(context.payer).toMatchObject({
+      name: "Maria",
+      surname: "Silva",
+      email: "Buyer@example.com",
+      identification: { type: "CPF", number: "52998224725" },
+    });
+  });
+
+  it("rejects an invalid private buyer without exposing validation details", () => {
+    expect(() => buildMercadoPagoPreferenceContext({
+      orderId,
+      itens: [],
+      buyer: { email: "invalid", cpf: "529.982.247-25" },
+    })).toThrow("Dados do comprador inválidos.");
+  });
+
+  it("never uses legacy address email or CPF as payer identity", () => {
+    const context = buildMercadoPagoPreferenceContext({
+      orderId,
+      itens: [],
+      endereco: {
+        nome: "Maria",
+        email: "attacker@example.com",
+        cpf: "52998224725",
+        deliveryMethod: "retirada",
+      },
+    });
+
+    expect(context.payer).toEqual({ name: "Maria" });
+  });
+
   it("builds payer phone from national and saved country-code numbers", () => {
     const national = buildMercadoPagoPreferenceContext({
       orderId,
@@ -103,7 +142,7 @@ describe("buildMercadoPagoPreferenceContext", () => {
     expect(context.payer).toMatchObject({
       name: "Maria",
       surname: "Silva",
-      address: { zip_code: "55000000", street_name: "Rua das Flores", street_number: 42 },
+      address: { zip_code: "55000000", street_name: "Rua das Flores", street_number: "42" },
     });
     expect(context.item.title).toBe("RM Imports — Camisa Santa Cruz");
     expect(context.item.title.length).toBeLessThanOrEqual(120);

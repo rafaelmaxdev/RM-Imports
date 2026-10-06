@@ -4,6 +4,7 @@ import { gerarId } from "./types";
 import { saveOrderAccessToken } from "./lib/orderAccess";
 import { track } from "@vercel/analytics";
 import { getMPDeviceSessionId } from "./lib/mpDevice";
+import { normalizeBuyerIdentity } from "../server/lib/buyer-identity";
 
 interface CartContextType {
   cart: CartItem[];
@@ -84,6 +85,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (cart.length === 0) return null;
 
       const orderId = gerarId();
+      const { email, cpf, ...publicAddress } = endereco;
+      const buyer = normalizeBuyerIdentity({ email, cpf });
       const items = cart.map((item) => ({
         productId: item.productId,
         tamanho: item.tamanho,
@@ -103,7 +106,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId,
-          address: endereco,
+          address: publicAddress,
+          buyer,
           paymentMethod,
           couponCode: cupom?.codigo,
           items,

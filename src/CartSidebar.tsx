@@ -5,7 +5,9 @@ import type { OrderAddress, PaymentMethod, Cupom } from "./types";
 import { formatarMoeda, yupooThumbnailUrl, getCachedImageUrl } from "./types";
 import { validarCupom, aplicarCupom } from "./lib/db";
 import { hasPromotionalDiscount, PROMOTION_COUPON_ERROR } from "../server/lib/checkout";
+import { normalizeBuyerIdentity } from "../server/lib/buyer-identity";
 import { ensureMPDeviceScript } from "./lib/mpDevice";
+import { Link } from "react-router-dom";
 
 interface CartSidebarProps {
   onClose: () => void;
@@ -43,6 +45,14 @@ function formatarTelefone(valor: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
+function formatarCpf(valor: string): string {
+  const digits = valor.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
 type Step = "cart" | "address" | "payment";
 
 export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
@@ -55,6 +65,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
   const [showSugestoes, setShowSugestoes] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ruaRef = useRef<HTMLDivElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const cpfRef = useRef<HTMLInputElement>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
 
   const [endereco, setEndereco] = useState<OrderAddress>({
@@ -67,6 +79,8 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
     estado: "PE",
     cep: "",
     telefone: "",
+    email: "",
+    cpf: "",
     deliveryMethod: "entrega" as const,
   });
 
@@ -178,6 +192,25 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
     setErro("");
   }
 
+  function validateBuyerIdentity(returnToAddress = false): boolean {
+    try {
+      normalizeBuyerIdentity({ email: endereco.email, cpf: endereco.cpf });
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Informe um e-mail válido.";
+      const fieldRef = message === "Informe um CPF válido." ? cpfRef : emailRef;
+      setErro(message);
+      if (returnToAddress) {
+        setFinalizacaoErro("");
+        setStep("address");
+        requestAnimationFrame(() => fieldRef.current?.focus());
+      } else {
+        fieldRef.current?.focus();
+      }
+      return false;
+    }
+  }
+
   function handleNext() {
     if (step === "cart") {
       setStep("address");
@@ -205,6 +238,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
           return;
         }
       }
+      if (!validateBuyerIdentity()) return;
       setErro("");
       setStep("payment");
     }
@@ -242,6 +276,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
       }
     }
 
+    if (!validateBuyerIdentity(true)) return;
     setErro("");
     setFinalizacaoErro("");
     const desconto = cupomAplicado && !hasPromotion ? total - totalComDesconto : 0;
@@ -528,6 +563,44 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
                 />
               </div>
 
+              <div>
+                <label htmlFor="cart-email" className="block text-sm font-semibold text-text-muted mb-1">E-mail *</label>
+                <input
+                  ref={emailRef}
+                  id="cart-email"
+                  type="email"
+                  value={endereco.email}
+                  onChange={(e) => updateField("email", e.target.value)}
+                  autoComplete="email"
+                  maxLength={254}
+                  required
+                  placeholder="voce@exemplo.com"
+                  className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="cart-cpf" className="block text-sm font-semibold text-text-muted mb-1">CPF *</label>
+                <input
+                  ref={cpfRef}
+                  id="cart-cpf"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={14}
+                  required
+                  value={endereco.cpf}
+                  onChange={(e) => updateField("cpf", formatarCpf(e.target.value))}
+                  placeholder="000.000.000-00"
+                  className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg"
+                />
+              </div>
+
+              <p className="text-xs leading-5 text-text-muted">
+                E-mail e CPF do comprador são enviados ao Mercado Pago para processar o pagamento e ajudar na análise de segurança. {" "}
+                <Link to="/politica-de-privacidade" className="font-semibold text-primary underline hover:text-accent">Política de privacidade</Link>
+              </p>
+
               {/* Coupon */}
               <div className="mb-4">
                 {cupomAplicado ? (
@@ -732,7 +805,7 @@ export default function CartSidebar({ onClose, onCheckout }: CartSidebarProps) {
               )}
             </div>
 
-            {erro && <div className="text-accent text-sm text-center px-4">{erro}</div>}
+            {erro && <div className="text-accent text-sm text-center px-4" role="alert">{erro}</div>}
 
             <div className="px-6 py-4 border-t border-border">
               <div className="flex flex-col gap-0.5 mb-3">

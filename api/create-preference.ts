@@ -85,10 +85,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (order.mp_preference_id) {
+      console.info(JSON.stringify({
+        event: "mp_preference_device_diagnostic",
+        timestamp: new Date().toISOString(),
+        orderId,
+        phase: "reused",
+        deviceIdRecebido: typeof body?.deviceId === "string" && body.deviceId.length > 0,
+        deviceIdValido: Boolean(deviceId),
+        deviceIdEnviadoAoSDK: false,
+        preferenceId: order.mp_preference_id,
+      }));
       return res.status(200).json({
         preferenceId: order.mp_preference_id,
         initPoint: `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=${order.mp_preference_id}`,
       });
+    }
+
+    let privateBuyer: unknown;
+    try {
+      const { data, error } = await supabase
+        .from("pedido_payment_buyers")
+        .select("email,cpf")
+        .eq("pedido_id", orderId)
+        .maybeSingle();
+
+      const errorCode = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+        ? error.code
+        : undefined;
+      if (error) {
+        if (errorCode === "42P01" || errorCode === "PGRST205") {
+          console.warn("private payment buyer storage unavailable");
+        } else {
+          console.error("private payment buyer storage failure");
+          return res.status(500).json({ error: "Não foi possível carregar os dados do pagamento." });
+        }
+      } else {
+        privateBuyer = data ?? undefined;
+      }
+    } catch (error: unknown) {
+      const errorCode = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+        ? error.code
+        : undefined;
+      if (errorCode === "42P01" || errorCode === "PGRST205") {
+        console.warn("private payment buyer storage unavailable");
+      } else {
+        console.error("private payment buyer storage failure");
+        return res.status(500).json({ error: "Não foi possível carregar os dados do pagamento." });
+      }
     }
 
     const paymentMethod = order.payment_method;
@@ -139,7 +182,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       orderId,
       itens: order.itens,
       endereco: order.endereco,
+      buyer: privateBuyer,
     });
+
+    const requestOptions = {
+      idempotencyKey: `preference-${orderId}`,
+      ...(deviceId ? { meliSessionId: deviceId } : {}),
+    };
+
+    console.info(JSON.stringify({
+      event: "mp_preference_device_diagnostic",
+      timestamp: new Date().toISOString(),
+      orderId,
+      phase: "create_requested",
+      deviceIdRecebido: typeof body?.deviceId === "string" && body.deviceId.length > 0,
+      deviceIdValido: Boolean(deviceId),
+      deviceIdEnviadoAoSDK: Boolean(requestOptions.meliSessionId),
+    }));
 
     const result = await preference.create({
       body: {
@@ -164,11 +223,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         expires: true,
         date_of_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       },
-      requestOptions: {
-        idempotencyKey: `preference-${orderId}`,
-        ...(deviceId ? { meliSessionId: deviceId } : {}),
-      },
+      requestOptions,
     });
+
+    console.info(JSON.stringify({
+      event: "mp_preference_device_diagnostic",
+      timestamp: new Date().toISOString(),
+      orderId,
+      phase: "created",
+      deviceIdRecebido: typeof body?.deviceId === "string" && body.deviceId.length > 0,
+      deviceIdValido: Boolean(deviceId),
+      deviceIdEnviadoAoSDK: Boolean(requestOptions.meliSessionId),
+      preferenceId: result.id,
+    }));
 
     // Persist preference ID to the order (idempotent — only sets if not already set)
     const { error: updateError } = await supabase
@@ -185,8 +252,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       preferenceId: result.id,
       initPoint: result.init_point,
     });
-  } catch (error: unknown) {
-    console.error("Error creating preference:", error);
+  } catch {
+    console.error("Error creating preference");
     return res.status(500).json({
       error: "Failed to create preference",
     });

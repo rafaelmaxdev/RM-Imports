@@ -25,7 +25,7 @@ const supabase = supabaseUrl && serviceRoleKey
   ? createClient(supabaseUrl, serviceRoleKey)
   : null;
 
-const PUBLIC_ORDER_FIELDS = "id,data,hora,itens,total,status,endereco,payment_method,mp_preference_id,pronta_entrega,created_at,telefone_normalizado";
+const PUBLIC_ORDER_FIELDS = "id,data,hora,itens,total,status,endereco,payment_method,mp_preference_id,pronta_entrega,created_at,telefone_normalizado,cupom_codigo,cupom_desconto";
 const ORDER_ID_PATTERN = /^UL-[A-Z2-9]{8}$/;
 
 function flattenCandidates(value: unknown): unknown[] {
@@ -183,7 +183,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const path = resolveOrderPath([req.query.path, req.query.id], req.url);
   const payment = req.query.payment;
-  const phone = requestedPhone(req.query.phone);
+  const phone = requestedPhone(req.headers["x-order-phone"] ?? req.query.phone);
   const admin = await isAdminToken(supabase, bearerToken(req.headers.authorization));
 
   if (req.method === "POST") {

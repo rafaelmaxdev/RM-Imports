@@ -1,27 +1,101 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { formatarMoeda } from "./types";
 import { STATUS_CONFIG } from "./lib/status";
 import type { Order } from "./types";
 import { getPedidoById } from "./lib/db";
-import { saveOrderAccessToken } from "./lib/orderAccess";
+import {
+  getOrderAccessToken,
+  getPersistentOrderAccessToken,
+  isValidOrderAccessToken,
+  isValidOrderId,
+  removeOrderAccessToken,
+  saveOrderAccessToken,
+} from "./lib/orderAccess";
+import {
+  buildOrderTrackingLink,
+  clearLastTrackedOrder,
+  getLastTrackedOrderId,
+  parseOrderTrackingId,
+  rememberLastTrackedOrder,
+} from "./lib/orderTracking";
+import { getOrderItemPrices } from "./lib/orderItemPrices";
 
 const STATUS_PRIORITY: Record<string, number> = {
   pendente: 0, pago: 1, enviado_fornecedor: 2, em_producao: 3,
   a_caminho: 4, em_estoque: 5, em_entrega: 6, entregue: 7,
 };
-const CURRENT_TIME = Date.now();
+const ACCESS_REQUIRED_MESSAGE = "Confirme novamente o telefone da compra.";
+
+type PublicOrderResponse = Order & {
+  itens: Order["itens"] | string;
+  endereco?: Order["endereco"] | string | null;
+  orderAccessToken?: unknown;
+};
+
+function parsePublicOrderResponse(value: unknown): PublicOrderResponse | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const raw = value as Record<string, unknown>;
+  if (!isValidOrderId(raw.id)) return null;
+  const id = raw.id;
+
+  const itens = typeof raw.itens === "string" ? JSON.parse(raw.itens) : raw.itens;
+  const endereco = typeof raw.endereco === "string" ? JSON.parse(raw.endereco) : raw.endereco;
+  if (!Array.isArray(itens)) return null;
+
+  return {
+    ...raw,
+    id,
+    itens,
+    endereco: endereco ?? undefined,
+  } as unknown as PublicOrderResponse;
+}
 
 export default function MeusPedidos() {
   useEffect(() => {
     document.title = "Acompanhar Pedido — RM Imports";
     document.querySelector('meta[name="description"]')?.setAttribute("content", "Acompanhe o status do seu pedido na RM Imports.");
   }, []);
+  const [searchParams] = useSearchParams();
+  const searchQuery = searchParams.toString();
+  const hasOrderQuery = searchParams.has("pedido");
+  const queryOrderId = parseOrderTrackingId(searchQuery);
   const [busca, setBusca] = useState("");
   const [telefone, setTelefone] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("");
+  const [lembrar, setLembrar] = useState(true);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [toast, setToast] = useState("");
+  const requestGenerationRef = useRef(0);
+  const requestInFlightRef = useRef(false);
+  const mountedRef = useRef(true);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestGenerationRef.current += 1;
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  function isCurrentRequest(generation: number): boolean {
+    return mountedRef.current && requestGenerationRef.current === generation;
+  }
+
+  function showToast(message: string): void {
+    if (!mountedRef.current) return;
+    setToast(message);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) setToast("");
+    }, 3000);
+  }
 
   const active = useMemo(() => {
     const filtered = orders.filter((o) => o.status !== "cancelado" && o.status !== "reembolsado");
@@ -34,10 +108,76 @@ export default function MeusPedidos() {
     return [...set].filter((s) => s !== "cancelado" && s !== "reembolsado");
   }, [orders]);
 
+  useEffect(() => {
+    const generation = ++requestGenerationRef.current;
+    requestInFlightRef.current = false;
+    setLoading(false);
+    setOrders([]);
+    setError("");
+    setTelefone("");
+    setFiltroStatus("");
+    setRefreshingId(null);
+
+    const rememberedId = getLastTrackedOrderId();
+    const selectedId = hasOrderQuery ? queryOrderId : rememberedId;
+    const selectedToken = selectedId ? getOrderAccessToken(selectedId) : null;
+    const shouldRemember = !selectedToken || Boolean(selectedId && getPersistentOrderAccessToken(selectedId));
+    setBusca(selectedId ?? "");
+    setLembrar(shouldRemember);
+
+    const invalidate = () => {
+      if (requestGenerationRef.current === generation) {
+        requestGenerationRef.current += 1;
+        requestInFlightRef.current = false;
+      }
+    };
+
+    if (hasOrderQuery && !queryOrderId) {
+      setError("Link de acompanhamento inválido.");
+      return invalidate;
+    }
+    if (!selectedId) return invalidate;
+    if (!getOrderAccessToken(selectedId)) {
+      setError(ACCESS_REQUIRED_MESSAGE);
+      return invalidate;
+    }
+
+    requestInFlightRef.current = true;
+    setLoading(true);
+    getPedidoById(selectedId, undefined, shouldRemember)
+      .then((order) => {
+        if (!isCurrentRequest(generation)) return;
+        if (!order) {
+          setOrders([]);
+          setError(ACCESS_REQUIRED_MESSAGE);
+          return;
+        }
+        if (shouldRemember) rememberLastTrackedOrder(order.id);
+        else if (rememberedId === order.id) clearLastTrackedOrder();
+        setOrders([order]);
+        setError("");
+      })
+      .catch(() => {
+        if (!isCurrentRequest(generation)) return;
+        setOrders([]);
+        setError(ACCESS_REQUIRED_MESSAGE);
+      })
+      .finally(() => {
+        if (!isCurrentRequest(generation)) return;
+        requestInFlightRef.current = false;
+        setLoading(false);
+      });
+
+    return invalidate;
+  }, [hasOrderQuery, queryOrderId, searchQuery]);
+
   async function handleSearch() {
     const q = busca.trim();
     const phone = telefone.trim();
-    if (!q || !phone) return;
+    if (!q || !phone || requestInFlightRef.current) return;
+
+    const generation = ++requestGenerationRef.current;
+    requestInFlightRef.current = true;
     setLoading(true);
     setError("");
     setOrders([]);
@@ -47,9 +187,13 @@ export default function MeusPedidos() {
       const up = q.toUpperCase();
 
       if (up.startsWith("UL-")) {
-        const order = await getPedidoById(up, phone);
+        const order = await getPedidoById(up, phone, lembrar);
+        if (!isCurrentRequest(generation)) return;
         if (order) {
+          if (lembrar) rememberLastTrackedOrder(order.id);
+          else clearLastTrackedOrder();
           setOrders([order]);
+          setError("");
           return;
         }
         setError("Pedido não encontrado. Confira o ID e o telefone informado na compra.");
@@ -61,30 +205,108 @@ export default function MeusPedidos() {
         return;
       }
 
-      const res = await fetch(`/api/order/search?payment=${encodeURIComponent(q)}&phone=${encodeURIComponent(phone)}`);
+      const res = await fetch(`/api/order/search?payment=${encodeURIComponent(q)}`, {
+        headers: { "X-Order-Phone": phone },
+      });
+      if (!isCurrentRequest(generation)) return;
       if (res.ok) {
-        const data = await res.json() as Order;
-        if (data.orderAccessToken) saveOrderAccessToken(data.id, data.orderAccessToken);
+        const payload = await res.json();
+        if (!isCurrentRequest(generation)) return;
+        const data = parsePublicOrderResponse(payload);
+        if (!data || typeof data.orderAccessToken !== "string" || !isValidOrderAccessToken(data.orderAccessToken)) {
+          setError(ACCESS_REQUIRED_MESSAGE);
+          return;
+        }
+        saveOrderAccessToken(data.id, data.orderAccessToken, lembrar);
+        if (lembrar) rememberLastTrackedOrder(data.id);
+        else clearLastTrackedOrder();
         setOrders([data]);
+        setError("");
         return;
-      } else {
-        const errBody = await res.json().catch(() => ({}));
-        console.log("[MP] API error:", res.status, errBody);
       }
 
       setError("Nenhum pedido encontrado.");
-    } catch (err) {
-      console.error("[MP] Erro na busca:", err);
+    } catch {
+      if (!isCurrentRequest(generation)) return;
       setError("Erro de conexão. Tente novamente.");
     } finally {
-      setLoading(false);
+      if (isCurrentRequest(generation)) {
+        requestInFlightRef.current = false;
+        setLoading(false);
+      }
+    }
+  }
+
+  async function refreshOrder(order: Order): Promise<void> {
+    if (requestInFlightRef.current || refreshingId) return;
+
+    const generation = ++requestGenerationRef.current;
+    requestInFlightRef.current = true;
+    setRefreshingId(order.id);
+    setError("");
+
+    try {
+      const freshOrder = await getPedidoById(order.id, undefined, lembrar);
+      if (!isCurrentRequest(generation)) return;
+      if (!freshOrder) {
+        removeOrderAccessToken(order.id);
+        if (getLastTrackedOrderId() === order.id) clearLastTrackedOrder();
+        setOrders([]);
+        setTelefone("");
+        setLembrar(false);
+        setBusca(queryOrderId ?? order.id);
+        setError(ACCESS_REQUIRED_MESSAGE);
+        return;
+      }
+
+      if (lembrar) rememberLastTrackedOrder(freshOrder.id);
+      setOrders((current) => current.map((currentOrder) => (
+        currentOrder.id === freshOrder.id ? freshOrder : currentOrder
+      )));
+    } catch {
+      if (isCurrentRequest(generation)) setError(ACCESS_REQUIRED_MESSAGE);
+    } finally {
+      if (isCurrentRequest(generation)) {
+        requestInFlightRef.current = false;
+        setRefreshingId(null);
+      }
+    }
+  }
+
+  function forgetAccess(orderId: string): void {
+    if (!isValidOrderId(orderId)) return;
+
+    requestGenerationRef.current += 1;
+    requestInFlightRef.current = false;
+    removeOrderAccessToken(orderId);
+    if (getLastTrackedOrderId() === orderId) clearLastTrackedOrder();
+    setOrders([]);
+    setTelefone("");
+    setLoading(false);
+    setRefreshingId(null);
+    setLembrar(false);
+    setBusca(queryOrderId ?? orderId);
+    setFiltroStatus("");
+    setError(ACCESS_REQUIRED_MESSAGE);
+  }
+
+  async function copyTrackingLink(orderId: string): Promise<void> {
+    try {
+      const link = buildOrderTrackingLink(window.location.origin, orderId);
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(link);
+      showToast("Link copiado.");
+    } catch {
+      showToast("Não foi possível copiar o link.");
     }
   }
 
   function podePagar(order: Order): boolean {
     if (order.status !== "pendente" || !order.mp_preference_id) return false;
     if (!order.created_at) return true;
-    const horas = (CURRENT_TIME - new Date(order.created_at).getTime()) / 36e5;
+    // The payment window must use the current time on every evaluation.
+    // eslint-disable-next-line react-hooks/purity
+    const horas = (Date.now() - new Date(order.created_at).getTime()) / 36e5;
     return horas < 24;
   }
 
@@ -95,6 +317,16 @@ export default function MeusPedidos() {
       <div className="mb-5 rounded-2xl border border-primary/10 bg-primary/5 p-4 text-sm leading-relaxed text-text-muted">
         Informe o ID do pedido ou pagamento junto com o telefone usado na compra.
       </div>
+
+      <label className="mb-4 flex items-start gap-2 text-sm text-text-muted">
+        <input
+          type="checkbox"
+          checked={lembrar}
+          onChange={(e) => setLembrar(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-accent"
+        />
+        <span className="font-semibold text-primary">Lembrar neste dispositivo</span>
+      </label>
 
       <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
         <input
@@ -118,7 +350,7 @@ export default function MeusPedidos() {
         <button
           className="min-h-12 shrink-0 cursor-pointer rounded-xl bg-accent px-5 text-sm font-bold text-white transition-colors hover:bg-[#d93648] disabled:opacity-50"
           onClick={handleSearch}
-          disabled={loading || !busca.trim() || !telefone.trim()}
+          disabled={loading || Boolean(refreshingId) || !busca.trim() || !telefone.trim()}
         >
           {loading ? "Buscando..." : "Buscar"}
         </button>
@@ -146,6 +378,12 @@ export default function MeusPedidos() {
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700 mb-4">{error}</div>
+      )}
+
+      {toast && (
+        <div role="status" aria-live="polite" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg">
+          {toast}
+        </div>
       )}
 
       {active.length > 0 && statusOptions.length > 1 && (
@@ -188,6 +426,23 @@ export default function MeusPedidos() {
 
       {active.map((order) => {
         const pode = podePagar(order);
+        const itemPrices = getOrderItemPrices(order);
+        const subtotalCents = order.itens.reduce((sum, item) => (
+          sum + (Number.isFinite(item.preco) && item.preco >= 0 ? Math.round(item.preco * 100) : 0)
+        ), 0);
+        const totalCents = Number.isFinite(order.total) && order.total >= 0
+          ? Math.round(order.total * 100)
+          : null;
+        const savedDiscountCents = typeof order.cupom_desconto === "number" && Number.isFinite(order.cupom_desconto) && order.cupom_desconto >= 0
+          ? Math.round(order.cupom_desconto * 100)
+          : null;
+        const calculatedDiscountCents = totalCents !== null && totalCents < subtotalCents
+          ? subtotalCents - totalCents
+          : 0;
+        const couponCode = typeof order.cupom_codigo === "string" ? order.cupom_codigo.trim() : "";
+        const discountCents = couponCode
+          ? (savedDiscountCents && savedDiscountCents > 0 ? savedDiscountCents : 0)
+          : (savedDiscountCents && savedDiscountCents > 0 ? savedDiscountCents : calculatedDiscountCents);
         return (
           <div key={order.id} className="bg-card-bg rounded-lg border border-border overflow-hidden mb-4">
             <div className="p-3 sm:p-4 border-b border-border bg-bg-base">
@@ -222,8 +477,10 @@ export default function MeusPedidos() {
             <div className="p-3 sm:p-4 border-b border-border">
               <h4 className="text-xs sm:text-sm font-semibold text-text-muted mb-2">Itens</h4>
               <div className="flex flex-col gap-1.5">
-                {order.itens.map((item, i: number) => (
-                  <div key={i} className="flex items-start gap-2.5 p-2 sm:p-2.5 bg-bg-base rounded-md">
+                {order.itens.map((item, i: number) => {
+                  const prices = itemPrices[i];
+                  return (
+                  <div key={i} className="flex min-w-0 items-start gap-2.5 p-2 sm:p-2.5 bg-bg-base rounded-md">
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-xs sm:text-sm leading-tight">{item.nome}</div>
                       <div className="text-[10px] sm:text-xs text-text-muted mt-0.5">
@@ -235,17 +492,58 @@ export default function MeusPedidos() {
                         </div>
                       )}
                     </div>
-                    <div className="text-xs sm:text-sm font-semibold text-accent whitespace-nowrap shrink-0">
-                      {formatarMoeda(item.preco)}
+                    <div className="flex max-w-full flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5 text-xs sm:text-sm font-semibold text-accent">
+                      {prices.original > prices.final && (
+                        <span className="shrink-0 text-text-muted line-through">{formatarMoeda(prices.original)}</span>
+                      )}
+                      <span className="shrink-0 whitespace-nowrap">{formatarMoeda(prices.final)}</span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            <div className="p-3 sm:p-4 flex justify-between items-center">
-              <span className="font-bold text-sm sm:text-base">Total</span>
-              <span className="font-bold text-base sm:text-lg text-accent">{formatarMoeda(order.total)}</span>
+            <div className="p-3 sm:p-4 space-y-1.5">
+              <div className="flex items-center justify-between gap-3 text-sm text-text-muted">
+                <span>Subtotal</span>
+                <span className="shrink-0">{formatarMoeda(subtotalCents / 100)}</span>
+              </div>
+              {discountCents > 0 && (
+                <div className="flex items-center justify-between gap-3 text-sm text-green-600">
+                  <span className="min-w-0 break-words">{couponCode ? `Cupom ${couponCode}` : "Desconto no pedido"}</span>
+                  <span className="shrink-0">-{formatarMoeda(discountCents / 100)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <span className="font-bold text-sm sm:text-base">Total</span>
+                <span className="shrink-0 font-bold text-base sm:text-lg text-accent">{formatarMoeda((totalCents ?? 0) / 100)}</span>
+              </div>
+            </div>
+
+             <div className="flex flex-wrap gap-2 border-t border-border p-3 sm:p-4">
+               <button
+                 type="button"
+                 onClick={() => void copyTrackingLink(order.id)}
+                 className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+               >
+                Copiar link
+              </button>
+              <button
+                type="button"
+                onClick={() => void refreshOrder(order)}
+                disabled={loading || refreshingId === order.id}
+                className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-bg-base disabled:opacity-50"
+              >
+                {refreshingId === order.id ? "Atualizando..." : "Atualizar status"}
+              </button>
+              <button
+                type="button"
+                onClick={() => forgetAccess(order.id)}
+                className="rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50"
+              >
+                Esquecer acesso neste dispositivo
+              </button>
             </div>
 
             {pode && (

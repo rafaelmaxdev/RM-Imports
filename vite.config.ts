@@ -2,18 +2,14 @@
 import { defineConfig, type Plugin, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-
-type DevOrderAddress = { telefone?: string | null };
-type DevOrder = Record<string, unknown> & {
-  endereco: DevOrderAddress | string | null;
-  itens: unknown[] | string;
-};
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 function ignoreApiDir(): Plugin {
   return {
     name: "ignore-api-dir",
     enforce: "pre",
-    resolveId(id) {
+    resolveId(id, _importer, options) {
+      if (options.ssr) return null;
       if (id.startsWith("/api/") || id.startsWith("api/")) {
         return { id, external: true };
       }
@@ -87,99 +83,70 @@ function orderApiPlugin(): Plugin {
     name: "order-api",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        const isOrderId = req.url?.match(/^\/api\/order\/([^/?#]+)$/);
-        const isOrderQuery = req.url?.startsWith("/api/order?") || req.url?.startsWith("/api/order/search?");
-        if (!isOrderId && !isOrderQuery) return next();
+        const url = new URL(req.url || "/", "http://localhost");
+        const match = url.pathname.match(/^\/api\/order(?:\/[^/]+)?$/);
+        if (!match) return next();
 
-        const env = loadEnv(server.config.mode, process.cwd(), "");
-        const supabaseUrl = env.VITE_SUPABASE_URL;
-        const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
-        if (!supabaseUrl || !serviceKey) {
-          res.statusCode = 500;
+        if (req.method !== "GET") {
+          res.statusCode = 405;
           res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify({ error: "SUPABASE_SERVICE_ROLE_KEY não configurada no .env" }));
+          res.end(JSON.stringify({ error: "Method not allowed" }));
           return;
         }
 
-        const { createClient } = await import("@supabase/supabase-js");
-        const supabase = createClient(supabaseUrl, serviceKey);
+        try {
+          const env = loadEnv(server.config.mode, process.cwd(), "");
+          if (process.env.VITE_SUPABASE_URL === undefined && env.VITE_SUPABASE_URL !== undefined) {
+            process.env.VITE_SUPABASE_URL = env.VITE_SUPABASE_URL;
+          }
+          if (process.env.SUPABASE_SERVICE_ROLE_KEY === undefined && env.SUPABASE_SERVICE_ROLE_KEY !== undefined) {
+            process.env.SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+          }
 
-        // Handle /api/order?phone=... or /api/order?payment=...
-        if (isOrderQuery) {
-          const url = new URL(req.url || "/", "http://localhost");
-          let phone = url.searchParams.get("phone");
-          let payment = url.searchParams.get("payment");
-          if (Array.isArray(phone)) phone = phone[0];
-          if (Array.isArray(payment)) payment = payment[0];
-
-          if (payment) {
-            const pid = payment.trim();
-            const { data: order } = await supabase
-              .from("pedidos")
-              .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco")
-              .eq("mp_payment_id", pid)
-              .maybeSingle();
-            if (order) {
-              const parsed = { ...order, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens };
-              res.statusCode = 200;
-              res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify(parsed));
-              return;
+          const query: Record<string, string | string[] | undefined> = {};
+          for (const [key, value] of url.searchParams) {
+            const current = query[key];
+            query[key] = current === undefined
+              ? value
+              : Array.isArray(current)
+                ? [...current, value]
+                : [current, value];
+          }
+          if (match[0] !== "/api/order") {
+            const segment = match[0].slice("/api/order/".length);
+            try {
+              query.path = [decodeURIComponent(segment)];
+            } catch {
+              query.path = [segment];
             }
-            res.statusCode = 404;
-            res.end(JSON.stringify({ error: "Nenhum pedido encontrado." }));
-            return;
           }
 
-          if (phone) {
-            const digits = phone.replace(/\D/g, "");
-            const last8 = digits.slice(-8);
-            const { data: orders } = await supabase
-              .from("pedidos")
-              .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco")
-              .order("created_at", { ascending: false });
-            const typedOrders = (orders as DevOrder[] | null) ?? [];
-            const filtered = typedOrders.filter((o) => {
-              if (!o.endereco) return false;
-              const addr = typeof o.endereco === "string" ? JSON.parse(o.endereco) as DevOrderAddress : o.endereco;
-              const raw = addr.telefone || "";
-              const clean = raw.replace(/\D/g, "");
-              if (!clean) return false;
-              return clean.includes(digits) || digits.includes(clean) || clean.endsWith(last8) || last8.endsWith(clean);
-            });
-            const parsed = filtered.map((o) => ({ ...o, itens: typeof o.itens === "string" ? JSON.parse(o.itens) : o.itens }));
-            res.statusCode = 200;
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify(parsed));
-            return;
+          const request = Object.assign(req, { query, body: undefined }) as VercelRequest;
+          const adapter = res as unknown as VercelResponse;
+          Object.assign(adapter, {
+            status(code: number) {
+              res.statusCode = code;
+              return adapter;
+            },
+            json(payload: unknown) {
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify(payload));
+              return adapter;
+            },
+          });
+
+          const { default: handler } = await server.ssrLoadModule("/api/order/[[...path]].ts");
+          await handler(request, adapter);
+        } catch {
+          console.error("[order-api] handler failed");
+          if (!res.writableEnded) {
+            if (!res.headersSent) {
+              res.statusCode = 500;
+              res.setHeader("Content-Type", "application/json");
+            }
+            res.end(JSON.stringify({ error: "Internal server error" }));
           }
-
-          res.statusCode = 400;
-          res.end(JSON.stringify({ error: "Informe telefone ou ID do pagamento." }));
-          return;
         }
-
-        // Handle /api/order/:id
-        if (!isOrderId) return next();
-        const id = decodeURIComponent(isOrderId[1]);
-        const { data: order } = await supabase
-          .from("pedidos")
-          .select("id, data, hora, itens, total, status, payment_method, mp_preference_id, mp_payment_id, pronta_entrega, created_at, endereco")
-          .eq("id", id)
-          .maybeSingle();
-
-        if (!order) {
-          res.statusCode = 404;
-          res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify({ error: "Pedido não encontrado" }));
-          return;
-        }
-
-        const parsed = { ...order, itens: typeof order.itens === "string" ? JSON.parse(order.itens) : order.itens };
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        res.setHeader("Access-Control-Allow-Origin", "*");
-        res.end(JSON.stringify(parsed));
       });
     },
   };

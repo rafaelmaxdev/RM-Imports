@@ -415,22 +415,23 @@ async function fetchPedidosFromDb(): Promise<import("../types").Order[]> {
   return (data as DbPedido[]).map(dbPedidoToOrder);
 }
 
-export async function getPedidoById(id: string, phone?: string): Promise<import("../types").Order | null> {
+export async function getPedidoById(id: string, phone?: string, persistAccess = true): Promise<import("../types").Order | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     const orderAccessToken = getOrderAccessToken(id);
-    const query = phone ? `?phone=${encodeURIComponent(phone)}` : "";
-    const res = await fetch(`/api/order/${encodeURIComponent(id)}${query}`, {
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(orderAccessToken ? { "X-Order-Token": orderAccessToken } : {}),
-      },
+    const headers: Record<string, string> = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(orderAccessToken ? { "X-Order-Token": orderAccessToken } : {}),
+      ...(phone ? { "X-Order-Phone": phone } : {}),
+    };
+    const res = await fetch(`/api/order/${encodeURIComponent(id)}`, {
+      headers,
     });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`Failed to fetch order: ${res.status}`);
     const data = await res.json();
-    if (typeof data.orderAccessToken === "string") saveOrderAccessToken(id, data.orderAccessToken);
+    if (typeof data.orderAccessToken === "string") saveOrderAccessToken(id, data.orderAccessToken, persistAccess);
     const dateTime = formatPedidoDateTime({
       created_at: data.created_at,
       data: data.data,
@@ -444,8 +445,7 @@ export async function getPedidoById(id: string, phone?: string): Promise<import(
         ? (typeof data.endereco === "string" ? JSON.parse(data.endereco) : data.endereco)
         : undefined,
     };
-  } catch (err) {
-    console.error("Error fetching order via API:", err);
+  } catch {
     return null;
   }
 }

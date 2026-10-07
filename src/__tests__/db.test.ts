@@ -2,7 +2,7 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 import { DEFAULT_CONFIG } from "../types";
 import { getCached, isCacheStale, setCache } from "../lib/cache";
 import { supabase } from "../lib/supabase";
-import { formatPedidoDateTime, getLojaConfig, parseImageUrls } from "../lib/db";
+import { formatPedidoDateTime, getLojaConfig, parseImageUrls, updatePedidoAdminOrder, updatePedidoStatus } from "../lib/db";
 
 vi.mock("../lib/cache", () => ({
   getCached: vi.fn(),
@@ -11,7 +11,7 @@ vi.mock("../lib/cache", () => ({
 }));
 
 vi.mock("../lib/supabase", () => ({
-  supabase: { from: vi.fn() },
+  supabase: { from: vi.fn(), rpc: vi.fn() },
 }));
 
 beforeEach(() => {
@@ -105,5 +105,81 @@ describe("getLojaConfig", () => {
 
     expect(supabase.from).not.toHaveBeenCalled();
     expect(setCache).not.toHaveBeenCalled();
+  });
+});
+
+describe("updatePedidoAdminOrder", () => {
+  it("returns the RPC result when marking a pending order as Admin", async () => {
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: { status: "pago", admin_order: true, admin_payment_exempt: true },
+      error: null,
+    } as never);
+
+    await expect(updatePedidoAdminOrder("pedido-1", true)).resolves.toEqual({
+      status: "pago",
+      admin_order: true,
+      admin_payment_exempt: true,
+    });
+    expect(supabase.rpc).toHaveBeenCalledWith("set_pedido_admin_order", {
+      p_order_id: "pedido-1",
+      p_is_admin: true,
+    });
+  });
+
+  it("returns pending when removing an unpaid Admin release", async () => {
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: { status: "pendente", admin_order: false, admin_payment_exempt: false },
+      error: null,
+    } as never);
+
+    await expect(updatePedidoAdminOrder("pedido-1", false)).resolves.toEqual({
+      status: "pendente",
+      admin_order: false,
+      admin_payment_exempt: false,
+    });
+  });
+
+  it("preserves a real paid response", async () => {
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: { status: "pago", admin_order: false, admin_payment_exempt: false },
+      error: null,
+    } as never);
+
+    await expect(updatePedidoAdminOrder("pedido-1", false)).resolves.toEqual({
+      status: "pago",
+      admin_order: false,
+      admin_payment_exempt: false,
+    });
+  });
+
+  it("rejects RPC errors", async () => {
+    const rpcError = new Error("rpc failed");
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: null, error: rpcError } as never);
+
+    await expect(updatePedidoAdminOrder("pedido-1", true)).rejects.toBe(rpcError);
+  });
+
+  it.each(["PGRST202", "42883"])("reports a missing RPC for %s", async (code) => {
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: null,
+      error: { code, message: "function does not exist" },
+    } as never);
+
+    await expect(updatePedidoAdminOrder("pedido-1", true)).rejects.toThrow(
+      "A atualização de pedidos Admin requer aplicar auto_release_admin_orders.sql no Supabase.",
+    );
+  });
+});
+
+describe("updatePedidoStatus", () => {
+  it("clears the Admin payment exemption when marking an order as paid", async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ eq });
+    vi.mocked(supabase.from).mockReturnValue({ update } as never);
+
+    await updatePedidoStatus("pedido-1", "pago");
+
+    expect(update).toHaveBeenCalledWith({ status: "pago", admin_payment_exempt: false });
+    expect(eq).toHaveBeenCalledWith("id", "pedido-1");
   });
 });

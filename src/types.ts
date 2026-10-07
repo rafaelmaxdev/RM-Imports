@@ -66,6 +66,7 @@ export interface Order {
   mp_preference_id?: string;
   mp_payment_id?: string;
   admin_order?: boolean;
+  admin_payment_exempt?: boolean;
   pronta_entrega?: boolean;
   reposicao?: boolean;
   cupom_codigo?: string;

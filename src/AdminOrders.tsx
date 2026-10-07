@@ -45,6 +45,8 @@ export default function AdminOrders() {
   const [peFilter, setPeFilter] = useState(false);
   const [novosPedidos, setNovosPedidos] = useState(0);
   const ultimoTotalRef = useRef(0);
+  const [adminUpdatingId, setAdminUpdatingId] = useState<string | null>(null);
+  const adminUpdatingIdRef = useRef<string | null>(null);
 
   const loadOrders = useCallback(async (isRefresh = false) => {
     const startedAt = Date.now();
@@ -185,6 +187,35 @@ export default function AdminOrders() {
       setOrders((prev) => prev.filter((o) => o.id !== id));
     } catch (err: unknown) {
       alert(err instanceof Error && err.message ? err.message : "Erro ao excluir pedido.");
+    }
+  }
+
+  async function handleAdminOrderToggle(order: Order) {
+    if (adminUpdatingIdRef.current) return;
+
+    const newVal = !order.admin_order;
+    const confirmation = newVal
+      ? "Marcar como Admin e liberar sem pagamento? Não conta como receita/lucro."
+      : "Remover Admin? Se liberado sem pagamento e ainda não enviado, volta a Pendente.";
+    if (!confirm(confirmation)) return;
+
+    adminUpdatingIdRef.current = order.id;
+    setAdminUpdatingId(order.id);
+    try {
+      const result = await updatePedidoAdminOrder(order.id, newVal);
+      setOrders((prev) => prev.map((o) => o.id === order.id
+        ? { ...o, ...result, status: result.status as Order["status"] }
+        : o));
+    } catch (err: unknown) {
+      const message = err instanceof Error && err.message
+        ? err.message
+        : typeof err === "object" && err !== null && "message" in err && typeof err.message === "string" && err.message
+          ? err.message
+          : "Erro ao atualizar pedido Admin.";
+      alert(message);
+    } finally {
+      if (adminUpdatingIdRef.current === order.id) adminUpdatingIdRef.current = null;
+      setAdminUpdatingId((current) => current === order.id ? null : current);
     }
   }
 
@@ -451,13 +482,9 @@ export default function AdminOrders() {
                         className={`px-3 py-1.5 text-xs font-semibold rounded-md border-none cursor-pointer transition-opacity hover:opacity-85 ${
                           order.admin_order ? "bg-purple-500 text-white" : "bg-gray-200 text-gray-600"
                         }`}
-                        onClick={() => {
-                          const newVal = !order.admin_order;
-                          if (confirm(newVal ? "Marcar como pedido do admin (não conta como lucro)?" : "Desmarcar pedido do admin?")) {
-                            updatePedidoAdminOrder(order.id, newVal);
-                            setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, admin_order: newVal } : o));
-                          }
-                        }}
+                        onClick={() => void handleAdminOrderToggle(order)}
+                        disabled={adminUpdatingId !== null}
+                        aria-busy={adminUpdatingId === order.id}
                       >
                         {order.admin_order ? "👤 Pedido do Admin" : "👤 Marcar como Admin"}
                       </button>

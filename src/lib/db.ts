@@ -308,6 +308,7 @@ export interface DbPedido {
   mp_preference_id: string | null;
   mp_payment_id: string | null;
   admin_order: boolean | null;
+  admin_payment_exempt?: boolean;
   pronta_entrega: boolean | null;
   reposicao: boolean | null;
   cupom_codigo?: string | null;
@@ -361,6 +362,7 @@ function dbPedidoToOrder(db: DbPedido): import("../types").Order {
     mp_preference_id: db.mp_preference_id || undefined,
     mp_payment_id: db.mp_payment_id || undefined,
     admin_order: db.admin_order ?? false,
+    admin_payment_exempt: db.admin_payment_exempt,
     pronta_entrega: db.pronta_entrega ?? false,
     reposicao: db.reposicao ?? false,
     cupom_codigo: db.cupom_codigo ?? undefined,
@@ -468,7 +470,7 @@ export async function updatePedidoStatus(id: string, status: string): Promise<vo
 
   const { error } = await supabase
     .from("pedidos")
-    .update({ status })
+    .update(status === "pago" ? { status, admin_payment_exempt: false } : { status })
     .eq("id", id);
 
   if (error) {
@@ -480,13 +482,38 @@ export async function updatePedidoStatus(id: string, status: string): Promise<vo
   }
 }
 
-export async function updatePedidoAdminOrder(id: string, isAdmin: boolean): Promise<void> {
-  const { error } = await supabase
-    .from("pedidos")
-    .update({ admin_order: isAdmin })
-    .eq("id", id);
+export async function updatePedidoAdminOrder(
+  id: string,
+  isAdmin: boolean,
+): Promise<{ status: string; admin_order: boolean; admin_payment_exempt: boolean }> {
+  const { data, error } = await supabase.rpc("set_pedido_admin_order", {
+    p_order_id: id,
+    p_is_admin: isAdmin,
+  });
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === "PGRST202" || error.code === "42883") {
+      throw new Error("A atualização de pedidos Admin requer aplicar auto_release_admin_orders.sql no Supabase.");
+    }
+    throw error;
+  }
+
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    Array.isArray(data) ||
+    typeof data.status !== "string" ||
+    typeof data.admin_order !== "boolean" ||
+    typeof data.admin_payment_exempt !== "boolean"
+  ) {
+    throw new Error("Resposta inválida ao atualizar pedido Admin.");
+  }
+
+  return {
+    status: data.status,
+    admin_order: data.admin_order,
+    admin_payment_exempt: data.admin_payment_exempt,
+  };
 }
 
 export async function updatePedidoProntaEntrega(id: string, isProntaEntrega: boolean): Promise<void> {

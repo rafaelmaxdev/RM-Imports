@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getPedidos, deletePedido, updatePedidoAdminOrder, updatePedidoStatus } from "./lib/db";
 import { clearCache } from "./lib/cache";
 import type { Order } from "./types";
@@ -13,6 +13,8 @@ export default function AdminHistory() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "entregue" | "cancelado" | "reembolsado">("all");
   const [refreshing, setRefreshing] = useState(false);
+  const [adminUpdating, setAdminUpdating] = useState(false);
+  const adminUpdatingRef = useRef(false);
 
   const loadHistory = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -36,6 +38,35 @@ export default function AdminHistory() {
     await deletePedido(id);
     clearCache("pedidos");
     setHistory((prev) => prev.filter((o) => o.id !== id));
+  }
+
+  async function handleAdminOrderToggle(order: Order) {
+    if (adminUpdatingRef.current) return;
+
+    const newVal = !order.admin_order;
+    const confirmation = newVal
+      ? "Marcar como Admin e liberar sem pagamento? Não conta como receita/lucro."
+      : "Remover Admin? Se liberado sem pagamento e ainda não enviado, volta a Pendente.";
+    if (!confirm(confirmation)) return;
+
+    adminUpdatingRef.current = true;
+    setAdminUpdating(true);
+    try {
+      const result = await updatePedidoAdminOrder(order.id, newVal);
+      setHistory((prev) => prev.map((o) => o.id === order.id
+        ? { ...o, ...result, status: result.status as Order["status"] }
+        : o));
+    } catch (err: unknown) {
+      const message = err instanceof Error && err.message
+        ? err.message
+        : typeof err === "object" && err !== null && "message" in err && typeof err.message === "string" && err.message
+          ? err.message
+          : "Erro ao atualizar pedido Admin.";
+      alert(message);
+    } finally {
+      adminUpdatingRef.current = false;
+      setAdminUpdating(false);
+    }
   }
 
   const filteredHistory = history.filter((order) => {
@@ -239,13 +270,9 @@ export default function AdminHistory() {
                         className={`px-3 py-1.5 text-xs font-semibold rounded-md border-none cursor-pointer transition-opacity hover:opacity-85 ${
                           order.admin_order ? "bg-purple-500 text-white" : "bg-gray-200 text-gray-600"
                         }`}
-                        onClick={() => {
-                          const newVal = !order.admin_order;
-                          if (confirm(newVal ? "Marcar como pedido do admin (não conta como lucro)?" : "Desmarcar pedido do admin?")) {
-                            updatePedidoAdminOrder(order.id, newVal);
-                            setHistory((prev) => prev.map((o) => o.id === order.id ? { ...o, admin_order: newVal } : o));
-                          }
-                        }}
+                        onClick={() => handleAdminOrderToggle(order)}
+                        disabled={adminUpdating}
+                        aria-busy={adminUpdating}
                       >
                         {order.admin_order ? "👤 Pedido do Admin" : "👤 Marcar como Admin"}
                       </button>

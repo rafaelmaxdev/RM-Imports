@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getPedidos, updatePedidoStatus, getPacotes, createPacote, updatePacoteStatus, updatePacoteFinanceiro, removePedidoFromPacote, deletePacote, getProdutos } from "./lib/db";
 import type { Order, OrderItem } from "./types";
 import type { Pacote, DbProduto } from "./lib/db";
-import { montarMensagemItem, formatarMoeda, yupooThumbnailUrl, getCachedImageUrl } from "./types";
+import { montarMensagemItem, formatarMoeda, getCachedImageUrl } from "./types";
 import type { LojaConfig } from "./types";
 import { PAYMENT_LABELS_SHORT, PACKAGE_STATUS_PIPELINE, PACKAGE_STATUS_LABELS, PACKAGE_NEXT_STATUS, PACKAGE_PREV_STATUS, PACKAGE_PREV_ACTION_LABELS, PACKAGE_STATUS_ACTION_LABELS, getMPFeeRate } from "./lib/status";
+import { getPackageStatusAfterOrderAdvance } from "./lib/packageProgress";
+import { prepareSupplierImage, shareSupplierItem } from "./lib/supplierShare";
 
 type Tab = "montar" | "pacotes" | "historico";
 type Step = "select" | "review";
@@ -12,7 +14,14 @@ type Step = "select" | "review";
 interface SharingState {
   items: OrderItem[];
   index: number;
-  onDone: () => void;
+  onDone: () => Promise<void>;
+}
+
+interface PreparedImageState {
+  key: string;
+  file: File | null;
+  error: string | null;
+  loading: boolean;
 }
 
 export default function AdminPacotes({ config }: { config: LojaConfig }) {
@@ -31,6 +40,19 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
   const [mensagem, setMensagem] = useState("");
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState<SharingState | null>(null);
+  const [sharingError, setSharingError] = useState<string | null>(null);
+  const [sharingStatus, setSharingStatus] = useState<string | null>(null);
+  const [sharingBusy, setSharingBusy] = useState(false);
+  const [sharedItemIndex, setSharedItemIndex] = useState<number | null>(null);
+  const [imageShareUnsupportedKey, setImageShareUnsupportedKey] = useState<string | null>(null);
+  const [preparedImage, setPreparedImage] = useState<PreparedImageState>({
+    key: "",
+    file: null,
+    error: null,
+    loading: false,
+  });
+  const [advanceBusy, setAdvanceBusy] = useState(false);
+  const advanceBusyRef = useRef(false);
 
   // Lock body scroll when sharing modal is open
   useEffect(() => {
@@ -104,52 +126,91 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
     if (!prod) return "";
     const urls = feminino ? prod.imagem_urls_feminina : prod.imagem_urls;
     if (!urls || urls.length === 0) return "";
-    const cached = getCachedImageUrl(urls[0], prod.cached_image_urls, 0, "medium");
-    return cached || yupooThumbnailUrl(urls[0], "medium");
+    return getCachedImageUrl(urls[0], prod.cached_image_urls, 0, "medium");
   }
 
-  // Share single item via Web Share API (mobile) or clipboard (desktop)
-  async function shareItem(item: OrderItem) {
-    const msg = montarMensagemItem(item);
-    const img = getProductImage(item.yupooUrl, item.nome, item.feminino && item.genero === "Feminino");
-    const imageUrls = img ? [img] : [];
+  const sharingItem = sharing ? sharing.items[sharing.index] : undefined;
+  const sharingImageUrl = sharingItem
+    ? getProductImage(sharingItem.yupooUrl, sharingItem.nome, sharingItem.feminino && sharingItem.genero === "Feminino")
+    : "";
+  const sharingImageKey = sharing ? `${sharing.index}:${sharingImageUrl}` : "";
 
-    // Try Web Share API with files first (image + text)
-    if (imageUrls.length > 0 && navigator.share && navigator.canShare) {
-      try {
-        const blobs = await Promise.all(
-          imageUrls.map(async (url) => {
-            const res = await fetch(url);
-            const blob = await res.blob();
-            return new File([blob], `camisa-${Date.now()}.jpg`, { type: blob.type || "image/jpeg" });
-          })
-        );
-        const shareData = { text: msg, files: blobs };
-        if (navigator.canShare(shareData)) {
-          await navigator.share(shareData);
-          return;
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        // Fall through to text-only share
-      }
+  useEffect(() => {
+    if (!sharingImageKey) {
+      setPreparedImage({ key: "", file: null, error: null, loading: false });
+      return;
     }
 
-    // Try text-only Web Share API (works even without images)
-    if (navigator.share) {
-      try {
-        await navigator.share({ text: msg });
-        return;
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        // Fall through to clipboard
-      }
+    if (!sharingImageUrl) {
+      setPreparedImage({ key: sharingImageKey, file: null, error: null, loading: false });
+      return;
     }
 
-    // Fallback: copy to clipboard
-    await navigator.clipboard.writeText(msg);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const controller = new AbortController();
+    let active = true;
+    setPreparedImage({ key: sharingImageKey, file: null, error: null, loading: true });
+    const timeoutId = window.setTimeout(() => {
+      if (!active) return;
+      controller.abort();
+      setPreparedImage({
+        key: sharingImageKey,
+        file: null,
+        error: "Não foi possível preparar a imagem para compartilhamento.",
+        loading: false,
+      });
+    }, 8000);
+
+    void prepareSupplierImage(sharingImageUrl, controller.signal)
+      .then((file) => {
+        if (!active || controller.signal.aborted) return;
+        setPreparedImage({ key: sharingImageKey, file, error: null, loading: false });
+      })
+      .catch(() => {
+        if (!active || controller.signal.aborted) return;
+        setPreparedImage({
+          key: sharingImageKey,
+          file: null,
+          error: "Não foi possível preparar a imagem para compartilhamento.",
+          loading: false,
+        });
+      })
+      .finally(() => window.clearTimeout(timeoutId));
+
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [sharingImageKey, sharingImageUrl]);
+
+  async function handleShareItem(item: OrderItem) {
+    if (!sharing || advanceBusyRef.current || sharingBusy) return;
+    if (preparedImage.key !== sharingImageKey || preparedImage.loading) return;
+
+    const file = preparedImage.file ?? undefined;
+    setSharingBusy(true);
+    setSharingError(null);
+    try {
+      const result = await shareSupplierItem(montarMensagemItem(item), file);
+      if (result === "cancelled") return;
+
+      setSharedItemIndex(sharing.index);
+      if (file && (result === "text" || result === "clipboard")) {
+        setImageShareUnsupportedKey(sharingImageKey);
+      }
+
+      if (result === "image-text") {
+        setSharingStatus("Foto e texto enviados ao compartilhamento. Confirme o envio no aplicativo escolhido.");
+      } else if (result === "clipboard") {
+        setSharingStatus("Texto copiado. Envie ao fornecedor antes de confirmar.");
+      } else {
+        setSharingStatus("Texto enviado ao compartilhamento. Confirme o envio no aplicativo escolhido. O aplicativo escolhido pode tratar a legenda separadamente.");
+      }
+    } catch {
+      setSharingError("Não foi possível compartilhar o item. Tente novamente.");
+    } finally {
+      setSharingBusy(false);
+    }
   }
 
   // Copy single item info (formatted) to clipboard
@@ -185,51 +246,213 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
     setSending(false);
   }
 
+  async function withAdvanceBusy(action: () => Promise<void>): Promise<void> {
+    if (advanceBusyRef.current) throw new Error("Avanço já em andamento");
+    advanceBusyRef.current = true;
+    setAdvanceBusy(true);
+    try {
+      await action();
+    } finally {
+      advanceBusyRef.current = false;
+      setAdvanceBusy(false);
+    }
+  }
+
+  async function persistOrderAdvance(order: Order, pacote: Pacote, nextStatus: string): Promise<void> {
+    const updatedOrders = allOrders.map((current) =>
+      current.id === order.id ? { ...current, status: nextStatus as Order["status"] } : current,
+    );
+    const nextPackageStatus = getPackageStatusAfterOrderAdvance(
+      pacote,
+      updatedOrders,
+      order.id,
+      nextStatus,
+    );
+
+    await withAdvanceBusy(async () => {
+      await updatePedidoStatus(order.id, nextStatus);
+      if (nextPackageStatus) await updatePacoteStatus(pacote.id, nextPackageStatus);
+
+      setAllOrders((prev) => prev.map((current) =>
+        current.id === order.id ? { ...current, status: nextStatus as Order["status"] } : current,
+      ));
+      if (nextStatus !== "pago") {
+        setOrders((prev) => prev.filter((current) => current.id !== order.id));
+      }
+      if (nextPackageStatus) {
+        setPacotes((prev) => prev.map((current) =>
+          current.id === pacote.id ? { ...current, status: nextPackageStatus } : current,
+        ));
+      }
+    });
+  }
+
+  async function handleAdvanceOrder(order: Order, pacote: Pacote | undefined) {
+    if (advanceBusyRef.current || sharing) return;
+    const nextStatus = PACKAGE_NEXT_STATUS[order.status];
+    if (!nextStatus || order.status === "entregue") return;
+    if (!pacote) {
+      alert("Pacote não encontrado. O pedido não foi avançado.");
+      return;
+    }
+    if (order.itens.length === 0) {
+      alert("Este pedido não possui itens para compartilhar.");
+      return;
+    }
+
+    const label = PACKAGE_STATUS_ACTION_LABELS[order.status] || nextStatus;
+    if (!confirm(`Avançar pedido ${order.id} para "${label}"?`)) return;
+
+    if (order.status === "pago") {
+      setSharingError(null);
+      setSharingStatus(null);
+      setSharedItemIndex(null);
+      setImageShareUnsupportedKey(null);
+      setPreparedImage({ key: "", file: null, error: null, loading: false });
+      setSharing({
+        items: order.itens,
+        index: 0,
+        onDone: () => persistOrderAdvance(order, pacote, nextStatus),
+      });
+      return;
+    }
+
+    try {
+      await persistOrderAdvance(order, pacote, nextStatus);
+    } catch (err) {
+      console.error("Erro ao avançar pedido:", err);
+      alert("Erro ao atualizar status.");
+    }
+  }
+
   async function handleAdvancePackage(pacote: Pacote) {
+    if (advanceBusyRef.current || sharing) return;
     const nextStatus = PACKAGE_NEXT_STATUS[pacote.status];
     if (!nextStatus) return;
 
     const label = PACKAGE_STATUS_ACTION_LABELS[pacote.status] || nextStatus;
-    if (!confirm(`Avançar Pacote para "${label}"?`)) return;
 
     // If advancing from "pago" to "enviado_fornecedor", share items one by one
     if (pacote.status === "pago") {
-      const pacoteOrders = pacote.pedido_ids
-        .map((id) => allOrders.find((o) => o.id === id))
-        .filter((o): o is Order => !!o);
-      if (pacoteOrders.length > 0) {
-        const items = pacoteOrders.flatMap((o) => o.itens);
-        setSharing({
-          items,
-          index: 0,
-          onDone: async () => {
-            try {
-              await Promise.all(pacote.pedido_ids.map((id) => updatePedidoStatus(id, nextStatus)));
-              await updatePacoteStatus(pacote.id, nextStatus);
-              setPacotes((prev) =>
-                prev.map((p) => p.id === pacote.id ? { ...p, status: nextStatus } : p)
-              );
-            } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : "Erro ao atualizar status. Verifique manualmente.";
-              console.error("Erro ao atualizar status:", msg);
-              alert(msg);
-            }
-            setSharing(null);
-          },
-        });
-        return; // Don't proceed with status update here — onDone handles it
+      const pacoteOrders = pacote.pedido_ids.map((id) => allOrders.find((order) => order.id === id));
+      if (pacoteOrders.some((order) => !order)) {
+        alert("Não foi possível encontrar todos os pedidos do pacote. O pacote não foi avançado.");
+        return;
       }
+
+      const knownOrders = pacoteOrders as Order[];
+      if (knownOrders.some((order) => order.itens.length === 0)) {
+        alert("Um pedido do pacote não possui itens. O pacote não foi avançado.");
+        return;
+      }
+      const paidOrders = knownOrders.filter((order) => order.status === "pago");
+      if (paidOrders.length === 0) {
+        alert("Não há itens pagos para compartilhar neste pacote.");
+        return;
+      }
+
+      const items = paidOrders.flatMap((order) => order.itens);
+      if (items.length === 0) {
+        alert("Não há itens para compartilhar neste pacote.");
+        return;
+      }
+      const paidOrderIds = new Set(paidOrders.map((order) => order.id));
+      const ordersAfterSharing = allOrders.map((order) =>
+        paidOrderIds.has(order.id) ? { ...order, status: nextStatus as Order["status"] } : order,
+      );
+      const nextPackageStatus = getPackageStatusAfterOrderAdvance(
+        pacote,
+        ordersAfterSharing,
+        paidOrders[0].id,
+        nextStatus,
+      );
+      if (!nextPackageStatus) {
+        alert("Todos os pedidos do pacote precisam estar em um status válido para avançar.");
+        return;
+      }
+      if (!confirm(`Avançar Pacote para "${label}"?`)) return;
+
+      setSharingError(null);
+      setSharingStatus(null);
+      setSharedItemIndex(null);
+      setImageShareUnsupportedKey(null);
+      setPreparedImage({ key: "", file: null, error: null, loading: false });
+      setSharing({
+        items,
+        index: 0,
+        onDone: async () => {
+          await withAdvanceBusy(async () => {
+            await Promise.all(paidOrders.map((order) => updatePedidoStatus(order.id, nextStatus)));
+            await updatePacoteStatus(pacote.id, nextPackageStatus);
+
+            setAllOrders((prev) => prev.map((order) =>
+              paidOrderIds.has(order.id) && order.status === "pago"
+                ? { ...order, status: nextStatus as Order["status"] }
+                : order,
+            ));
+            if (nextStatus !== "pago") {
+              setOrders((prev) => prev.filter((order) => !paidOrderIds.has(order.id)));
+            }
+            setPacotes((prev) => prev.map((current) =>
+              current.id === pacote.id ? { ...current, status: nextPackageStatus } : current,
+            ));
+          });
+        },
+      });
+      return;
     }
 
-    try {
-      // Update all orders in this pacote
-      await Promise.all(pacote.pedido_ids.map((id) => updatePedidoStatus(id, nextStatus)));
-      // Update pacote status
-      await updatePacoteStatus(pacote.id, nextStatus);
+    const pacoteOrders = pacote.pedido_ids.map((id) => allOrders.find((order) => order.id === id));
+    if (pacoteOrders.some((order) => !order)) {
+      alert("Não foi possível encontrar todos os pedidos do pacote. O pacote não foi avançado.");
+      return;
+    }
 
-      setPacotes((prev) =>
-        prev.map((p) => p.id === pacote.id ? { ...p, status: nextStatus } : p)
-      );
+    const knownOrders = pacoteOrders as Order[];
+    const nextIndex = PACKAGE_STATUS_PIPELINE.indexOf(nextStatus as typeof PACKAGE_STATUS_PIPELINE[number]);
+    const ordersToAdvance = knownOrders.filter((order) => {
+      if (order.status === "pago") return false;
+      const currentIndex = PACKAGE_STATUS_PIPELINE.indexOf(order.status as typeof PACKAGE_STATUS_PIPELINE[number]);
+      return currentIndex >= 0 && currentIndex < nextIndex;
+    });
+    const ordersToAdvanceIds = new Set(ordersToAdvance.map((order) => order.id));
+    const ordersAfterAdvance = allOrders.map((order) =>
+      ordersToAdvanceIds.has(order.id) ? { ...order, status: nextStatus as Order["status"] } : order,
+    );
+    const progressOrder = knownOrders.find((order) => {
+      const effectiveStatus = ordersToAdvanceIds.has(order.id) ? nextStatus : order.status;
+      const effectiveIndex = PACKAGE_STATUS_PIPELINE.indexOf(effectiveStatus as typeof PACKAGE_STATUS_PIPELINE[number]);
+      return effectiveIndex >= nextIndex;
+    });
+    const nextPackageStatus = progressOrder
+      ? getPackageStatusAfterOrderAdvance(pacote, ordersAfterAdvance, progressOrder.id, nextStatus)
+      : null;
+    if (!nextPackageStatus) {
+      alert("Todos os pedidos do pacote precisam estar em um status válido para avançar.");
+      return;
+    }
+
+    if (!confirm(`Avançar Pacote para "${label}"?`)) return;
+
+    try {
+
+      await withAdvanceBusy(async () => {
+        await Promise.all(ordersToAdvance.map((order) => updatePedidoStatus(order.id, nextStatus)));
+        // Update pacote status
+        await updatePacoteStatus(pacote.id, nextPackageStatus);
+
+        setAllOrders((prev) => prev.map((order) =>
+          ordersToAdvanceIds.has(order.id)
+            ? { ...order, status: nextStatus as Order["status"] }
+            : order,
+        ));
+        if (nextStatus !== "pago") {
+          setOrders((prev) => prev.filter((order) => !ordersToAdvanceIds.has(order.id)));
+        }
+        setPacotes((prev) =>
+          prev.map((p) => p.id === pacote.id ? { ...p, status: nextPackageStatus } : p)
+        );
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erro ao atualizar status. Verifique manualmente.";
       console.error("Erro ao atualizar status:", msg);
@@ -594,6 +817,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                         <div className="flex items-center gap-2">
                           {PACKAGE_PREV_STATUS[pacote.status] && (
                             <button
+                              type="button"
                               className="px-3 py-1.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded-md cursor-pointer hover:bg-gray-300 transition-colors"
                               onClick={(e) => { e.stopPropagation(); handleRevertPackage(pacote); }}
                             >
@@ -602,6 +826,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                           )}
                           {nextAction && (
                             <button
+                              type="button"
                               className="px-3 py-1.5 text-xs font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity"
                               onClick={(e) => { e.stopPropagation(); handleAdvancePackage(pacote); }}
                             >
@@ -696,32 +921,11 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                                 <div className="flex gap-1.5 mt-2">
                                   {PACKAGE_NEXT_STATUS[order.status] && order.status !== "entregue" && (
                                     <button
+                                      type="button"
                                       className="px-2 py-1 text-[11px] font-semibold bg-accent text-white rounded cursor-pointer hover:opacity-85 transition-opacity border-none"
-                                      onClick={async (e) => {
+                                      onClick={(e) => {
                                         e.stopPropagation();
-                                        const next = PACKAGE_NEXT_STATUS[order.status];
-                                        if (!next) return;
-                                        const label = PACKAGE_STATUS_ACTION_LABELS[order.status] || "próximo status";
-                                        if (!confirm(`Avançar pedido ${order.id} para "${label}"?`)) return;
-                                        try {
-                                          await updatePedidoStatus(order.id, next);
-                                          // Also update the package status if this order is the last to advance
-                                          const pkgIdx = pacotes.findIndex((p) => p.pedido_ids.includes(order.id));
-                                          if (pkgIdx >= 0) {
-                                            const pkg = pacotes[pkgIdx];
-                                            const allAdvanced = pkg.pedido_ids.every((id) => {
-                                              const o = allOrders.find((o2) => o2.id === id);
-                                              return !o || o.id === order.id || PACKAGE_NEXT_STATUS[o.status] !== next;
-                                            });
-                                            if (allAdvanced && PACKAGE_NEXT_STATUS[pkg.status] === next) {
-                                              await updatePacoteStatus(pkg.id, next);
-                                            }
-                                          }
-                                          loadOrders();
-                                        } catch (err) {
-                                          console.error("Erro ao avançar pedido:", err);
-                                          alert("Erro ao atualizar status.");
-                                        }
+                                        void handleAdvanceOrder(order, pacote);
                                       }}
                                     >
                                       → {PACKAGE_STATUS_ACTION_LABELS[order.status] || PACKAGE_NEXT_STATUS[order.status]}
@@ -791,9 +995,25 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
       {sharing && (() => {
         const item = sharing.items[sharing.index];
         const isLast = sharing.index === sharing.items.length - 1;
-        const img = getProductImage(item.yupooUrl, item.nome, item.feminino && item.genero === "Feminino");
+        const imageStateReady = preparedImage.key === sharingImageKey;
+        const imageLoading = !imageStateReady || preparedImage.loading;
+        const file = imageStateReady ? preparedImage.file : null;
+        const imageUnsupported = imageStateReady && Boolean(preparedImage.error || imageShareUnsupportedKey === sharingImageKey);
+        const showUnsupportedWarning = Boolean(sharingImageUrl) && !imageLoading && imageUnsupported;
+        const currentItemShared = sharedItemIndex === sharing.index;
+        const canProceed = currentItemShared && !imageLoading && !sharingBusy && !advanceBusy;
         return (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSharing(null)}>
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => {
+              if (advanceBusyRef.current || sharingBusy) return;
+              setSharing(null);
+              setSharingError(null);
+              setSharingStatus(null);
+              setSharedItemIndex(null);
+              setImageShareUnsupportedKey(null);
+            }}
+          >
             <div className="bg-card-bg rounded-xl shadow-2xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
               <div className="text-center mb-2">
                 <span className="text-xs font-semibold text-text-muted">
@@ -811,8 +1031,8 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
 
               {/* Item card */}
               <div className="flex gap-3 mb-4">
-                {img && (
-                  <img src={img} alt={item.nome} width={80} height={80} className="w-20 h-20 object-cover rounded flex-shrink-0" />
+                {sharingImageUrl && (
+                  <img src={sharingImageUrl} alt={item.nome} width={80} height={80} className="w-20 h-20 object-cover rounded flex-shrink-0" />
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-sm mb-1">{item.nome}</p>
@@ -820,32 +1040,67 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                 </div>
               </div>
 
+              {!sharingImageUrl && <p className="text-xs text-text-muted mb-4">Sem imagem disponível; será compartilhado apenas o texto.</p>}
+              {showUnsupportedWarning && <p className="text-xs text-text-muted mb-4">Seu navegador não permite anexar a foto. Use a imagem do produto separadamente.</p>}
+              {imageLoading && <p className="text-xs text-text-muted mb-4" role="status">Preparando imagem...</p>}
+              <p className="text-xs text-text-muted mb-4">O status só muda após sua confirmação.</p>
+              {sharingStatus && <p className="text-sm text-green-700 mb-4" role="status">{sharingStatus}</p>}
+              {sharingError && <p className="text-sm text-red-600 mb-4" role="alert">{sharingError}</p>}
+
               {/* Actions */}
               <div className="flex flex-col gap-2">
                 <button
+                  type="button"
                   className="w-full px-4 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent/90 transition-colors cursor-pointer"
-                  onClick={() => shareItem(item)}
+                  onClick={() => { void handleShareItem(item); }}
+                  disabled={imageLoading || sharingBusy || advanceBusy}
                 >
-                  {typeof navigator.share === "function" ? "📤 Compartilhar" : "📋 Copiar"}
+                  {imageLoading ? "Preparando imagem..." : file && !imageUnsupported ? "Compartilhar foto e texto" : "Compartilhar texto"}
                 </button>
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     className="flex-1 px-4 py-2.5 bg-gray-200 text-text-main rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
-                    onClick={() => setSharing(null)}
+                    onClick={() => {
+                      if (advanceBusyRef.current || sharingBusy) return;
+                      setSharing(null);
+                      setSharingError(null);
+                      setSharingStatus(null);
+                      setSharedItemIndex(null);
+                      setImageShareUnsupportedKey(null);
+                    }}
+                    disabled={advanceBusy || sharingBusy}
                   >
                     Cancelar
                   </button>
                   <button
+                    type="button"
                     className="flex-1 px-4 py-2.5 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors cursor-pointer"
-                    onClick={() => {
-                      if (isLast) {
-                        sharing.onDone();
-                      } else {
+                    disabled={!canProceed}
+                    onClick={async () => {
+                      if (advanceBusyRef.current || sharingBusy || advanceBusy || imageLoading || !currentItemShared) return;
+                      if (!isLast) {
                         setSharing({ ...sharing, index: sharing.index + 1 });
+                        setSharedItemIndex(null);
+                        setSharingStatus(null);
+                        setSharingError(null);
+                        setImageShareUnsupportedKey(null);
+                        return;
+                      }
+
+                      setSharingError(null);
+                      try {
+                        await sharing.onDone();
+                        setSharing(null);
+                        setSharingStatus(null);
+                        setSharedItemIndex(null);
+                        setImageShareUnsupportedKey(null);
+                      } catch {
+                        setSharingError("Erro ao atualizar status. Tente novamente.");
                       }
                     }}
                   >
-                    {isLast ? "✓ Finalizar" : "Próximo →"}
+                    {isLast ? "Confirmar envio" : "Já enviei esta camisa"}
                   </button>
                 </div>
               </div>

@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { getPedidos, updatePedidoStatus, getPacotes, createPacote, updatePacoteStatus, updatePacoteFinanceiro, removePedidoFromPacote, deletePacote, getProdutos } from "./lib/db";
 import type { Order, OrderItem } from "./types";
 import type { Pacote, DbProduto } from "./lib/db";
-import { montarMensagemItem, formatarMoeda, TAMANHO_FORNECEDOR, yupooThumbnailUrl, getCachedImageUrl } from "./types";
+import { montarMensagemItem, formatarMoeda, yupooThumbnailUrl, getCachedImageUrl } from "./types";
 import type { LojaConfig } from "./types";
-import { PAYMENT_LABELS_SHORT, TIPO_ENGLISH, PACKAGE_STATUS_PIPELINE, PACKAGE_STATUS_LABELS, PACKAGE_NEXT_STATUS, PACKAGE_PREV_STATUS, PACKAGE_PREV_ACTION_LABELS, PACKAGE_STATUS_ACTION_LABELS, getMPFeeRate } from "./lib/status";
+import { PAYMENT_LABELS_SHORT, PACKAGE_STATUS_PIPELINE, PACKAGE_STATUS_LABELS, PACKAGE_NEXT_STATUS, PACKAGE_PREV_STATUS, PACKAGE_PREV_ACTION_LABELS, PACKAGE_STATUS_ACTION_LABELS, getMPFeeRate } from "./lib/status";
 
 type Tab = "montar" | "pacotes" | "historico";
 type Step = "select" | "review";
@@ -362,8 +362,6 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
               <div className="p-4">
                 <div className="flex flex-col gap-3">
                   {order.itens.map((item, i) => {
-                    const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
-                    const version = item.feminino && item.genero === "Feminino" ? `${tipoEn} WOMENS` : `${tipoEn}`;
                     const img = getProductImage(item.yupooUrl, item.nome, item.feminino && item.genero === "Feminino");
                     return (
                       <div key={i} className="p-3 bg-bg-base rounded-md">
@@ -385,15 +383,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                                 Copiar
                               </button>
                             </div>
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted mt-1">
-                              <span>Size: {TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho}</span>
-                              <span>Version: {version}</span>
-                            </div>
-                            {item.personalizado && (
-                              <div className="text-xs text-accent font-semibold mt-1">
-                                Name: {item.nomePersonalizado} / Number: {item.numeroPersonalizado}
-                              </div>
-                            )}
+                            <div className="text-xs text-text-muted mt-1 whitespace-pre-line">{montarMensagemItem(item)}</div>
                           </div>
                         </div>
                       </div>
@@ -801,9 +791,6 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
       {sharing && (() => {
         const item = sharing.items[sharing.index];
         const isLast = sharing.index === sharing.items.length - 1;
-        const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
-        const version = item.feminino && item.genero === "Feminino" ? `${tipoEn} WOMENS` : `${tipoEn}`;
-        const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
         const img = getProductImage(item.yupooUrl, item.nome, item.feminino && item.genero === "Feminino");
         return (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSharing(null)}>
@@ -829,16 +816,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-sm mb-1">{item.nome}</p>
-                  <div className="text-xs text-text-muted space-y-0.5">
-                    <p>Version: {version}</p>
-                    <p>Size: {sizeForSupplier}</p>
-                    {item.personalizado && (
-                      <>
-                        <p>Name: {item.nomePersonalizado}</p>
-                        <p>Number: {item.numeroPersonalizado}</p>
-                      </>
-                    )}
-                  </div>
+                  <div className="text-xs text-text-muted whitespace-pre-line">{montarMensagemItem(item)}</div>
                 </div>
               </div>
 

@@ -579,22 +579,26 @@ export function montarMensagemPagamento(order: Order): string {
   return msg;
 }
 
-import { TIPO_ENGLISH } from "./lib/status";
-
 export function montarMensagemItem(item: OrderItem): string {
-  const tipoEn = TIPO_ENGLISH[item.tipo] || item.tipo;
-  const version = item.feminino && item.genero === "Feminino"
-    ? `${tipoEn} WOMENS`
-    : `${tipoEn}`;
-  const sizeForSupplier = TAMANHO_FORNECEDOR[item.tamanho] || item.tamanho;
+  const tamanhoBR = tamanhoCliente(item.tamanho);
+  const tamanhoSolicitado = ({
+    P: "P",
+    M: "M",
+    G: "G",
+    GG: "XL",
+    G1: "2XL",
+    G2: "3XL",
+    G3: "4XL",
+  } as Record<string, string>)[tamanhoBR] ?? item.tamanho;
 
   const lines: string[] = [];
-  lines.push(`Version: ${version}`);
-  lines.push(`Size: ${sizeForSupplier}`);
   if (item.personalizado) {
-    lines.push(`Name: ${item.nomePersonalizado}`);
-    lines.push(`Number: ${item.numeroPersonalizado}`);
+    lines.push(`Nome: ${item.nomePersonalizado}`);
+    lines.push(`Número: ${item.numeroPersonalizado}`);
   }
+  lines.push(`Modelo: ${item.tipo}`);
+  lines.push(`Tamanho: ${tamanhoSolicitado}`);
+  lines.push(item.genero);
   return lines.join("\n");
 }
 

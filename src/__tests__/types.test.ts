@@ -402,48 +402,48 @@ describe("montarMensagemPacote", () => {
 
   it("includes order header and item details for single order", () => {
     const msg = montarMensagemPacote([makeOrder()]);
-    expect(msg).toContain("Size: M");
-    expect(msg).toContain("Version: Fan");
+    expect(msg).toContain("Tamanho: M");
+    expect(msg).toContain("Modelo: Torcedor");
+    expect(msg).toContain("Masculino");
   });
 
   it("maps tamanho via TAMANHO_FORNECEDOR", () => {
     const item = { ...baseItem, tamanho: "G2" };
     const order = makeOrder({ itens: [item] });
     const msg = montarMensagemPacote([order]);
-    expect(msg).toContain(`Size: ${TAMANHO_FORNECEDOR["G2"]}`);
+    expect(msg).toContain(`Tamanho: ${TAMANHO_FORNECEDOR["G2"]}`);
   });
 
   it("falls back to original tamanho when not in TAMANHO_FORNECEDOR", () => {
     const item = { ...baseItem, tamanho: "XXL" };
     const order = makeOrder({ itens: [item] });
     const msg = montarMensagemPacote([order]);
-    expect(msg).toContain("Size: XXL");
+    expect(msg).toContain("Tamanho: XXL");
   });
 
-  it("includes WOMANS version when feminino is true and genero is Feminino", () => {
+  it("includes feminine gender in the last line", () => {
     const item = { ...baseItem, feminino: true, genero: "Feminino" };
     const order = makeOrder({ itens: [item] });
     const msg = montarMensagemPacote([order]);
-    expect(msg).toContain("Version: Fan WOMENS");
+    expect(msg).toContain("Modelo: Torcedor\nTamanho: M\nFeminino");
   });
 
-  it("includes personalization details when item is personalized", () => {
+  it("includes the exact personalized format", () => {
     const item = {
       ...baseItem,
       personalizado: true,
-      nomePersonalizado: "RAFAEL",
-      numeroPersonalizado: "10",
+      nomePersonalizado: "Raul",
+      numeroPersonalizado: "9",
     };
     const order = makeOrder({ itens: [item] });
     const msg = montarMensagemPacote([order]);
-    expect(msg).toContain("Name: RAFAEL");
-    expect(msg).toContain("Number: 10");
+    expect(msg).toContain("Nome: Raul\nNúmero: 9\nModelo: Torcedor\nTamanho: M\nMasculino");
   });
 
   it("ommits personalization when not applicable", () => {
     const msg = montarMensagemPacote([makeOrder()]);
-    expect(msg).not.toContain("Name:");
-    expect(msg).not.toContain("Number:");
+    expect(msg).not.toContain("Nome:");
+    expect(msg).not.toContain("Número:");
   });
 
   it("handles multiple orders", () => {
@@ -460,11 +460,11 @@ describe("montarMensagemPacote", () => {
     expect(msg).not.toContain("Link:");
   });
 
-  it("includes the Retrô mapping (Retro) for tipo", () => {
+  it("preserves the accent in Retrô", () => {
     const item = { ...baseItem, tipo: "Retrô" };
     const order = makeOrder({ itens: [item] });
     const msg = montarMensagemPacote([order]);
-    expect(msg).toContain("Version: Retro");
+    expect(msg).toContain("Modelo: Retrô");
   });
 
   it("does not include resumo section", () => {
@@ -489,48 +489,65 @@ describe("montarMensagemItem", () => {
     feminino: false,
   };
 
-  it("formats basic item with Version and Size", () => {
+  it("formats a non-personalized item in Portuguese", () => {
     const msg = montarMensagemItem(baseItem);
-    expect(msg).toBe("Version: Fan\nSize: M");
+    expect(msg).toBe("Modelo: Torcedor\nTamanho: M\nMasculino");
   });
 
   it("maps tamanho via TAMANHO_FORNECEDOR", () => {
     const item = { ...baseItem, tamanho: "GG" };
-    expect(montarMensagemItem(item)).toContain(`Size: ${TAMANHO_FORNECEDOR["GG"]}`);
+    expect(montarMensagemItem(item)).toContain(`Tamanho: ${TAMANHO_FORNECEDOR["GG"]}`);
   });
 
-  it("includes WOMENS version when feminino and genero is Feminino", () => {
+  it.each([
+    ["P", "P"],
+    ["G", "G"],
+    ["GG", "XL"],
+    ["G1", "2XL"],
+    ["G2", "3XL"],
+    ["G3", "4XL"],
+    ["S", "P"],
+    ["L", "G"],
+    ["XL", "XL"],
+    ["2XL", "2XL"],
+    ["3XL", "3XL"],
+    ["4XL", "4XL"],
+  ])("maps tamanho %s to %s", (tamanho, esperado) => {
+    const item = { ...baseItem, tamanho };
+    expect(montarMensagemItem(item)).toContain(`Tamanho: ${esperado}`);
+  });
+
+  it("includes feminine gender in the last line", () => {
     const item = { ...baseItem, feminino: true, genero: "Feminino" };
-    expect(montarMensagemItem(item)).toContain("Version: Fan WOMENS");
+    expect(montarMensagemItem(item)).toBe("Modelo: Torcedor\nTamanho: M\nFeminino");
   });
 
-  it("does not include WOMENS when feminino but genero is not Feminino", () => {
+  it("preserves an unknown uppercase tamanho", () => {
+    const item = { ...baseItem, tamanho: "XXL" };
+    expect(montarMensagemItem(item)).toContain("Tamanho: XXL");
+  });
+
+  it("does not include personalization when not applicable", () => {
     const item = { ...baseItem, feminino: true, genero: "Masculino" };
-    expect(montarMensagemItem(item)).toContain("Version: Fan");
-    expect(montarMensagemItem(item)).not.toContain("WOMENS");
+    const msg = montarMensagemItem(item);
+    expect(msg).not.toContain("Nome:");
+    expect(msg).not.toContain("Número:");
   });
 
   it("includes personalization when item is personalized", () => {
     const item = {
       ...baseItem,
       personalizado: true,
-      nomePersonalizado: "Jorge",
-      numeroPersonalizado: "23",
+      nomePersonalizado: "Raul",
+      numeroPersonalizado: "9",
     };
     const msg = montarMensagemItem(item);
-    expect(msg).toContain("Name: Jorge");
-    expect(msg).toContain("Number: 23");
+    expect(msg).toBe("Nome: Raul\nNúmero: 9\nModelo: Torcedor\nTamanho: M\nMasculino");
   });
 
-  it("omits personalization when not applicable", () => {
-    const msg = montarMensagemItem(baseItem);
-    expect(msg).not.toContain("Name:");
-    expect(msg).not.toContain("Number:");
-  });
-
-  it("maps Retrò to Retro", () => {
+  it("preserves the accent in Retrô", () => {
     const item = { ...baseItem, tipo: "Retrô" };
-    expect(montarMensagemItem(item)).toContain("Version: Retro");
+    expect(montarMensagemItem(item)).toContain("Modelo: Retrô");
   });
 });
 

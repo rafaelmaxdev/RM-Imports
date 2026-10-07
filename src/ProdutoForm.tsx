@@ -626,7 +626,7 @@ export default function ProdutoForm({
     setPrecoCustomizado(p.preco_customizado != null ? String(p.preco_customizado) : "");
     setEditandoId(fp.id);
 
-    const locMatch = fp.nome.match(/\((Casa|Fora|Terceira)\)/);
+    const locMatch = fp.nome.match(/\((Casa|Fora|Terceira|Quarta)\)/);
     const loc = locMatch ? locMatch[1] : "";
     setLocalizacao(loc);
 
@@ -794,6 +794,7 @@ export default function ProdutoForm({
           <option value="Casa">Casa</option>
           <option value="Fora">Fora</option>
           <option value="Terceira">Terceira</option>
+          <option value="Quarta">Quarta</option>
         </select>
       </div>
 

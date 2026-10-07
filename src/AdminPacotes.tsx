@@ -1001,7 +1001,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
         const imageUnsupported = imageStateReady && Boolean(preparedImage.error || imageShareUnsupportedKey === sharingImageKey);
         const showUnsupportedWarning = Boolean(sharingImageUrl) && !imageLoading && imageUnsupported;
         const currentItemShared = sharedItemIndex === sharing.index;
-        const canProceed = currentItemShared && !imageLoading && !sharingBusy && !advanceBusy;
+        const canProceed = !sharingBusy && !advanceBusy;
         return (
           <div
             className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
@@ -1043,7 +1043,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
               {!sharingImageUrl && <p className="text-xs text-text-muted mb-4">Sem imagem disponível; será compartilhado apenas o texto.</p>}
               {showUnsupportedWarning && <p className="text-xs text-text-muted mb-4">Seu navegador não permite anexar a foto. Use a imagem do produto separadamente.</p>}
               {imageLoading && <p className="text-xs text-text-muted mb-4" role="status">Preparando imagem...</p>}
-              <p className="text-xs text-text-muted mb-4">O status só muda após sua confirmação.</p>
+              <p className="text-xs text-text-muted mb-4">O status só muda após sua confirmação. Se já enviou por outro meio, use o botão abaixo para confirmar.</p>
               {sharingStatus && <p className="text-sm text-green-700 mb-4" role="status">{sharingStatus}</p>}
               {sharingError && <p className="text-sm text-red-600 mb-4" role="alert">{sharingError}</p>}
 
@@ -1075,10 +1075,12 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
                   </button>
                   <button
                     type="button"
-                    className="flex-1 px-4 py-2.5 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors cursor-pointer"
+                    className="flex-1 px-4 py-2.5 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!canProceed}
+                    aria-busy={advanceBusy}
                     onClick={async () => {
-                      if (advanceBusyRef.current || sharingBusy || advanceBusy || imageLoading || !currentItemShared) return;
+                      if (advanceBusyRef.current || sharingBusy || advanceBusy) return;
+                      if (!currentItemShared && !confirm("Você confirma que já enviou a foto e os detalhes desta camisa ao fornecedor por outro meio?")) return;
                       if (!isLast) {
                         setSharing({ ...sharing, index: sharing.index + 1 });
                         setSharedItemIndex(null);

@@ -50,6 +50,7 @@ const PHONE = "5581999999999";
 const PHONE_INPUT = "(81) 99999-9999";
 const WRONG_PHONE_INPUT = "(81) 88888-8888";
 const PUBLIC_ORDER_FIELDS = "id,data,hora,itens,total,status,endereco,payment_method,mp_preference_id,pronta_entrega,created_at,telefone_normalizado,cupom_codigo,cupom_desconto";
+const PUBLIC_ORDER_FIELDS_WITH_HISTORY = `${PUBLIC_ORDER_FIELDS},status_history`;
 
 const orderRow: Record<string, unknown> = {
   id: ORDER_ID,
@@ -58,7 +59,7 @@ const orderRow: Record<string, unknown> = {
   itens: JSON.stringify([{ nome: "Camisa", quantidade: 1, preco: 100 }]),
   total: 100,
   status: "pago",
-  endereco: JSON.stringify({ cidade: "Recife" }),
+  endereco: JSON.stringify({ cidade: "Recife", cpf: "52998224725", accessToken: "address-secret" }),
   payment_method: "pix",
   mp_preference_id: "preference-test",
   pronta_entrega: false,
@@ -66,12 +67,24 @@ const orderRow: Record<string, unknown> = {
   telefone_normalizado: PHONE,
   cupom_codigo: "PROMO10",
   cupom_desconto: 10,
+  status_history: [{
+    status: "pago",
+    from_status: "pendente",
+    changed_at: "2026-10-07T13:01:00.000Z",
+    source: "mercado_pago",
+    buyer: "private-data",
+    cpf: "52998224725",
+    accessToken: "history-secret",
+  }],
+  cpf: "52998224725",
+  accessToken: "raw-order-secret",
 };
 
 let selectedFields: string[];
 let queriedTables: string[];
 let filters: [string, unknown][];
 let row: Record<string, unknown> | null;
+let queryResults: { data: Record<string, unknown> | null; error: unknown }[];
 
 type FakeQuery = {
   select: ReturnType<typeof vi.fn>;
@@ -89,7 +102,7 @@ function makeQuery(): FakeQuery {
     filters.push([field, value]);
     return query;
   });
-  query.maybeSingle = vi.fn().mockResolvedValue({ data: row, error: null });
+  query.maybeSingle = vi.fn().mockImplementation(async () => queryResults.shift() ?? { data: row, error: null });
   return query;
 }
 
@@ -142,7 +155,7 @@ async function invoke(options: RequestOptions = {}) {
 
 function expectPublicRead() {
   expect(queriedTables).toEqual(["pedidos"]);
-  expect(selectedFields).toEqual([PUBLIC_ORDER_FIELDS]);
+  expect(selectedFields).toEqual([PUBLIC_ORDER_FIELDS_WITH_HISTORY]);
   expect(selectedFields.every((fields) => !/\*|email|cpf|buyer|secret|nome_cliente/i.test(fields))).toBe(true);
   expect(rpcMock).not.toHaveBeenCalled();
   expect(fetchMock).not.toHaveBeenCalled();
@@ -153,6 +166,7 @@ beforeEach(() => {
   queriedTables = [];
   filters = [];
   row = { ...orderRow };
+  queryResults = [];
   fromMock.mockReset();
   rpcMock.mockReset();
   consumeRateLimitMock.mockReset().mockResolvedValue(true);
@@ -183,16 +197,46 @@ describe("GET /api/order", () => {
     expectPublicRead();
   });
 
-  it("authorizes the correct phone header and returns only public coupon fields", async () => {
+  it("authorizes the correct phone header and returns public history fields", async () => {
     const result = await invoke({ headers: { "x-order-phone": PHONE_INPUT } });
     const body = result.body as Record<string, unknown>;
 
     expect(result.statusCode).toBe(200);
     expect(body.cupom_codigo).toBe("PROMO10");
     expect(body.cupom_desconto).toBe(10);
+    expect(body.status_history).toEqual([{
+      status: "pago",
+      from_status: "pendente",
+      changed_at: "2026-10-07T13:01:00.000Z",
+      source: "mercado_pago",
+    }]);
     expect(body).not.toHaveProperty("telefone_normalizado");
     expect(body).not.toHaveProperty("email");
     expect(body).not.toHaveProperty("cpf");
+    expect(JSON.stringify(body)).not.toContain("52998224725");
+    expect(JSON.stringify(body)).not.toContain("secret");
+    expectPublicRead();
+  });
+
+  it("keeps only allowed status sources and no arbitrary history fields", async () => {
+    row = {
+      ...orderRow,
+      status_history: [
+        { status: "pago", changed_at: "2026-10-07T13:01:00.000Z", source: "status_transition", cpf: "private" },
+        { status: "em_producao", changed_at: "2026-10-08T13:01:00.000Z", source: "store_reported", token: "private" },
+        { status: "a_caminho", changed_at: "2026-10-09T13:01:00.000Z", source: "unexpected", secret: "private" },
+      ],
+    };
+
+    const result = await invoke({ headers: { "x-order-phone": PHONE_INPUT } });
+
+    expect(result.statusCode).toBe(200);
+    expect((result.body as Record<string, unknown>).status_history).toEqual([
+      { status: "pago", changed_at: "2026-10-07T13:01:00.000Z", source: "status_transition" },
+      { status: "em_producao", changed_at: "2026-10-08T13:01:00.000Z", source: "store_reported" },
+      { status: "a_caminho", changed_at: "2026-10-09T13:01:00.000Z" },
+    ]);
+    expect(JSON.stringify(result.body)).not.toMatch(/private|unexpected/);
     expectPublicRead();
   });
 
@@ -284,5 +328,32 @@ describe("GET /api/order", () => {
     expect(body).not.toHaveProperty("telefone_normalizado");
     expect(filters).toContainEqual(["mp_payment_id", "123456789"]);
     expectPublicRead();
+  });
+
+  it("retries without history when the database does not have the column", async () => {
+    const legacyRow = { ...orderRow };
+    delete legacyRow.status_history;
+    queryResults = [
+      { data: null, error: { code: "42703", message: "column pedidos.status_history does not exist" } },
+      { data: legacyRow, error: null },
+    ];
+
+    const result = await invoke({ headers: { "x-order-phone": PHONE_INPUT } });
+    const body = result.body as Record<string, unknown>;
+
+    expect(result.statusCode).toBe(200);
+    expect(body).not.toHaveProperty("status_history");
+    expect(selectedFields).toEqual([PUBLIC_ORDER_FIELDS_WITH_HISTORY, PUBLIC_ORDER_FIELDS]);
+    expect(filters).toEqual([["id", ORDER_ID], ["id", ORDER_ID]]);
+  });
+
+  it("does not retry for unrelated database errors", async () => {
+    queryResults = [{ data: null, error: { code: "42501", message: "permission denied" } }];
+
+    const result = await invoke({ headers: { "x-order-phone": PHONE_INPUT } });
+
+    expect(result.statusCode).toBe(404);
+    expect(selectedFields).toEqual([PUBLIC_ORDER_FIELDS_WITH_HISTORY]);
+    expect(filters).toEqual([["id", ORDER_ID]]);
   });
 });

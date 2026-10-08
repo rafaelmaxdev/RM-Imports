@@ -2,7 +2,7 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 import { DEFAULT_CONFIG } from "../types";
 import { getCached, isCacheStale, setCache } from "../lib/cache";
 import { supabase } from "../lib/supabase";
-import { formatPedidoDateTime, getLojaConfig, parseImageUrls, updatePedidoAdminOrder, updatePedidoStatus } from "../lib/db";
+import { formatPedidoDateTime, getLojaConfig, getPedidos, parseImageUrls, updatePedidoAdminOrder, updatePedidoStatus } from "../lib/db";
 
 vi.mock("../lib/cache", () => ({
   getCached: vi.fn(),
@@ -181,5 +181,45 @@ describe("updatePedidoStatus", () => {
 
     expect(update).toHaveBeenCalledWith({ status: "pago", admin_payment_exempt: false });
     expect(eq).toHaveBeenCalledWith("id", "pedido-1");
+  });
+});
+
+describe("getPedidos", () => {
+  it("keeps valid status history and normalizes invalid values to an array", async () => {
+    vi.mocked(getCached).mockReturnValue(undefined);
+    const history = [{ status: "pago", from_status: "pendente", changed_at: "2026-10-07T13:01:00.000Z" }];
+    const base = {
+      id: "pedido-1",
+      data: "07/10/2026",
+      hora: "10:00",
+      itens: [],
+      total: 100,
+      status: "pago",
+      endereco: null,
+      payment_method: null,
+      mp_preference_id: null,
+      mp_payment_id: null,
+      admin_order: null,
+      pronta_entrega: null,
+      reposicao: null,
+      created_at: "2026-10-07T13:00:00.000Z",
+    };
+    const order = vi.fn().mockResolvedValue({
+      data: [
+        { ...base, status_history: history },
+        { ...base, id: "pedido-2", status_history: null },
+        { ...base, id: "pedido-3", status_history: { invalid: true } },
+      ],
+      error: null,
+    });
+    vi.mocked(supabase.from).mockReturnValue({
+      select: vi.fn().mockReturnValue({ order }),
+    } as never);
+
+    await expect(getPedidos()).resolves.toMatchObject([
+      { status_history: history },
+      { status_history: [] },
+      { status_history: [] },
+    ]);
   });
 });

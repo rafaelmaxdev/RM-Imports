@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { formatarMoeda } from "./types";
 import { STATUS_CONFIG } from "./lib/status";
-import type { Order } from "./types";
+import type { Order, OrderStatusEvent } from "./types";
 import { getPedidoById } from "./lib/db";
 import {
   getOrderAccessToken,
@@ -20,12 +20,66 @@ import {
   rememberLastTrackedOrder,
 } from "./lib/orderTracking";
 import { getOrderItemPrices } from "./lib/orderItemPrices";
+import { getDeliveryEstimate, getStatusChangeTime } from "./lib/deliveryEstimate";
 
 const STATUS_PRIORITY: Record<string, number> = {
   pendente: 0, pago: 1, enviado_fornecedor: 2, em_producao: 3,
   a_caminho: 4, em_estoque: 5, em_entrega: 6, entregue: 7,
 };
+const TIMELINE_STATUSES = [
+  "pendente", "pago", "em_producao",
+  "a_caminho", "em_estoque", "em_entrega", "entregue",
+] as const;
 const ACCESS_REQUIRED_MESSAGE = "Confirme novamente o telefone da compra.";
+const STATUS_DATE_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Recife",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+function formatStatusDate(changedAt: string | null): string | null {
+  if (!changedAt) return null;
+  const timestamp = Date.parse(changedAt);
+  if (!Number.isFinite(timestamp)) return null;
+
+  const parts = Object.fromEntries(
+    STATUS_DATE_FORMATTER.formatToParts(new Date(timestamp))
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  ) as Record<string, string>;
+  if (!parts.day || !parts.month || !parts.year || !parts.hour || !parts.minute) return null;
+  return `${parts.day}/${parts.month}/${parts.year} às ${parts.hour}:${parts.minute}`;
+}
+
+function formatEstimateDate(date: string): string {
+  const [year, month, day] = date.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function getTimelineSource(
+  history: unknown,
+  status: string,
+  changedAt: string | null,
+): OrderStatusEvent["source"] {
+  if (!changedAt || !Array.isArray(history)) return undefined;
+
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const value = history[index];
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const event = value as { status?: unknown; changed_at?: unknown; source?: unknown };
+    if (event.status !== status || event.changed_at !== changedAt) continue;
+    if (event.source === "mercado_pago" || event.source === "store_reported" || event.source === "status_transition") {
+      return event.source;
+    }
+    return undefined;
+  }
+
+  return undefined;
+}
 
 type PublicOrderResponse = Order & {
   itens: Order["itens"] | string;
@@ -70,6 +124,7 @@ export default function MeusPedidos() {
   const [lembrar, setLembrar] = useState(true);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [toast, setToast] = useState("");
+  const [now, setNow] = useState(() => Date.now());
   const requestGenerationRef = useRef(0);
   const requestInFlightRef = useRef(false);
   const mountedRef = useRef(true);
@@ -82,6 +137,11 @@ export default function MeusPedidos() {
       requestGenerationRef.current += 1;
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   function isCurrentRequest(generation: number): boolean {
@@ -118,19 +178,19 @@ export default function MeusPedidos() {
     setFiltroStatus("");
     setRefreshingId(null);
 
-    const rememberedId = getLastTrackedOrderId();
-    const selectedId = hasOrderQuery ? queryOrderId : rememberedId;
-    const selectedToken = selectedId ? getOrderAccessToken(selectedId) : null;
-    const shouldRemember = !selectedToken || Boolean(selectedId && getPersistentOrderAccessToken(selectedId));
-    setBusca(selectedId ?? "");
-    setLembrar(shouldRemember);
-
     const invalidate = () => {
       if (requestGenerationRef.current === generation) {
         requestGenerationRef.current += 1;
         requestInFlightRef.current = false;
       }
     };
+
+    const rememberedId = getLastTrackedOrderId();
+    const selectedId = hasOrderQuery ? queryOrderId : rememberedId;
+    const selectedToken = selectedId ? getOrderAccessToken(selectedId) : null;
+    const shouldRemember = !selectedToken || Boolean(selectedId && getPersistentOrderAccessToken(selectedId));
+    setBusca(selectedId ?? "");
+    setLembrar(shouldRemember);
 
     if (hasOrderQuery && !queryOrderId) {
       setError("Link de acompanhamento inválido.");
@@ -443,6 +503,28 @@ export default function MeusPedidos() {
         const discountCents = couponCode
           ? (savedDiscountCents && savedDiscountCents > 0 ? savedDiscountCents : 0)
           : (savedDiscountCents && savedDiscountCents > 0 ? savedDiscountCents : calculatedDiscountCents);
+        const statusDates: Record<string, string | null> = {};
+        const statusChangeTimes: Record<string, string | null> = {};
+        TIMELINE_STATUSES.forEach((status) => {
+          const changedAt = getStatusChangeTime(order.status_history, status);
+          statusChangeTimes[status] = changedAt;
+          statusDates[status] = formatStatusDate(changedAt);
+        });
+        const deliveryEstimate = getDeliveryEstimate(order, now);
+        const showForecast = order.status === "a_caminho" && deliveryEstimate !== null;
+        const showForecastUnavailable = order.status === "a_caminho" && deliveryEstimate === null;
+        const isPickup = order.endereco?.deliveryMethod === "retirada";
+        const statusMessage = order.status === "em_producao"
+          ? "Aguardando envio. A previsão de chegada ao estoque será calculada quando o pacote sair."
+          : order.status === "em_estoque"
+            ? isPickup
+              ? "Seu pedido chegou ao estoque. Avisaremos quando estiver disponível para retirada."
+              : "Seu pedido chegou ao estoque. Avisaremos quando sair para entrega."
+            : order.status === "em_entrega"
+              ? isPickup
+                ? "Seu pedido está disponível para retirada."
+                : "Seu pedido saiu para entrega."
+              : null;
         return (
           <div key={order.id} className="bg-card-bg rounded-lg border border-border overflow-hidden mb-4">
             <div className="p-3 sm:p-4 border-b border-border bg-bg-base">
@@ -459,20 +541,60 @@ export default function MeusPedidos() {
 
             {/* Timeline */}
             <div className="px-3 sm:px-4 py-3 space-y-1.5 border-b border-border">
-              {["pendente", "pago", "enviado_fornecedor", "em_producao", "a_caminho", "em_estoque", "em_entrega", "entregue"].map((s) => {
+              {TIMELINE_STATUSES.map((s) => {
                 const done = STATUS_PRIORITY[order.status] >= STATUS_PRIORITY[s];
                 const current = order.status === s;
+                const statusDate = done ? statusDates[s] : null;
+                const source = getTimelineSource(order.status_history, s, statusChangeTimes[s]);
+                const statusDateTitle = source === "mercado_pago"
+                  ? "Horário confirmado pelo Mercado Pago"
+                  : source === "store_reported" && s === "em_producao"
+                    ? "Horário informado pela loja"
+                    : undefined;
                 return (
                   <div key={s} className="flex items-center gap-2">
                     <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${done ? (current ? "bg-accent ring-2 ring-accent/30" : "bg-accent") : "bg-gray-300"}`} />
                     <span className={`text-[10px] sm:text-xs ${done ? "text-text-main font-medium" : "text-text-muted"}`}>
                       {STATUS_CONFIG[s]?.label || s}
+                      {statusDate && <span title={statusDateTitle} className="ml-1 font-normal text-text-muted">({statusDate})</span>}
                     </span>
                   </div>
                 );
               })}
             </div>
 
+            {statusMessage && (
+              <p className="mx-3 my-3 rounded-lg border border-primary/10 bg-primary/5 p-3 text-xs leading-relaxed text-text-muted sm:mx-4">
+                {statusMessage}
+              </p>
+            )}
+
+            {showForecast && deliveryEstimate && (
+              <div className="mx-3 my-3 rounded-lg border border-primary/10 bg-primary/5 p-3 sm:mx-4">
+                <p className="text-xs font-semibold text-primary sm:text-sm">Chegada estimada ao estoque</p>
+                <p className="mt-1 text-sm font-bold text-primary">
+                  De {formatEstimateDate(deliveryEstimate.startDate)} a {formatEstimateDate(deliveryEstimate.endDate)}
+                </p>
+                <p className="mt-1 text-[10px] leading-relaxed text-text-muted sm:text-xs">
+                  21 a 28 dias corridos após o envio.
+                </p>
+                {deliveryEstimate.overdue && (
+                  <p className="mt-1 text-[10px] leading-relaxed text-text-muted sm:text-xs">
+                    A previsão de chegada foi ultrapassada. Estamos acompanhando o transporte.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {showForecastUnavailable && (
+              <p className="mx-3 my-3 rounded-lg border border-primary/10 bg-primary/5 p-3 text-xs leading-relaxed text-text-muted sm:mx-4">
+                Previsão disponível após o registro da data de envio ao estoque.
+              </p>
+            )}
+
+            {order.status === "entregue" && (
+              <p className="border-b border-border px-3 py-3 text-xs font-semibold text-primary sm:px-4">Pedido entregue</p>
+            )}
 
             <div className="p-3 sm:p-4 border-b border-border">
               <h4 className="text-xs sm:text-sm font-semibold text-text-muted mb-2">Itens</h4>
@@ -521,32 +643,32 @@ export default function MeusPedidos() {
               </div>
             </div>
 
-             <div className="flex flex-wrap gap-2 border-t border-border p-3 sm:p-4">
-               <button
-                 type="button"
-                 onClick={() => void copyTrackingLink(order.id)}
-                 className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-               >
-                Copiar link
-              </button>
-              <button
-                type="button"
-                onClick={() => void refreshOrder(order)}
-                disabled={loading || refreshingId === order.id}
-                className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-bg-base disabled:opacity-50"
-              >
-                {refreshingId === order.id ? "Atualizando..." : "Atualizar status"}
-              </button>
-              <button
-                type="button"
-                onClick={() => forgetAccess(order.id)}
-                className="rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50"
-              >
-                Esquecer acesso neste dispositivo
-              </button>
-            </div>
+              <div className="flex flex-wrap gap-2 border-t border-border p-3 sm:p-4">
+                <button
+                  type="button"
+                  onClick={() => void copyTrackingLink(order.id)}
+                  className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                >
+                  Copiar link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void refreshOrder(order)}
+                  disabled={loading || refreshingId === order.id}
+                  className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-bg-base disabled:opacity-50"
+                >
+                  {refreshingId === order.id ? "Atualizando..." : "Atualizar status"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => forgetAccess(order.id)}
+                  className="rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50"
+                >
+                  Esquecer acesso neste dispositivo
+                </button>
+              </div>
 
-            {pode && (
+             {pode && (
               <div className="px-3 sm:px-4 pb-3 sm:pb-4">
                 <a
                   href={`https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=${order.mp_preference_id}`}

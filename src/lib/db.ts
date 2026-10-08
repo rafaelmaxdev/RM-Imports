@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { LojaConfig, OrderItem, OrderAddress, CachedImageMap, EstoqueItem, Cupom } from "../types";
+import type { LojaConfig, OrderItem, OrderAddress, CachedImageMap, EstoqueItem, Cupom, OrderStatusEvent } from "../types";
 import { DEFAULT_CONFIG } from "../types";
 import { getCached, setCache, isCacheStale } from "./cache";
 import { getOrderAccessToken, saveOrderAccessToken } from "./orderAccess";
@@ -320,6 +320,7 @@ export interface DbPedido {
   valor_base_comissao?: number | null;
   comissao_calculada?: number | null;
   credit_release_period?: "immediate" | "14_days" | "30_days" | null;
+  status_history?: OrderStatusEvent[] | null;
   created_at: string;
 }
 
@@ -373,6 +374,7 @@ function dbPedidoToOrder(db: DbPedido): import("../types").Order {
     rev_share_percentual: db.rev_share_percentual ?? undefined,
     valor_base_comissao: db.valor_base_comissao ?? undefined,
     comissao_calculada: db.comissao_calculada ?? undefined,
+    status_history: Array.isArray(db.status_history) ? db.status_history : [],
     created_at: db.created_at,
   };
 }

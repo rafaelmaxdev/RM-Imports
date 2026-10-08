@@ -27,6 +27,19 @@ const supabase = supabaseUrl && serviceRoleKey
 
 const PUBLIC_ORDER_FIELDS = "id,data,hora,itens,total,status,endereco,payment_method,mp_preference_id,pronta_entrega,created_at,telefone_normalizado,cupom_codigo,cupom_desconto";
 const ORDER_ID_PATTERN = /^UL-[A-Z2-9]{8}$/;
+const PUBLIC_RESPONSE_FIELDS = [
+  "id", "data", "hora", "itens", "total", "status", "endereco", "payment_method",
+  "mp_preference_id", "pronta_entrega", "created_at", "cupom_codigo", "cupom_desconto", "status_history",
+] as const;
+const PUBLIC_ADDRESS_FIELDS = [
+  "nome", "rua", "numero", "complemento", "bairro", "cidade", "estado", "cep", "telefone", "deliveryMethod",
+] as const;
+const PUBLIC_STATUS_SOURCES = ["status_transition", "mercado_pago", "store_reported"] as const;
+type PublicStatusSource = typeof PUBLIC_STATUS_SOURCES[number];
+
+function isPublicStatusSource(value: unknown): value is PublicStatusSource {
+  return typeof value === "string" && (PUBLIC_STATUS_SOURCES as readonly string[]).includes(value);
+}
 
 function flattenCandidates(value: unknown): unknown[] {
   return Array.isArray(value) ? value.flatMap(flattenCandidates) : [value];
@@ -53,8 +66,34 @@ function requestedPhone(value: unknown): string | null {
 }
 
 function publicOrder(order: Record<string, unknown>, accessToken: string) {
-  const safe = { ...order };
-  delete safe.telefone_normalizado;
+  const safe = Object.fromEntries(
+    PUBLIC_RESPONSE_FIELDS
+      .filter((field) => field in order)
+      .map((field) => [field, order[field]]),
+  ) as Record<string, unknown>;
+  if ("status_history" in safe) {
+    safe.status_history = Array.isArray(safe.status_history)
+      ? safe.status_history.flatMap((event) => {
+        if (!isRecord(event) || typeof event.status !== "string" || typeof event.changed_at !== "string") return [];
+        return [{
+          status: event.status,
+          ...(typeof event.from_status === "string" ? { from_status: event.from_status } : {}),
+          changed_at: event.changed_at,
+          ...(isPublicStatusSource(event.source) ? { source: event.source } : {}),
+        }];
+      })
+      : [];
+  }
+  if ("endereco" in safe) {
+    const endereco = typeof safe.endereco === "string" ? JSON.parse(safe.endereco) : safe.endereco;
+    safe.endereco = isRecord(endereco)
+      ? Object.fromEntries(
+        PUBLIC_ADDRESS_FIELDS
+          .filter((field) => field in endereco)
+          .map((field) => [field, endereco[field]]),
+      )
+      : endereco;
+  }
   return {
     ...safe,
     itens: typeof safe.itens === "string" ? JSON.parse(safe.itens) : safe.itens,
@@ -65,6 +104,47 @@ function publicOrder(order: Record<string, unknown>, accessToken: string) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isMissingStatusHistoryError(error: unknown): boolean {
+  if (!isRecord(error)) return false;
+  const code = error.code;
+  if (code !== "42703" && code !== 42703 && code !== "PGRST204") return false;
+  return [error.message, error.details, String(error)].some(
+    (value) => typeof value === "string" && value.includes("status_history"),
+  );
+}
+
+async function fetchPublicOrder(
+  column: "id" | "mp_payment_id",
+  value: string,
+): Promise<(Record<string, unknown> & { id: string }) | null> {
+  if (!supabase) return null;
+
+  const query = (fields: string) => supabase
+    .from("pedidos")
+    .select(fields)
+    .eq(column, value)
+    .maybeSingle();
+
+  try {
+    let result = await query(`${PUBLIC_ORDER_FIELDS},status_history`);
+    let legacy = false;
+    if (result.error && isMissingStatusHistoryError(result.error)) {
+      legacy = true;
+      result = await query(PUBLIC_ORDER_FIELDS);
+    }
+    const data = result.data as unknown;
+    if (result.error || !data || !isRecord(data)) return null;
+    if (legacy) {
+      const legacyOrder = { ...data };
+      delete legacyOrder.status_history;
+      return legacyOrder as Record<string, unknown> & { id: string };
+    }
+    return data as Record<string, unknown> & { id: string };
+  } catch {
+    return null;
+  }
 }
 
 async function reconcilePendingPayment(order: Record<string, unknown>) {
@@ -223,11 +303,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (!phone) return res.status(400).json({ error: "Informe o telefone usado no pedido." });
 
-    const { data: order } = await supabase
-      .from("pedidos")
-      .select(PUBLIC_ORDER_FIELDS)
-      .eq("mp_payment_id", payment)
-      .maybeSingle();
+    const order = await fetchPublicOrder("mp_payment_id", payment);
 
     if (!order || order.telefone_normalizado !== phone) {
       return res.status(404).json({ error: "Nenhum pedido encontrado com esses dados." });
@@ -260,11 +336,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Informe o telefone usado no pedido." });
   }
 
-  const { data: order } = await supabase
-    .from("pedidos")
-    .select(PUBLIC_ORDER_FIELDS)
-    .eq("id", id)
-    .maybeSingle();
+  const order = await fetchPublicOrder("id", id);
 
   if (!order || (!tokenIsValid && order.telefone_normalizado !== phone)) {
     return res.status(404).json({ error: "Pedido não encontrado." });

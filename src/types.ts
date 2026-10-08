@@ -80,6 +80,14 @@ export interface Order {
   credit_release_period?: string;
   created_at?: string;
   orderAccessToken?: string;
+  status_history?: OrderStatusEvent[];
+}
+
+export interface OrderStatusEvent {
+  status: Order["status"];
+  from_status?: Order["status"];
+  changed_at: string;
+  source?: "status_transition" | "mercado_pago" | "store_reported";
 }
 
 export interface EstoqueItem {

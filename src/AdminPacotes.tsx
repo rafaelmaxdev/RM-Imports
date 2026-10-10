@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { getPedidos, updatePedidoStatus, getPacotes, createPacote, updatePacoteStatus, updatePacoteFinanceiro, removePedidoFromPacote, deletePacote, getProdutos } from "./lib/db";
 import type { Order, OrderItem } from "./types";
 import type { Pacote, DbProduto } from "./lib/db";
@@ -7,6 +8,7 @@ import type { LojaConfig } from "./types";
 import { PAYMENT_LABELS_SHORT, PACKAGE_STATUS_PIPELINE, PACKAGE_STATUS_LABELS, PACKAGE_NEXT_STATUS, PACKAGE_PREV_STATUS, PACKAGE_PREV_ACTION_LABELS, PACKAGE_STATUS_ACTION_LABELS, getMPFeeRate } from "./lib/status";
 import { getPackageStatusAfterOrderAdvance } from "./lib/packageProgress";
 import { prepareSupplierImage, shareSupplierItem } from "./lib/supplierShare";
+import useBodyScrollLock from "./hooks/useBodyScrollLock";
 
 type Tab = "montar" | "pacotes" | "historico";
 type Step = "select" | "review";
@@ -53,16 +55,73 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
   });
   const [advanceBusy, setAdvanceBusy] = useState(false);
   const advanceBusyRef = useRef(false);
+  const sharingBusyRef = useRef(false);
+  const sharingModalRef = useRef<HTMLDivElement | null>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
+  const sharingOpen = Boolean(sharing);
 
-  // Lock body scroll when sharing modal is open
+  useBodyScrollLock(Boolean(sharing));
+
+  const closeSharing = useCallback(() => {
+    if (advanceBusyRef.current || sharingBusyRef.current) return;
+    setSharing(null);
+    setSharingError(null);
+    setSharingStatus(null);
+    setSharedItemIndex(null);
+    setImageShareUnsupportedKey(null);
+  }, []);
+
   useEffect(() => {
-    if (sharing) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
+    sharingBusyRef.current = sharingBusy;
+  }, [sharingBusy]);
+
+  useEffect(() => {
+    if (!sharingOpen) return;
+
+    previousActiveElementRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const modal = sharingModalRef.current;
+    modal?.focus({ preventScroll: true });
+
+    function handleSharingKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        if (!sharingBusyRef.current && !advanceBusyRef.current) closeSharing();
+        return;
+      }
+
+      if (event.key !== "Tab" || !modal) return;
+
+      const focusable = Array.from(modal.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => !element.matches(":disabled"));
+
+      if (focusable.length === 0) {
+        event.preventDefault();
+        modal.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const activeElement = document.activeElement;
+      if (event.shiftKey && (activeElement === first || activeElement === modal || !modal.contains(activeElement))) {
+        event.preventDefault();
+        last.focus({ preventScroll: true });
+      } else if (!event.shiftKey && (activeElement === last || !modal.contains(activeElement))) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+      }
     }
-    return () => { document.body.style.overflow = ""; };
-  }, [sharing]);
+
+    document.addEventListener("keydown", handleSharingKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleSharingKeyDown);
+      const previousActiveElement = previousActiveElementRef.current;
+      previousActiveElementRef.current = null;
+      if (previousActiveElement?.isConnected) previousActiveElement.focus({ preventScroll: true });
+    };
+  }, [sharingOpen, closeSharing]);
 
   const loadOrders = useCallback(async () => {
     try {
@@ -188,6 +247,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
     if (preparedImage.key !== sharingImageKey || preparedImage.loading) return;
 
     const file = preparedImage.file ?? undefined;
+    sharingBusyRef.current = true;
     setSharingBusy(true);
     setSharingError(null);
     try {
@@ -209,6 +269,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
     } catch {
       setSharingError("Não foi possível compartilhar o item. Tente novamente.");
     } finally {
+      sharingBusyRef.current = false;
       setSharingBusy(false);
     }
   }
@@ -1003,111 +1064,119 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
         const currentItemShared = sharedItemIndex === sharing.index;
         const canProceed = !sharingBusy && !advanceBusy;
         return (
-          <div
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            onClick={() => {
-              if (advanceBusyRef.current || sharingBusy) return;
-              setSharing(null);
-              setSharingError(null);
-              setSharingStatus(null);
-              setSharedItemIndex(null);
-              setImageShareUnsupportedKey(null);
-            }}
-          >
-            <div className="bg-card-bg rounded-xl shadow-2xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
-              <div className="text-center mb-2">
-                <span className="text-xs font-semibold text-text-muted">
-                  Camisa {sharing.index + 1} de {sharing.items.length}
-                </span>
-              </div>
+          createPortal(
+            <div
+              className="fixed inset-0 bg-black/50 z-[1100] flex items-center justify-center p-3 sm:p-4"
+              style={{
+                paddingTop: "max(12px, env(safe-area-inset-top))",
+                paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+              }}
+              onClick={closeSharing}
+            >
+              <div
+                ref={sharingModalRef}
+                className="bg-card-bg rounded-xl shadow-2xl max-w-sm w-full max-h-[calc(100vh-2rem)] flex flex-col"
+                style={{ maxHeight: "calc(100dvh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)))" }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="supplier-sharing-title"
+                tabIndex={-1}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-4 sm:p-6 pb-0 shrink-0">
+                  <div className="text-center mb-2">
+                    <h2 id="supplier-sharing-title" className="text-xs font-semibold text-text-muted">
+                      Camisa {sharing.index + 1} de {sharing.items.length}
+                    </h2>
+                  </div>
 
-              {/* Progress bar */}
-              <div className="w-full bg-gray-200 rounded-full h-1.5 mb-4">
-                <div
-                  className="bg-accent h-1.5 rounded-full transition-all"
-                  style={{ width: `${((sharing.index + 1) / sharing.items.length) * 100}%` }}
-                />
-              </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-gray-200 rounded-full h-1.5 mb-4">
+                    <div
+                      className="bg-accent h-1.5 rounded-full transition-all"
+                      style={{ width: `${((sharing.index + 1) / sharing.items.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
 
-              {/* Item card */}
-              <div className="flex gap-3 mb-4">
-                {sharingImageUrl && (
-                  <img src={sharingImageUrl} alt={item.nome} width={80} height={80} className="w-20 h-20 object-cover rounded flex-shrink-0" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-sm mb-1">{item.nome}</p>
-                  <div className="text-xs text-text-muted whitespace-pre-line">{montarMensagemItem(item)}</div>
+                <div className="min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4">
+                  {/* Item card */}
+                  <div className="flex gap-3 mb-4">
+                    {sharingImageUrl && (
+                      <img src={sharingImageUrl} alt={item.nome} width={80} height={80} className="w-20 h-20 object-cover rounded flex-shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm mb-1">{item.nome}</p>
+                      <div className="text-xs text-text-muted whitespace-pre-line">{montarMensagemItem(item)}</div>
+                    </div>
+                  </div>
+
+                  {!sharingImageUrl && <p className="text-xs text-text-muted mb-4">Sem imagem disponível; será compartilhado apenas o texto.</p>}
+                  {showUnsupportedWarning && <p className="text-xs text-text-muted mb-4">Seu navegador não permite anexar a foto. Use a imagem do produto separadamente.</p>}
+                  {imageLoading && <p className="text-xs text-text-muted mb-4" role="status">Preparando imagem...</p>}
+                  <p className="text-xs text-text-muted mb-4">O status só muda após sua confirmação. Se já enviou por outro meio, use o botão abaixo para confirmar.</p>
+                  {sharingStatus && <p className="text-sm text-green-700 mb-4" role="status">{sharingStatus}</p>}
+                  {sharingError && <p className="text-sm text-red-600 mb-4" role="alert">{sharingError}</p>}
+                </div>
+
+                <div className="shrink-0 border-t border-border px-4 sm:px-6 py-3">
+                  {/* Actions */}
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      className="w-full min-h-11 px-4 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent/90 transition-colors cursor-pointer"
+                      onClick={() => { void handleShareItem(item); }}
+                      disabled={imageLoading || sharingBusy || advanceBusy}
+                    >
+                      {imageLoading ? "Preparando imagem..." : file && !imageUnsupported ? "Compartilhar foto e texto" : "Compartilhar texto"}
+                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="flex-1 min-w-0 min-h-11 px-4 py-2.5 bg-gray-200 text-text-main rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
+                        onClick={closeSharing}
+                        disabled={advanceBusy || sharingBusy}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        className="flex-1 min-w-0 min-h-11 px-4 py-2.5 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!canProceed}
+                        aria-busy={advanceBusy}
+                        onClick={async () => {
+                          if (advanceBusyRef.current || sharingBusy || advanceBusy) return;
+                          if (!currentItemShared && !confirm("Você confirma que já enviou a foto e os detalhes desta camisa ao fornecedor por outro meio?")) return;
+                          if (!isLast) {
+                            setSharing({ ...sharing, index: sharing.index + 1 });
+                            setSharedItemIndex(null);
+                            setSharingStatus(null);
+                            setSharingError(null);
+                            setImageShareUnsupportedKey(null);
+                            return;
+                          }
+
+                          setSharingError(null);
+                          try {
+                            await sharing.onDone();
+                            setSharing(null);
+                            setSharingStatus(null);
+                            setSharedItemIndex(null);
+                            setImageShareUnsupportedKey(null);
+                          } catch {
+                            setSharingError("Erro ao atualizar status. Tente novamente.");
+                          }
+                        }}
+                      >
+                        {isLast ? "Confirmar envio" : "Já enviei esta camisa"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              {!sharingImageUrl && <p className="text-xs text-text-muted mb-4">Sem imagem disponível; será compartilhado apenas o texto.</p>}
-              {showUnsupportedWarning && <p className="text-xs text-text-muted mb-4">Seu navegador não permite anexar a foto. Use a imagem do produto separadamente.</p>}
-              {imageLoading && <p className="text-xs text-text-muted mb-4" role="status">Preparando imagem...</p>}
-              <p className="text-xs text-text-muted mb-4">O status só muda após sua confirmação. Se já enviou por outro meio, use o botão abaixo para confirmar.</p>
-              {sharingStatus && <p className="text-sm text-green-700 mb-4" role="status">{sharingStatus}</p>}
-              {sharingError && <p className="text-sm text-red-600 mb-4" role="alert">{sharingError}</p>}
-
-              {/* Actions */}
-              <div className="flex flex-col gap-2">
-                <button
-                  type="button"
-                  className="w-full px-4 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent/90 transition-colors cursor-pointer"
-                  onClick={() => { void handleShareItem(item); }}
-                  disabled={imageLoading || sharingBusy || advanceBusy}
-                >
-                  {imageLoading ? "Preparando imagem..." : file && !imageUnsupported ? "Compartilhar foto e texto" : "Compartilhar texto"}
-                </button>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className="flex-1 px-4 py-2.5 bg-gray-200 text-text-main rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
-                    onClick={() => {
-                      if (advanceBusyRef.current || sharingBusy) return;
-                      setSharing(null);
-                      setSharingError(null);
-                      setSharingStatus(null);
-                      setSharedItemIndex(null);
-                      setImageShareUnsupportedKey(null);
-                    }}
-                    disabled={advanceBusy || sharingBusy}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    className="flex-1 px-4 py-2.5 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={!canProceed}
-                    aria-busy={advanceBusy}
-                    onClick={async () => {
-                      if (advanceBusyRef.current || sharingBusy || advanceBusy) return;
-                      if (!currentItemShared && !confirm("Você confirma que já enviou a foto e os detalhes desta camisa ao fornecedor por outro meio?")) return;
-                      if (!isLast) {
-                        setSharing({ ...sharing, index: sharing.index + 1 });
-                        setSharedItemIndex(null);
-                        setSharingStatus(null);
-                        setSharingError(null);
-                        setImageShareUnsupportedKey(null);
-                        return;
-                      }
-
-                      setSharingError(null);
-                      try {
-                        await sharing.onDone();
-                        setSharing(null);
-                        setSharingStatus(null);
-                        setSharedItemIndex(null);
-                        setImageShareUnsupportedKey(null);
-                      } catch {
-                        setSharingError("Erro ao atualizar status. Tente novamente.");
-                      }
-                    }}
-                  >
-                    {isLast ? "Confirmar envio" : "Já enviei esta camisa"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+            </div>,
+            document.body,
+          )
         );
       })()}
 

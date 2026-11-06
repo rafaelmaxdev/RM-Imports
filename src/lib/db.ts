@@ -550,6 +550,7 @@ export interface DbPacote {
   frete: number | null;
   taxa_importacao: number | null;
   dolar_rate: number | null;
+  custos_itens_usd?: Record<string, number>;
   pedido_ids: string; // JSONB stored as string from Supabase
   created_at: string;
 }
@@ -561,6 +562,7 @@ export interface Pacote {
   frete: number | null;
   taxa_importacao: number | null;
   dolar_rate: number | null;
+  custos_itens_usd: Record<string, number>;
   pedido_ids: string[];
   created_at: string;
 }
@@ -573,6 +575,7 @@ function dbPacoteToPacote(db: DbPacote): Pacote {
     frete: db.frete,
     taxa_importacao: db.taxa_importacao,
     dolar_rate: db.dolar_rate,
+    custos_itens_usd: db.custos_itens_usd ?? {},
     pedido_ids: typeof db.pedido_ids === "string" ? JSON.parse(db.pedido_ids) : db.pedido_ids,
     created_at: db.created_at,
   };
@@ -618,21 +621,30 @@ export async function updatePacoteStatus(id: string, status: string): Promise<vo
   if (error) throw error;
 }
 
+export type PacoteFinanceiro = Pick<Pacote, "custo" | "frete" | "taxa_importacao">
+  & Partial<Pick<Pacote, "dolar_rate" | "custos_itens_usd">>;
+
 export async function updatePacoteFinanceiro(
   id: string,
-  financeiro: { custo: number | null; frete: number | null; taxa_importacao: number | null; dolar_rate?: number | null }
+  financeiro: PacoteFinanceiro,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("pacotes")
     .update(financeiro)
-    .eq("id", id);
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
+    if (error.code === "PGRST204" && error.message.includes("custos_itens_usd")) {
+      throw new Error("O banco ainda precisa ser atualizado para salvar os custos por camisa.");
+    }
     if (error.message?.includes("chk_") || error.message?.includes("non_negative") || error.message?.includes("check constraint")) {
       throw new Error("Valores financeiros não podem ser negativos.");
     }
     throw error;
   }
+  if (!data) throw new Error("Não foi possível atualizar este pacote. Verifique se ele ainda existe e se sua sessão de administrador está ativa.");
 }
 
 export async function removePedidoFromPacote(pacoteId: string, pedidoId: string): Promise<Pacote> {

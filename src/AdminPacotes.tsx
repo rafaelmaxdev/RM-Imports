@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { getPedidos, updatePedidoStatus, getPacotes, createPacote, updatePacoteStatus, updatePacoteFinanceiro, removePedidoFromPacote, deletePacote, getProdutos } from "./lib/db";
 import type { Order, OrderItem } from "./types";
-import type { Pacote, DbProduto } from "./lib/db";
+import type { Pacote, PacoteFinanceiro, DbProduto } from "./lib/db";
 import { montarMensagemItem, formatarMoeda, getCachedImageUrl } from "./types";
 import type { LojaConfig } from "./types";
 import { PAYMENT_LABELS_SHORT, PACKAGE_STATUS_PIPELINE, PACKAGE_STATUS_LABELS, PACKAGE_NEXT_STATUS, PACKAGE_PREV_STATUS, PACKAGE_PREV_ACTION_LABELS, PACKAGE_STATUS_ACTION_LABELS, getMPFeeRate } from "./lib/status";
 import { getPackageStatusAfterOrderAdvance } from "./lib/packageProgress";
+import { calculatePackageCosts } from "./lib/packageCosts";
 import { prepareSupplierImage, shareSupplierItem } from "./lib/supplierShare";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
 
@@ -60,7 +61,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
   const sharingOpen = Boolean(sharing);
 
-  useBodyScrollLock(Boolean(sharing));
+  useBodyScrollLock(Boolean(sharing || custosPacote));
 
   const closeSharing = useCallback(() => {
     if (advanceBusyRef.current || sharingBusyRef.current) return;
@@ -555,17 +556,13 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
     }
   }
 
-  async function handleSaveAllFinanceiro(pacote: Pacote, values: { custo: number | null; frete: number | null; taxa_importacao: number | null; dolar_rate?: number | null }) {
-    try {
-      await updatePacoteFinanceiro(pacote.id, values);
-      setPacotes((prev) =>
-        prev.map((p) => p.id === pacote.id ? { ...p, ...values } : p)
-      );
-      setMensagem("Custos salvos com sucesso!");
-      setTimeout(() => setMensagem(""), 3000);
-    } catch (err) {
-      console.error("Erro ao salvar financeiro:", err);
-    }
+  async function handleSaveAllFinanceiro(pacote: Pacote, values: PacoteFinanceiro) {
+    await updatePacoteFinanceiro(pacote.id, values);
+    setPacotes((prev) =>
+      prev.map((p) => p.id === pacote.id ? { ...p, ...values } : p)
+    );
+    setMensagem("Custos salvos com sucesso!");
+    setTimeout(() => setMensagem(""), 3000);
   }
 
   async function handleRemovePedido(pacoteId: string, pedidoId: string) {
@@ -1195,13 +1192,8 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
 
       {/* Custos modal */}
       {custosPacote && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4" onClick={() => setCustosPacote(null)}>
-          <div className="bg-card-bg rounded-md p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-primary">💰 Custos do Pacote {custosPacote.id.slice(0, 8)}</h3>
-              <button className="text-text-muted hover:text-primary cursor-pointer bg-transparent border-none text-xl" onClick={() => setCustosPacote(null)}>✕</button>
-            </div>
-
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="custos-pacote-title" className="bg-card-bg rounded-md p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <CustosForm
               pacote={custosPacote}
               allOrders={allOrders}
@@ -1210,9 +1202,6 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
               onClose={() => setCustosPacote(null)}
             />
 
-            <button className="mt-4 w-full py-2.5 text-sm font-semibold bg-primary text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setCustosPacote(null)}>
-              Fechar
-            </button>
           </div>
         </div>
       )}
@@ -1230,65 +1219,77 @@ function CustosForm({
   pacote: Pacote;
   allOrders: Order[];
   config: LojaConfig;
-  onSaveAll: (pacote: Pacote, values: { custo: number | null; frete: number | null; taxa_importacao: number | null; dolar_rate?: number | null }) => void;
+  onSaveAll: (pacote: Pacote, values: PacoteFinanceiro) => Promise<void>;
   onClose: () => void;
 }) {
   const [localCusto, setLocalCusto] = useState(pacote.custo?.toString() ?? "");
   const [localFrete, setLocalFrete] = useState(pacote.frete?.toString() ?? "");
   const [localTaxa, setLocalTaxa] = useState(pacote.taxa_importacao?.toString() ?? "");
   const [localDolar, setLocalDolar] = useState(pacote.dolar_rate?.toString() ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const orders = pacote.pedido_ids
     .map((id) => allOrders.find((o) => o.id === id))
     .filter((o): o is Order => !!o);
 
-  // Per-item cost overrides: key = `${orderId}-${itemIndex}` -> USD value
-  const [itemCosts, setItemCosts] = useState<Record<string, string>>({});
-
-  function getItemKey(o: Order, i: number) { return `${o.id}-${i}`; }
-
-  function getItemCost(o: Order, item: OrderItem, i: number): number {
-    const override = itemCosts[getItemKey(o, i)];
-    if (override !== undefined && override !== "") return parseFloat(override) || 0;
-    const custoCat = config.custo_base[item.tipo] ?? 0;
-    const custoPers = item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0;
-    return custoCat + custoPers;
-  }
-
-  const custoCalculadoUSD = orders.reduce((sum, o) => {
-    return sum + o.itens.reduce((s, item, i) => s + getItemCost(o, item, i), 0);
-  }, 0);
-  const dolarRate = parseFloat(localDolar) || 0;
-  const custoCalculadoBRL = custoCalculadoUSD * dolarRate;
-  const freteValue = parseFloat(localFrete) || 0;
-  const taxaValue = parseFloat(localTaxa) || 0;
+  const [itemCosts, setItemCosts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(Object.entries(pacote.custos_itens_usd).map(([key, cost]) => [key, String(cost)])),
+  );
+  const lines = orders.flatMap((order) => order.itens.map((item, index) => {
+    const key = `${order.id}-${index}`;
+    const base = (config.custo_base[item.tipo] ?? 0) + (item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0);
+    const suggested = base.toFixed(2);
+    const value = itemCosts[key] ?? suggested;
+    return { key, item, value, suggested, cost: Number(value || suggested) };
+  }));
+  const dolarRate = Number(localDolar) || null;
+  const freteValue = localFrete === "" ? null : Number(localFrete);
+  const taxaValue = localTaxa === "" ? null : Number(localTaxa);
+  const totals = calculatePackageCosts(lines.map(({ cost }) => cost), dolarRate, freteValue, taxaValue);
 
   async function save() {
-    const custoFinal = localCusto ? parseFloat(localCusto) : (custoCalculadoBRL > 0 ? Math.round(custoCalculadoBRL * 100) / 100 : null);
-    await onSaveAll(pacote, {
-      custo: custoFinal,
-      frete: localFrete ? parseFloat(localFrete) : null,
-      taxa_importacao: localTaxa ? parseFloat(localTaxa) : null,
-      dolar_rate: localDolar ? parseFloat(localDolar) : null,
-    });
-    onClose();
+    if (saving) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      await onSaveAll(pacote, {
+        custo: totals.subtotal ?? (localCusto === "" ? null : Number(localCusto)),
+        frete: freteValue,
+        taxa_importacao: taxaValue,
+        dolar_rate: dolarRate,
+        custos_itens_usd: { ...pacote.custos_itens_usd, ...Object.fromEntries(lines.map(({ key, cost }) => [key, cost])) },
+      });
+      onClose();
+    } catch (err) {
+      console.error("Erro ao salvar financeiro:", err);
+      setSaveError(err instanceof Error ? err.message : "Não foi possível salvar os custos. Tente novamente.");
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="space-y-4">
+    <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
+      <fieldset disabled={saving} className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 id="custos-pacote-title" className="text-lg font-bold text-primary">💰 Custos do Pacote {pacote.id.slice(0, 8)}</h3>
+        <button type="button" aria-label="Fechar custos do pacote" className="text-text-muted hover:text-primary cursor-pointer bg-transparent border-none text-xl" onClick={onClose}>✕</button>
+      </div>
       <div className="p-3 bg-green-50 rounded-md border border-green-200">
-        <label className="block text-xs font-semibold text-green-700 mb-1">Cotação do dólar (R$)</label>
+        <label htmlFor="pacote-cotacao" className="block text-xs font-semibold text-green-700 mb-1">Cotação do dólar (R$)</label>
         <input
-          type="number" step="0.01" min="0"
+          id="pacote-cotacao"
+          type="number" step="0.01" min="0.01"
           value={localDolar}
           onChange={(e) => setLocalDolar(e.target.value)}
           placeholder="Ex: 5.20"
           className="w-full max-w-[200px] px-3 py-2 text-sm border border-green-300 rounded-md bg-white"
         />
         <p className="text-xs text-green-600 mt-1">
-          Custo calculado: <strong>${custoCalculadoUSD.toFixed(2)} USD</strong>
-          {dolarRate > 0 && <> → <strong>R$ {custoCalculadoBRL.toFixed(2)}</strong></>}
+          Custo calculado: <strong>${totals.totalUsd.toFixed(2)} USD</strong>
+          {totals.subtotal !== null && <> → <strong>{formatarMoeda(totals.subtotal)}</strong></>}
         </p>
+        {dolarRate === null && <p className="text-xs text-green-700 mt-1">Informe a cotação para calcular o total em reais.</p>}
       </div>
 
       <div className="overflow-x-auto">
@@ -1303,16 +1304,8 @@ function CustosForm({
             </tr>
           </thead>
           <tbody>
-            {orders.map((o) =>
-              o.itens.map((item, i) => {
-                const key = getItemKey(o, i);
-                const val = itemCosts[key] ?? "";
-                const defaultCost = (config.custo_base[item.tipo] ?? 0) + (item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0);
-                const costUSD = parseFloat(val) || defaultCost;
-                const share = custoCalculadoUSD > 0 ? costUSD / custoCalculadoUSD : 0;
-                const taxaShare = taxaValue * share;
-                const freteShare = freteValue * share;
-                const finalBRL = dolarRate > 0 ? (costUSD * dolarRate) + taxaShare + freteShare : 0;
+            {lines.map(({ key, item, value, suggested }, i) => {
+                const { tax, shipping, final } = totals.items[i];
                 return (
                   <tr key={key} className="border-b border-border">
                     <td className="px-2 py-1.5">
@@ -1326,27 +1319,27 @@ function CustosForm({
                         type="number"
                         step="0.01"
                         min="0"
-                        value={val}
+                        aria-label={`Custo em dólar: ${item.nome} (${item.tamanho})`}
+                        value={value}
                         onChange={(e) => setItemCosts((prev) => ({ ...prev, [key]: e.target.value }))}
-                        placeholder={defaultCost.toFixed(2)}
+                        placeholder={suggested}
                         className="w-20 px-2 py-1 text-sm text-right border border-border rounded-md bg-card-bg"
                       />
                     </td>
-                    <td className="text-right px-2 py-1.5 text-xs text-text-muted">{dolarRate > 0 ? `R$ ${taxaShare.toFixed(2)}` : "—"}</td>
-                    <td className="text-right px-2 py-1.5 text-xs text-text-muted">{dolarRate > 0 ? `R$ ${freteShare.toFixed(2)}` : "—"}</td>
-                    <td className="text-right px-2 py-1.5 font-medium">{dolarRate > 0 ? `R$ ${finalBRL.toFixed(2)}` : "—"}</td>
+                    <td className="text-right px-2 py-1.5 text-xs text-text-muted">{taxaValue === null ? "—" : formatarMoeda(tax)}</td>
+                    <td className="text-right px-2 py-1.5 text-xs text-text-muted">{freteValue === null ? "—" : formatarMoeda(shipping)}</td>
+                    <td className="text-right px-2 py-1.5 font-medium">{final === null ? "—" : formatarMoeda(final)}</td>
                   </tr>
                 );
-              })
-            )}
+            })}
           </tbody>
           <tfoot>
             <tr className="font-bold">
               <td className="px-2 py-1.5">Total</td>
-              <td className="text-right px-2 py-1.5">${custoCalculadoUSD.toFixed(2)}</td>
-              <td className="text-right px-2 py-1.5">{dolarRate > 0 ? `R$ ${taxaValue.toFixed(2)}` : "—"}</td>
-              <td className="text-right px-2 py-1.5">{dolarRate > 0 ? `R$ ${freteValue.toFixed(2)}` : "—"}</td>
-              <td className="text-right px-2 py-1.5">{dolarRate > 0 ? `R$ ${custoCalculadoBRL.toFixed(2)}` : "—"}</td>
+              <td className="text-right px-2 py-1.5">${totals.totalUsd.toFixed(2)}</td>
+              <td className="text-right px-2 py-1.5">{taxaValue === null ? "—" : formatarMoeda(taxaValue)}</td>
+              <td className="text-right px-2 py-1.5">{freteValue === null ? "—" : formatarMoeda(freteValue)}</td>
+              <td className="text-right px-2 py-1.5">{totals.final === null ? "—" : formatarMoeda(totals.final)}</td>
             </tr>
           </tfoot>
         </table>
@@ -1354,31 +1347,33 @@ function CustosForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-text-muted mb-1">Custo total (R$)</label>
-          <input type="number" step="0.01" value={localCusto} onChange={(e) => setLocalCusto(e.target.value)} onBlur={save}
-            placeholder={custoCalculadoBRL > 0 ? custoCalculadoBRL.toFixed(2) : "0.00"}
+          <label htmlFor="pacote-custo" className="block text-xs font-semibold text-text-muted mb-1">Subtotal das camisas (R$)</label>
+          <input id="pacote-custo" type="number" step="0.01" min="0" value={totals.subtotal?.toFixed(2) ?? localCusto}
+            readOnly={totals.subtotal !== null} onChange={(e) => setLocalCusto(e.target.value)} placeholder="0.00"
             className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg" />
-          {custoCalculadoBRL > 0 && !localCusto && <p className="text-[10px] text-green-600 mt-0.5">Auto: R$ {custoCalculadoBRL.toFixed(2)}</p>}
+          {totals.subtotal !== null && <p className="text-[10px] text-green-600 mt-0.5">Calculado pela cotação e pelos custos em dólar.</p>}
         </div>
         <div>
-          <label className="block text-xs font-semibold text-text-muted mb-1">Frete (R$)</label>
-          <input type="number" step="0.01" value={localFrete} onChange={(e) => setLocalFrete(e.target.value)} onBlur={save}
+          <label htmlFor="pacote-frete" className="block text-xs font-semibold text-text-muted mb-1">Frete (R$)</label>
+          <input id="pacote-frete" type="number" step="0.01" min="0" value={localFrete} onChange={(e) => setLocalFrete(e.target.value)}
             placeholder="0.00" className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-text-muted mb-1">Taxa de importação (R$)</label>
-          <input type="number" step="0.01" value={localTaxa} onChange={(e) => setLocalTaxa(e.target.value)} onBlur={save}
+          <label htmlFor="pacote-taxa" className="block text-xs font-semibold text-text-muted mb-1">Taxa de importação (R$)</label>
+          <input id="pacote-taxa" type="number" step="0.01" min="0" value={localTaxa} onChange={(e) => setLocalTaxa(e.target.value)}
             placeholder="0.00" className="w-full px-3 py-2 text-sm border border-border rounded-md bg-card-bg" />
         </div>
       </div>
 
-      <button
-        className="w-full py-2.5 text-sm font-semibold bg-green-600 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity"
-        onClick={save}
-      >
-        Salvar Custos
+      {saveError && <p role="alert" className="text-sm text-red-700">{saveError}</p>}
+      <button type="submit" className="w-full py-2.5 text-sm font-semibold bg-green-600 text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-60">
+        {saving ? "Salvando..." : "Salvar Custos"}
       </button>
-    </div>
+      <button type="button" onClick={onClose} className="w-full py-2.5 text-sm font-semibold bg-primary text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-60">
+        Fechar
+      </button>
+      </fieldset>
+    </form>
   );
 }
 

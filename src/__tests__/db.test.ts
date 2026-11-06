@@ -2,7 +2,7 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 import { DEFAULT_CONFIG } from "../types";
 import { getCached, isCacheStale, setCache } from "../lib/cache";
 import { supabase } from "../lib/supabase";
-import { formatPedidoDateTime, getLojaConfig, getPedidos, parseImageUrls, updatePedidoAdminOrder, updatePedidoStatus } from "../lib/db";
+import { formatPedidoDateTime, getLojaConfig, getPacotes, getPedidos, parseImageUrls, updatePacoteFinanceiro, updatePedidoAdminOrder, updatePedidoStatus } from "../lib/db";
 
 vi.mock("../lib/cache", () => ({
   getCached: vi.fn(),
@@ -23,6 +23,35 @@ function mockConfigFetch(data: { key: string; value: unknown }[]) {
     select: vi.fn().mockResolvedValue({ data, error: null }),
   } as never);
 }
+
+describe("updatePacoteFinanceiro", () => {
+  it.each([null, { id: "pacote-1" }])("only reports success when the database confirms a row (%j)", async (data) => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data, error: null });
+    const select = vi.fn(() => ({ maybeSingle }));
+    const eq = vi.fn(() => ({ select }));
+    const update = vi.fn(() => ({ eq }));
+    vi.mocked(supabase.from).mockReturnValue({ update } as never);
+
+    const values = { custo: 478.4, frete: 0, taxa_importacao: 50.12, dolar_rate: 5.2, custos_itens_usd: { "pedido-1-0": 0, "pedido-1-1": 17 } };
+    const saving = updatePacoteFinanceiro("pacote-1", values);
+    if (data) await expect(saving).resolves.toBeUndefined();
+    else await expect(saving).rejects.toThrow("Não foi possível atualizar este pacote");
+    expect(update).toHaveBeenCalledWith(values);
+    expect(eq).toHaveBeenCalledWith("id", "pacote-1");
+  });
+
+  it("loads saved shirt values and explicit zero freight when the package is reopened", async () => {
+    vi.mocked(supabase.from).mockReturnValue({
+      select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [{
+        id: "pacote-1", pedido_ids: ["pedido-1"], custo: 88.4, frete: 0, taxa_importacao: 50.12,
+        dolar_rate: 5.2, custos_itens_usd: { "pedido-1-0": 0, "pedido-1-1": 17 },
+      }], error: null }) })),
+    } as never);
+    await expect(getPacotes()).resolves.toMatchObject([{
+      custo: 88.4, frete: 0, taxa_importacao: 50.12, custos_itens_usd: { "pedido-1-0": 0, "pedido-1-1": 17 },
+    }]);
+  });
+});
 
 describe("formatPedidoDateTime", () => {
   it("formats created_at in the Recife timezone", () => {

@@ -1,19 +1,23 @@
-import { Fragment, useState, useEffect } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { getPedidos, getPacotes, getEstoque, getProdutos, getLojaConfig } from "./lib/db";
 import type { Pacote, DbProduto } from "./lib/db";
 import type { Order, EstoqueItem, LojaConfig } from "./types";
 import { DEFAULT_CONFIG, formatarMoeda } from "./types";
-import { supabase } from "./lib/supabase";
 import { MESES, getMPFeeRate } from "./lib/status";
-
-interface ExtraCusto {
-  id: number;
-  nome: string;
-  quantidade: number;
-  preco: number;
-  data: string;
-  cor: string;
-}
+import { allocatePackageCostShares, getSavedPackageItemCosts } from "./lib/packageCosts";
+import OwnerAccounts from "./OwnerAccounts";
+import {
+  DEFAULT_EXTRA_COLOR,
+  FINANCE_EXTRAS_GENERIC_ERROR,
+  createFinanceExtra,
+  deleteFinanceExtra,
+  getFinanceExtras,
+  getUnsyncedExtras,
+  importFinanceExtras,
+  parseFinanceExtras,
+  updateFinanceExtra,
+} from "./lib/financeExtras";
+import type { ExtraCusto } from "./lib/financeExtras";
 
 interface PedidoCustoDetalhe {
   reposicao: boolean;
@@ -37,6 +41,10 @@ interface LucroPedidoDetalhe extends PedidoCustoDetalhe {
 type PedidoDetalhe = ReposicaoPedidoDetalhe | LucroPedidoDetalhe;
 
 const EXTRA_KEY = "rm_custos_extras";
+const CACHE_WARNING = "Não foi possível ler a cópia local dos custos extras. Ela foi preservada; confira antes de continuar.";
+const CACHE_SAVE_WARNING = "A operação foi confirmada no servidor, mas a cópia local não pôde ser atualizada.";
+const EXTRAS_LOAD_ERROR = "Não foi possível carregar os custos extras do servidor. Os dados locais estão somente para consulta; recarregue para tentar novamente.";
+const PENDING_EXTRAS_WARNING = "Custos locais não confirmados no servidor. Confira: podem ser registros antigos já removidos.";
 const STATUS_VENDAS_FINANCEIRAS: readonly Order["status"][] = [
   "pago",
   "enviado_fornecedor",
@@ -47,23 +55,33 @@ const STATUS_VENDAS_FINANCEIRAS: readonly Order["status"][] = [
   "entregue",
 ];
 
-function loadExtras(): ExtraCusto[] {
-  try { return JSON.parse(localStorage.getItem(EXTRA_KEY) || "[]"); }
-  catch { return []; }
-}
-
-function saveExtras(extras: ExtraCusto[]) {
-  localStorage.setItem(EXTRA_KEY, JSON.stringify(extras));
-}
-
-async function loadExtrasFromSupabase(): Promise<ExtraCusto[]> {
+function readExtrasCache(): { extras: ExtraCusto[]; corrupted: boolean } {
   try {
-    const { data } = await supabase.from("custos_extras").select("*");
-    if (data) return data as ExtraCusto[];
-  } catch (err) {
-    console.warn("[Financeiro] Erro ao carregar custos extras do Supabase:", err);
+    const raw = localStorage.getItem(EXTRA_KEY);
+    if (raw === null) return { extras: [], corrupted: false };
+    const extras = parseFinanceExtras(JSON.parse(raw));
+    if (!extras) {
+      console.warn("[Financeiro] Cópia local de custos extras inválida.");
+      return { extras: [], corrupted: true };
+    }
+    return { extras, corrupted: false };
+  } catch {
+    console.warn("[Financeiro] Não foi possível ler a cópia local de custos extras.");
+    return { extras: [], corrupted: true };
   }
-  return [];
+}
+
+function safeSaveCache(extras: ExtraCusto[]): boolean {
+  try {
+    localStorage.setItem(EXTRA_KEY, JSON.stringify(extras));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function newExtraId(): number {
+  return Date.now();
 }
 
 
@@ -88,22 +106,56 @@ export default function AdminFinanceiro() {
   const [config, setConfig] = useState<LojaConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [extras, setExtras] = useState<ExtraCusto[]>([]);
+  const [extrasLoaded, setExtrasLoaded] = useState(false);
+  const [extrasServerState, setExtrasServerState] = useState<"loading" | "ready" | "error">("loading");
+  const [pendingExtras, setPendingExtras] = useState<ExtraCusto[]>([]);
+  const [extraBusy, setExtraBusy] = useState(false);
+  const extraBusyRef = useRef(false);
+  const [extraError, setExtraError] = useState("");
+  const [extraStatus, setExtraStatus] = useState("");
+  const [cacheWarning, setCacheWarning] = useState("");
+  const [cacheNeedsReview, setCacheNeedsReview] = useState(false);
+  const [ownerRefreshKey, setOwnerRefreshKey] = useState(0);
 
   const now = new Date();
   const [anoFiltro, setAnoFiltro] = useState(now.getFullYear());
   const [mesFiltro, setMesFiltro] = useState<number | null>(null);
   useEffect(() => {
-    loadExtrasFromSupabase().then((data) => {
-      if (data.length > 0) { setExtras(data); saveExtras(data); }
-      else { setExtras(loadExtras()); }
-    }).catch(() => setExtras(loadExtras()));
+    let cancelled = false;
+    const cache = readExtrasCache();
+    if (cache.corrupted) {
+      setCacheWarning(CACHE_WARNING);
+      setCacheNeedsReview(true);
+    }
+
+    getFinanceExtras().then((remote) => {
+      if (cancelled) return;
+      const pending = getUnsyncedExtras(remote, cache.extras);
+      setExtras(remote);
+      setPendingExtras(pending);
+      setExtrasLoaded(true);
+      setExtrasServerState("ready");
+      setExtraError("");
+      if (pending.length === 0 && !cache.corrupted && !safeSaveCache(remote)) {
+        setCacheWarning(CACHE_SAVE_WARNING);
+      }
+    }).catch(() => {
+      if (cancelled) return;
+      setExtras(cache.extras);
+      setPendingExtras([]);
+      setExtrasLoaded(true);
+      setExtrasServerState("error");
+      setExtraError(EXTRAS_LOAD_ERROR);
+    });
+    return () => { cancelled = true; };
   }, []);
   const [extraNome, setExtraNome] = useState("");
   const [extraQtd, setExtraQtd] = useState("");
   const [extraPreco, setExtraPreco] = useState("");
   const [extraData, setExtraData] = useState(new Date().toISOString().slice(0, 10));
   const CORES_PALETA = ["#F4A261", "#E76F51", "#D4A373", "#B5838D", "#6D597A", "#B56576", "#E5989B", "#FFB4A2", "#A8D5BA", "#7EC8E3", "#95D5B2", "#74C69D"];
-  const [extraCor, setExtraCor] = useState(CORES_PALETA[extras.length % CORES_PALETA.length]);
+  const [extraCor, setExtraCor] = useState(DEFAULT_EXTRA_COLOR);
+  const [editingExtraId, setEditingExtraId] = useState<number | null>(null);
   const [buscaPedido, setBuscaPedido] = useState("");
   const [maxPedidos, setMaxPedidos] = useState(20);
   const [lucroDetalheId, setLucroDetalheId] = useState<string | null>(null);
@@ -126,36 +178,150 @@ export default function AdminFinanceiro() {
     return () => { cancelled = true; };
   }, []);
 
-  async function syncExtraToSupabase(extra: ExtraCusto) {
+  const extraControlsBlocked = !extrasLoaded
+    || extrasServerState !== "ready"
+    || pendingExtras.length > 0
+    || cacheNeedsReview
+    || extraBusy;
+  const pendingActionsBlocked = !extrasLoaded || extrasServerState !== "ready" || extraBusy;
+
+  function resetExtraForm(itemCount: number): void {
+    setExtraNome("");
+    setExtraQtd("");
+    setExtraPreco("");
+    setExtraData(new Date().toISOString().slice(0, 10));
+    setExtraCor(CORES_PALETA[itemCount % CORES_PALETA.length]);
+    setEditingExtraId(null);
+  }
+
+  function saveServerCache(next: ExtraCusto[]): boolean {
+    if (safeSaveCache(next)) return true;
+    setCacheWarning(CACHE_SAVE_WARNING);
+    return false;
+  }
+
+  function beginExtraMutation(allowPending = false): boolean {
+    if ((allowPending ? pendingActionsBlocked : extraControlsBlocked) || extraBusyRef.current) return false;
+    extraBusyRef.current = true;
+    setExtraBusy(true);
+    setExtraError("");
+    setExtraStatus("");
+    return true;
+  }
+
+  async function addExtra(): Promise<void> {
+    if (!extraNome.trim() || !extraQtd.trim() || !extraPreco.trim() || !beginExtraMutation()) return;
+
+    const editingId = editingExtraId;
+    const extra: ExtraCusto = {
+      id: editingId ?? newExtraId(),
+      nome: extraNome.trim(),
+      quantidade: Number(extraQtd),
+      preco: Number(extraPreco),
+      data: extraData,
+      cor: extraCor,
+    };
+
     try {
-      await supabase.from("custos_extras").upsert({ id: extra.id, nome: extra.nome, quantidade: extra.quantidade, preco: extra.preco, data: extra.data, cor: extra.cor }, { onConflict: "id" });
-    } catch (err) {
-      console.warn("[Financeiro] Erro ao sincronizar custo extra com Supabase:", err);
+      const saved = editingId === null
+        ? await createFinanceExtra(extra)
+        : await updateFinanceExtra(extra);
+      const replaced = editingId === null
+        ? [...extras, saved]
+        : extras.some((item) => item.id === saved.id)
+          ? extras.map((item) => item.id === saved.id ? saved : item)
+          : [...extras, saved];
+      const cacheSaved = saveServerCache(replaced);
+      setExtras(replaced);
+      resetExtraForm(replaced.length);
+      setOwnerRefreshKey((key) => key + 1);
+      setExtraStatus(cacheSaved
+        ? editingId === null ? "Custo extra salvo." : "Custo extra atualizado."
+        : "Custo extra confirmado no servidor; a cópia local não foi atualizada.");
+    } catch {
+      setExtraError(FINANCE_EXTRAS_GENERIC_ERROR);
+    } finally {
+      extraBusyRef.current = false;
+      setExtraBusy(false);
     }
   }
 
-  async function deleteExtraFromSupabase(id: number) {
+  async function removeExtra(id: number): Promise<void> {
+    if (!beginExtraMutation()) return;
     try {
-      await supabase.from("custos_extras").delete().eq("id", id);
-    } catch (err) {
-      console.warn("[Financeiro] Erro ao deletar custo extra do Supabase:", err);
+      await deleteFinanceExtra(id);
+      const updated = extras.filter((item) => item.id !== id);
+      const cacheSaved = saveServerCache(updated);
+      setExtras(updated);
+      if (editingExtraId === id) resetExtraForm(updated.length);
+      setOwnerRefreshKey((key) => key + 1);
+      setExtraStatus(cacheSaved
+        ? "Custo extra removido."
+        : "Custo extra removido no servidor; a cópia local não foi atualizada.");
+    } catch {
+      setExtraError(FINANCE_EXTRAS_GENERIC_ERROR);
+    } finally {
+      extraBusyRef.current = false;
+      setExtraBusy(false);
     }
   }
 
-  function addExtra() {
-    if (!extraNome.trim() || !extraQtd || !extraPreco) return;
-    const novo: ExtraCusto = { id: Date.now(), nome: extraNome.trim(), quantidade: parseInt(extraQtd) || 1, preco: parseFloat(extraPreco) || 0, data: extraData, cor: extraCor };
-    const updated = [...extras, novo];
-    setExtras(updated); saveExtras(updated);
-    syncExtraToSupabase(novo);
-    setExtraNome(""); setExtraQtd(""); setExtraPreco(""); setExtraData(new Date().toISOString().slice(0, 10));
-    setExtraCor(CORES_PALETA[(extras.length + 1) % CORES_PALETA.length]);
+  async function importLocalExtras(): Promise<void> {
+    if (pendingActionsBlocked || extraBusyRef.current || pendingExtras.length === 0) return;
+    if (!window.confirm("Importar estes custos locais para o servidor?")) return;
+    if (!beginExtraMutation(true)) return;
+
+    try {
+      const imported = await importFinanceExtras(pendingExtras);
+      const combined = [...extras, ...imported];
+      const cacheSaved = saveServerCache(combined);
+      setExtras(combined);
+      setPendingExtras([]);
+      setOwnerRefreshKey((key) => key + 1);
+      setExtraStatus(cacheSaved
+        ? "Custos locais importados."
+        : "Custos locais importados no servidor; a cópia local não foi atualizada.");
+    } catch {
+      setExtraError(FINANCE_EXTRAS_GENERIC_ERROR);
+    } finally {
+      extraBusyRef.current = false;
+      setExtraBusy(false);
+    }
   }
 
-  function removeExtra(id: number) {
-    const updated = extras.filter((e) => e.id !== id);
-    setExtras(updated); saveExtras(updated);
-    deleteExtraFromSupabase(id);
+  function discardLocalExtras(): void {
+    if (pendingActionsBlocked || extraBusyRef.current || pendingExtras.length === 0) return;
+    if (!window.confirm("Descartar somente a cópia local destes custos?")) return;
+    if (!beginExtraMutation(true)) return;
+
+    const cacheSaved = saveServerCache(extras);
+    if (cacheSaved) {
+      setPendingExtras([]);
+      setOwnerRefreshKey((key) => key + 1);
+      setExtraStatus("Cópia local descartada; os custos do servidor foram preservados.");
+    } else {
+      setExtraStatus("A cópia local não foi descartada.");
+    }
+    extraBusyRef.current = false;
+    setExtraBusy(false);
+  }
+
+  function discardInvalidCache(): void {
+    if (pendingActionsBlocked || extraBusyRef.current || !cacheNeedsReview) return;
+    if (!window.confirm("Descartar somente a cópia local inválida? Os custos do servidor serão preservados.")) return;
+    if (!beginExtraMutation(true)) return;
+
+    if (safeSaveCache(extras)) {
+      setCacheNeedsReview(false);
+      setCacheWarning("");
+      setOwnerRefreshKey((key) => key + 1);
+      setExtraStatus("Cópia local inválida descartada; os custos do servidor foram preservados.");
+    } else {
+      setCacheWarning(CACHE_WARNING);
+      setExtraStatus("A cópia local inválida não foi descartada.");
+    }
+    extraBusyRef.current = false;
+    setExtraBusy(false);
   }
 
   function exportCSV() {
@@ -209,6 +375,28 @@ export default function AdminFinanceiro() {
     const totalShirts = pkgOrders.reduce((s, o) => s + o.itens.length, 0);
     const pedidosElegiveis = pkgOrders.filter((o) => idsComCustoFinanceiro.has(o.id) && !o.admin_order && !o.reposicao);
     const pedidosElegiveisShirts = pedidosElegiveis.reduce((s, o) => s + o.itens.length, 0);
+    const lines = pkgOrders.flatMap((order) => order.itens.map((_, index) => ({ orderId: order.id, order, index })));
+    const saved = pkgOrders.length === p.pedido_ids.length ? getSavedPackageItemCosts(p.custos_itens_usd, lines) : null;
+    if (saved && p.custo !== null) {
+      const shares = allocatePackageCostShares(saved, Math.round(p.custo * 100), Math.round((p.frete ?? 0) * 100), Math.round((p.taxa_importacao ?? 0) * 100));
+      for (const [index, { order }] of lines.entries()) {
+        if (order.admin_order) continue;
+        const { product, shipping, importation } = shares[index];
+        const atual = custoPacotePorPedido.get(order.id) || { reposicao: false, produto: 0, frete: 0, importacao: 0 };
+        custoPacotePorPedido.set(order.id, {
+          reposicao: atual.reposicao || !!order.reposicao,
+          produto: atual.produto + product / 100,
+          produtoUSD: (atual.produtoUSD ?? 0) + saved[index],
+          frete: atual.frete + shipping / 100,
+          importacao: atual.importacao + importation / 100,
+        });
+        if (order.reposicao || !idsComCustoFinanceiro.has(order.id)) continue;
+        custoPacote += product / 100;
+        freteTotal += shipping / 100;
+        taxaTotal += importation / 100;
+      }
+      continue;
+    }
     const custoItemUSD = (item: Order["itens"][number]) =>
       (config.custo_base[item.tipo] ?? 0) + (item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0);
     const custoUSDTotal = pkgOrders.reduce(
@@ -421,6 +609,18 @@ export default function AdminFinanceiro() {
     custoPorMes.set(mes, (custoPorMes.get(mes) || 0) + pkgCost + taxasMP);
   }
 
+  const ownerBlockedReason = !extrasLoaded || extrasServerState === "loading"
+    ? "Aguardando a confirmação dos custos extras no servidor."
+    : extrasServerState === "error"
+      ? EXTRAS_LOAD_ERROR
+      : pendingExtras.length > 0
+        ? PENDING_EXTRAS_WARNING
+        : cacheNeedsReview
+          ? CACHE_WARNING
+        : extraBusy
+          ? "Operação de custo extra em andamento."
+          : undefined;
+
   return (
     <div className="pb-16">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -476,6 +676,8 @@ export default function AdminFinanceiro() {
         </div>
       </div>
 
+      <OwnerAccounts refreshKey={ownerRefreshKey} blockedReason={ownerBlockedReason} />
+
       {custosTotais > 0 && (
         <div className="p-3 bg-bg-base rounded-md border border-border text-xs text-text-muted mb-6 space-y-1">
           <p>Taxas MP: {formatarMoeda(totalTaxasMP)} | Produtos: {formatarMoeda(custoPacote)} | Frete: {formatarMoeda(freteTotal)} | Taxa: {formatarMoeda(taxaTotal)} | Extras: {formatarMoeda(extraTotal)}{custoPE > 0 ? ` | Custo PE: ${formatarMoeda(custoPE)}` : ""}</p>
@@ -530,13 +732,52 @@ export default function AdminFinanceiro() {
       {/* Extra costs */}
       <div className="mb-6 p-4 bg-card-bg rounded-lg border border-border">
         <h4 className="text-sm font-semibold text-text-muted mb-3">Custos extras</h4>
+        {extraError && <p role="alert" className="mb-3 text-sm text-red-600">{extraError}</p>}
+        {cacheWarning && (!cacheNeedsReview || extrasServerState !== "ready") && <p role="alert" className="mb-3 text-sm text-yellow-700">{cacheWarning}</p>}
+        {extraStatus && <p role="status" className="mb-3 text-sm text-green-700">{extraStatus}</p>}
+        {cacheNeedsReview && extrasServerState === "ready" && (
+          <div className="mb-3 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900" role="alert">
+            <p>{CACHE_WARNING}</p>
+            <button
+              type="button"
+              className="mt-2 rounded-md border border-yellow-700 px-3 py-1.5 text-xs font-semibold text-yellow-900 disabled:opacity-50"
+              onClick={discardInvalidCache}
+              disabled={pendingActionsBlocked}
+            >Descartar cópia local inválida</button>
+          </div>
+        )}
+        {extrasServerState === "ready" && pendingExtras.length > 0 && (
+          <div className="mb-3 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900" role="alert">
+            <p className="font-semibold">{PENDING_EXTRAS_WARNING}</p>
+            <ul className="my-2 space-y-1 text-xs">
+              {pendingExtras.map((extra) => (
+                <li key={extra.id}>{extra.nome} — {formatarMoeda(extra.quantidade * extra.preco)} — {extra.data}</li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-md bg-yellow-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                onClick={importLocalExtras}
+                disabled={pendingActionsBlocked}
+              >Importar custos locais</button>
+              <button
+                type="button"
+                className="rounded-md border border-yellow-700 px-3 py-1.5 text-xs font-semibold text-yellow-900 disabled:opacity-50"
+                onClick={discardLocalExtras}
+                disabled={pendingActionsBlocked}
+              >Descartar cópia local</button>
+            </div>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2 mb-3">
-          <input type="text" value={extraNome} onChange={(e) => setExtraNome(e.target.value)} placeholder="Nome (ex: Bolsa)" className="flex-1 min-w-[100px] px-3 py-2 text-sm border border-border rounded-md bg-bg-base" />
-          <input type="number" min="1" value={extraQtd} onChange={(e) => setExtraQtd(e.target.value)} placeholder="Qtd" className="w-20 px-3 py-2 text-sm border border-border rounded-md bg-bg-base" />
-          <input type="number" step="0.01" min="0" value={extraPreco} onChange={(e) => setExtraPreco(e.target.value)} placeholder="R$ unid" className="w-24 px-3 py-2 text-sm border border-border rounded-md bg-bg-base" />
-          <input type="date" value={extraData} onChange={(e) => setExtraData(e.target.value)} className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base w-36" />
-          <input type="color" value={extraCor} onChange={(e) => setExtraCor(e.target.value)} className="w-9 h-9 p-0.5 border border-border rounded cursor-pointer bg-transparent" />
-          <button className="px-4 py-2 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50" onClick={addExtra} disabled={!extraNome.trim() || !extraQtd || !extraPreco}>Adicionar</button>
+          <input type="text" value={extraNome} onChange={(e) => setExtraNome(e.target.value)} placeholder="Nome (ex: Bolsa)" className="flex-1 min-w-[100px] px-3 py-2 text-sm border border-border rounded-md bg-bg-base disabled:opacity-50" disabled={extraControlsBlocked} />
+          <input type="number" min="1" value={extraQtd} onChange={(e) => setExtraQtd(e.target.value)} placeholder="Qtd" className="w-20 px-3 py-2 text-sm border border-border rounded-md bg-bg-base disabled:opacity-50" disabled={extraControlsBlocked} />
+          <input type="number" step="0.01" min="0" value={extraPreco} onChange={(e) => setExtraPreco(e.target.value)} placeholder="R$ unid" className="w-24 px-3 py-2 text-sm border border-border rounded-md bg-bg-base disabled:opacity-50" disabled={extraControlsBlocked} />
+          <input type="date" value={extraData} onChange={(e) => setExtraData(e.target.value)} className="px-3 py-2 text-sm border border-border rounded-md bg-bg-base w-36 disabled:opacity-50" disabled={extraControlsBlocked} />
+          <input type="color" value={extraCor} onChange={(e) => setExtraCor(e.target.value)} className="w-9 h-9 p-0.5 border border-border rounded cursor-pointer bg-transparent disabled:opacity-50" disabled={extraControlsBlocked} />
+          <button type="button" className="px-4 py-2 text-sm font-semibold bg-accent text-white rounded-md cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50" onClick={addExtra} disabled={extraControlsBlocked || !extraNome.trim() || !extraQtd || !extraPreco}>{editingExtraId === null ? "Adicionar" : "Salvar alterações"}</button>
+          {editingExtraId !== null && <button type="button" className="px-4 py-2 text-sm font-semibold border border-border rounded-md cursor-pointer hover:bg-bg-base transition-colors disabled:opacity-50" onClick={() => resetExtraForm(extras.length)} disabled={extraControlsBlocked}>Cancelar edição</button>}
         </div>
         {extras.length > 0 ? (
           <div className="w-full overflow-x-auto">
@@ -563,8 +804,8 @@ export default function AdminFinanceiro() {
                     <td className="py-1.5 px-2 text-right">{formatarMoeda(e.preco)}</td>
                     <td className="py-1.5 px-2 text-right font-medium">{formatarMoeda(e.quantidade * e.preco)}</td>
                     <td className="py-1.5 px-2 text-right whitespace-nowrap">
-                      <button className="text-blue-500 text-xs cursor-pointer bg-transparent border-none hover:text-blue-700 px-1" onClick={() => { setExtraNome(e.nome); setExtraQtd(String(e.quantidade)); setExtraPreco(String(e.preco)); setExtraData(e.data); setExtraCor(e.cor || "#F4A261"); removeExtra(e.id); }}>✎</button>
-                      <button className="text-red-500 text-xs cursor-pointer bg-transparent border-none hover:text-red-700 px-1" onClick={() => removeExtra(e.id)}>✕</button>
+                      <button type="button" className="text-blue-500 text-xs cursor-pointer bg-transparent border-none hover:text-blue-700 px-1 disabled:opacity-50" disabled={extraControlsBlocked} onClick={() => { setExtraNome(e.nome); setExtraQtd(String(e.quantidade)); setExtraPreco(String(e.preco)); setExtraData(e.data); setExtraCor(e.cor || DEFAULT_EXTRA_COLOR); setEditingExtraId(e.id); }}>✎</button>
+                      <button type="button" className="text-red-500 text-xs cursor-pointer bg-transparent border-none hover:text-red-700 px-1 disabled:opacity-50" disabled={extraControlsBlocked} onClick={() => void removeExtra(e.id)}>✕</button>
                     </td>
                   </tr>
                 ))}

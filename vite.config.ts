@@ -4,6 +4,131 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
+const OWNER_FINANCE_BODY_LIMIT = 8 * 1024;
+const OWNER_FINANCE_ENV_KEYS = [
+  "VITE_SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "MP_ACCESS_TOKEN",
+] as const;
+
+type OwnerFinanceBodyResult =
+  | { ok: true; body: unknown }
+  | { ok: false; status: 400 | 413; message: string };
+
+function loadOwnerFinanceEnv(mode: string): void {
+  const env = loadEnv(mode, process.cwd(), "");
+  for (const key of OWNER_FINANCE_ENV_KEYS) {
+    if (process.env[key] === undefined && env[key] !== undefined) {
+      process.env[key] = env[key];
+    }
+  }
+}
+
+async function readOwnerFinanceBody(req: NodeJS.ReadableStream & { headers: Record<string, string | string[] | undefined> }): Promise<OwnerFinanceBodyResult> {
+  const header = req.headers["content-length"];
+  const contentLength = Array.isArray(header) ? header[0] : header;
+  if (contentLength !== undefined) {
+    const length = Number(contentLength);
+    if (!Number.isFinite(length) || length < 0 || !Number.isInteger(length)) {
+      return { ok: false, status: 400, message: "Invalid request body" };
+    }
+    if (length > OWNER_FINANCE_BODY_LIMIT) {
+      return { ok: false, status: 413, message: "Request body too large" };
+    }
+  }
+
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  try {
+    for await (const chunk of req) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as unknown as Uint8Array);
+      totalBytes += buffer.length;
+      if (totalBytes > OWNER_FINANCE_BODY_LIMIT) {
+        return { ok: false, status: 413, message: "Request body too large" };
+      }
+      chunks.push(buffer);
+    }
+  } catch {
+    return { ok: false, status: 400, message: "Invalid request body" };
+  }
+
+  try {
+    return { ok: true, body: JSON.parse(Buffer.concat(chunks).toString("utf8")) };
+  } catch {
+    return { ok: false, status: 400, message: "Invalid request body" };
+  }
+}
+
+function ownerFinanceQuery(url: URL): Record<string, string | string[] | undefined> {
+  const query: Record<string, string | string[] | undefined> = {};
+  for (const [key, value] of url.searchParams) {
+    const current = query[key];
+    query[key] = current === undefined
+      ? value
+      : Array.isArray(current)
+        ? [...current, value]
+        : [current, value];
+  }
+  return query;
+}
+
+function ownerFinanceApiPlugin(): Plugin {
+  return {
+    name: "owner-finance-api",
+    enforce: "pre",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = new URL(req.url || "/", "http://localhost");
+        if (url.pathname !== "/api/owner-finance") return next();
+
+        const query = ownerFinanceQuery(url);
+        let body: unknown;
+        if (req.method === "POST") {
+          const result = await readOwnerFinanceBody(req);
+          if (!result.ok) {
+            res.statusCode = result.status;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: result.message }));
+            return;
+          }
+          body = result.body;
+        }
+
+        try {
+          loadOwnerFinanceEnv(server.config.mode);
+
+          const request = Object.assign(req, { query, body }) as VercelRequest;
+          const adapter = res as unknown as VercelResponse;
+          Object.assign(adapter, {
+            status(code: number) {
+              res.statusCode = code;
+              return adapter;
+            },
+            json(payload: unknown) {
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify(payload));
+              return adapter;
+            },
+          });
+
+          const { default: handler } = await server.ssrLoadModule("/api/owner-finance.ts");
+          await handler(request, adapter);
+        } catch {
+          if (!res.writableEnded) {
+            if (!res.headersSent) {
+              res.statusCode = 500;
+              res.setHeader("Content-Type", "application/json");
+            }
+            res.end(JSON.stringify({ error: "Internal server error" }));
+          }
+        }
+      });
+      const middleware = server.middlewares.stack.pop();
+      if (middleware) server.middlewares.stack.unshift(middleware);
+    },
+  };
+}
+
 function ignoreApiDir(): Plugin {
   return {
     name: "ignore-api-dir",
@@ -196,7 +321,7 @@ function imageProxyPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), ignoreApiDir(), orderApiPlugin(), imageProxyPlugin(), devApiPlugin()],
+  plugins: [ownerFinanceApiPlugin(), react(), tailwindcss(), ignoreApiDir(), orderApiPlugin(), imageProxyPlugin(), devApiPlugin()],
   build: {
     rollupOptions: {
       external: ['mercadopago'],

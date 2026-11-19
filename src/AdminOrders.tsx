@@ -6,34 +6,7 @@ import { formatarMoeda } from "./types";
 import { supabase } from "./lib/supabase";
 import { STATUS_CONFIG_ADMIN, STATUS_FLOW, PAYMENT_LABELS_SHORT } from "./lib/status";
 import { buscaPorPalavras } from "./lib/utils";
-
-function montarMensagemCliente(order: Order): string {
-  const isRetirada = order.endereco?.deliveryMethod === "retirada";
-
-  let msg = `*RM Imports*\n`;
-  msg += `Pedido: ${order.id}\n`;
-  msg += `Status: ${STATUS_CONFIG_ADMIN[order.status]?.label || order.status}\n\n`;
-
-  msg += `*Itens:*\n`;
-  order.itens.forEach((item, i) => {
-    msg += `${i + 1}. ${item.nome} (${item.tamanho})${item.feminino ? ' ♀' : ''}\n`;
-  });
-  msg += `\n*Total: ${formatarMoeda(order.total)}*\n`;
-
-  if (order.endereco) {
-    msg += `\n*${isRetirada ? "Retirada" : "Entrega"}:*\n`;
-    msg += `${order.endereco.nome}\n`;
-    if (!isRetirada) {
-      msg += `${order.endereco.rua}, ${order.endereco.numero}`;
-      if (order.endereco.complemento) msg += ` - ${order.endereco.complemento}`;
-      msg += `\n${order.endereco.bairro} - ${order.endereco.cidade}/${order.endereco.estado}\n`;
-    }
-    msg += `Tel: ${order.endereco.telefone}\n`;
-  }
-
-  msg += `\nAcompanhe aqui:\nhttps://rm-imports.vercel.app/pedido/${order.id}`;
-  return msg;
-}
+import { montarMensagemCliente } from "./lib/customerNotification";
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState<Order[]>([]);

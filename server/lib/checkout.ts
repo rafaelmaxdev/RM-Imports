@@ -1,4 +1,5 @@
 import { isPromotionActive } from "./promotions.js";
+import { nbaPlayer } from "./nba-jerseys.js";
 
 export interface ServerProductPricing {
   tipo: string;
@@ -11,6 +12,7 @@ export interface ServerProductPricing {
 
 export interface ServerProductVariantProduct {
   tipo: string;
+  nome?: string;
   feminino: boolean;
 }
 
@@ -56,7 +58,7 @@ const TAMANHOS_POR_TIPO: Record<string, string[]> = {
   Jogador: ["P", "M", "G", "GG", "G1", "G2", "G3"],
   Retrô: ["P", "M", "G", "GG", "G1"],
   Treinamento: ["P", "M", "G", "GG", "G1"],
-  NBA: ["P", "M", "G", "GG", "G1", "G2"],
+  NBA: ["P", "M", "G", "GG", "G1"],
   Polo: ["P", "M", "G", "GG"],
 };
 
@@ -87,7 +89,7 @@ export function validateProductVariant(
   if (
     !validGender ||
     !availableSizes.includes(options.tamanho) ||
-    (product.tipo === "Polo" && options.personalizado)
+    ((product.tipo === "Polo" || nbaPlayer(product)) && options.personalizado)
   ) {
     throw new Error(INVALID_PRODUCT_VARIANT_MESSAGE);
   }

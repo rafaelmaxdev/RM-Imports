@@ -20,6 +20,7 @@ import {
 } from "./types";
 import usePromotionClock from "./hooks/usePromotionClock";
 import PromotionCountdown from "./PromotionCountdown";
+import { nbaPlayer, nbaPlayerOptions } from "../server/lib/nba-jerseys";
 
 const OG_PROPERTIES = ["og:title", "og:description", "og:image"] as const;
 
@@ -250,7 +251,9 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
     })
     .slice(0, 4);
   const tamanhosTipo = tamanhosDisponiveis(produto.tipo, genero === "Feminino");
-  const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo);
+  const jogadorPronto = nbaPlayer(produto);
+  const opcoesJogador = nbaPlayerOptions(produto, produtos);
+  const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo) || Boolean(jogadorPronto);
   const imagensFemininas = parseImageUrls(produto.imagem_urls_feminina);
   const modeloFemininoComImagens = genero === "Feminino" && imagensFemininas.length > 0;
   const imagensDoModelo = modeloFemininoComImagens ? imagensFemininas : images;
@@ -344,7 +347,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
       <div className="grid items-start gap-6 lg:grid-cols-[1.08fr_.92fr] lg:grid-rows-[min-content_1fr] lg:gap-x-12 lg:gap-y-6">
         <div className="overflow-hidden rounded-2xl border border-border bg-[#eeeeeb] shadow-card sm:rounded-3xl lg:col-start-1 lg:row-start-1">
           <ImageCarousel
-            key={genero}
+            key={`${produto.id}-${genero}`}
             images={imagensDoModelo}
             alt={produto.nome}
             hoverZoom
@@ -426,6 +429,25 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
           </div>
 
           <div className="space-y-5">
+            {jogadorPronto && (
+              <fieldset>
+                <legend className="mb-2 block text-sm font-semibold text-text-muted">Jogador</legend>
+                <div className="flex flex-wrap gap-2">
+                  {opcoesJogador.map((opcao) => (
+                    <Link
+                      key={opcao.id}
+                      to={productUrl(opcao)}
+                      state={{ from: returnPath }}
+                      aria-current={opcao.id === produto.id ? "page" : undefined}
+                      className={`rounded-md border px-4 py-2 text-sm ${opcao.id === produto.id ? "border-primary bg-primary text-white" : "border-border bg-card-bg"}`}
+                    >
+                      {nbaPlayer(opcao)!.label}
+                    </Link>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-text-muted">Nome e número das fotos já incluídos. Cada opção mostra as fotos da sua versão.</p>
+              </fieldset>
+            )}
             <fieldset>
               <legend className="mb-2 block text-sm font-semibold text-text-muted">Modelo</legend>
               <div className="flex flex-wrap gap-2">
@@ -597,7 +619,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
               <div className="flex justify-between gap-4">
                 <dt className="text-text-muted">Acabamento do escudo</dt>
                 <dd className="min-w-0 break-words text-right font-medium text-text-main">
-                  {produto.tipo.includes("Jogador") ? "Aplicado por termotransferência" : "Bordado"}
+                  {produto.tipo === "NBA" ? "Conforme as fotos do modelo" : produto.tipo.includes("Jogador") ? "Aplicado por termotransferência" : "Bordado"}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">

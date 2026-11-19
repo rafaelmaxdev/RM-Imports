@@ -469,7 +469,7 @@ export const TAMANHOS_POR_TIPO: Record<string, string[]> = {
   "Jogador": ["P", "M", "G", "GG", "G1", "G2", "G3"],
   "Retrô": ["P", "M", "G", "GG", "G1"],
   "Treinamento": ["P", "M", "G", "GG", "G1"],
-  "NBA": ["P", "M", "G", "GG", "G1", "G2"],
+  "NBA": ["P", "M", "G", "GG", "G1"],
   "Polo": ["P", "M", "G", "GG"],
 };
 

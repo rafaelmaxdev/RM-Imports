@@ -5,6 +5,17 @@ import type { DbProduto } from "./lib/db";
 import { getCachedImageUrl } from "./types";
 import { buscaPorPalavras } from "./lib/utils";
 import { normalizeNome } from "./lib/utils";
+import { nbaPlayer } from "../server/lib/nba-jerseys";
+
+const EDICOES_NBA = [
+  ["", "Padrão"],
+  ["Association Branca", "Association — branca"],
+  ["Icon", "Icon — cor principal"],
+  ["Alternativa", "Alternativa"],
+  ["City Edition", "City Edition — cidade"],
+  ["Classic Edition", "Classic Edition — retrô"],
+  ["Especial", "Edição especial / colaboração"],
+] as const;
 
 /** Pre-cache product images via the /api/precache endpoint, returns updated cached_image_urls */
 async function precacheProduto(produtoId: string): Promise<{ small?: string; medium?: string; large?: string }[] | null> {
@@ -162,9 +173,16 @@ export function montarNome(
   periodo: string,
   nomeCustom: string,
   localizacao: string,
-  peca: string
+  peca: string,
+  edicaoNba = "",
+  jogadorNba = "",
+  numeroNba = "",
 ): string {
   if (!time || !tipo || !periodo) return "";
+  if (tipo === "NBA") {
+    const base = nomeCustom || `${peca === "regata" ? "Regata" : "Camisa"} ${time} ${periodo} ${edicaoNba || "NBA"}`;
+    return jogadorNba.trim() && numeroNba.trim() ? `${base} — ${jogadorNba.trim()} #${numeroNba.trim()}` : base;
+  }
   if (nomeCustom) return nomeCustom;
   const loc = localizacao ? ` (${localizacao})` : "";
   const pecaLabel = peca === "regata" ? "Regata" : "Camisa";
@@ -195,7 +213,7 @@ function toDbProduto(p: {
   temporada: string;
   imagemUrls: string[];
   imagemUrlsFeminina?: string[];
-  yupooUrl: string;
+  yupooUrl?: string;
   destaque?: boolean;
   feminino?: boolean;
   preco_customizado?: number | null;
@@ -212,7 +230,7 @@ function toDbProduto(p: {
     temporada: p.temporada,
     imagem_urls: p.imagemUrls.filter(Boolean),
     imagem_urls_feminina: (p.imagemUrlsFeminina ?? []).filter(Boolean),
-    yupoo_url: p.yupooUrl,
+    yupoo_url: p.yupooUrl ?? "",
     destaque: p.destaque ?? false,
     feminino: p.feminino ?? false,
     preco_customizado: p.preco_customizado ?? null,
@@ -229,7 +247,6 @@ function fromDbProduto(p: DbProduto) {
     ...p,
     imagemUrls: parseImageUrls(p.imagem_urls),
     imagemUrlsFeminina: parseImageUrls(p.imagem_urls_feminina),
-    yupooUrl: p.yupoo_url,
   };
 }
 
@@ -474,7 +491,9 @@ export default function ProdutoForm({
   const [localizacao, setLocalizacao] = useState("");
   const [nomeCustom, setNomeCustom] = useState("");
   const [imagemUrls, setImagemUrls] = useState<string[]>([""]);
-  const [yupooUrl, setYupooUrl] = useState("");
+  const [edicaoNba, setEdicaoNba] = useState("");
+  const [jogadorNba, setJogadorNba] = useState("");
+  const [numeroNba, setNumeroNba] = useState("");
   const [destaque, setDestaque] = useState(false);
   const [promocao, setPromocao] = useState(false);
   const [promocaoTipo, setPromocaoTipo] = useState<string>("");
@@ -530,7 +549,7 @@ export default function ProdutoForm({
   useEffect(() => {
     if (isNBA && tipo !== "NBA") {
       setTipo("NBA");
-    } else if (retro && tipo !== "Retrô" && tipo !== "Manga Longa Retrô") {
+    } else if (!isNBA && retro && tipo !== "Retrô" && tipo !== "Manga Longa Retrô") {
       setTipo("Retrô");
     } else if (!retro && !isNBA && (tipo === "Retrô" || tipo === "Manga Longa Retrô")) {
       setTipo("Torcedor");
@@ -543,7 +562,7 @@ export default function ProdutoForm({
     if (!TIPOS_COM_FEMININO.includes(tipo)) setFeminino(false);
   }, [tipo]);
 
-  const nomeFinal = montarNome(time, tipo, periodo, nomeCustom, localizacao, peca);
+  const nomeFinal = montarNome(time, tipo, periodo, nomeCustom, localizacao, peca, edicaoNba, jogadorNba, numeroNba);
 
   function limparForm() {
     setLiga("");
@@ -554,7 +573,9 @@ export default function ProdutoForm({
     setNomeCustom("");
     setImagemUrls([""]);
     setImagemUrlsFeminina([""]);
-    setYupooUrl("");
+    setEdicaoNba("");
+    setJogadorNba("");
+    setNumeroNba("");
     setDestaque(false);
     setFeminino(false);
     setPeca("camisa");
@@ -566,7 +587,11 @@ export default function ProdutoForm({
   }
 
   async function handleAdd() {
-    const nome = nomeCustom || montarNome(time, tipo, periodo, "", localizacao, peca);
+    const nome = nomeFinal;
+    if (isNBA && Boolean(jogadorNba.trim()) !== Boolean(numeroNba.trim())) {
+      alert("Preencha jogador e número juntos, ou deixe os dois vazios.");
+      return;
+    }
     if (!nome || saving) return;
     setSaving(true);
 
@@ -580,7 +605,6 @@ export default function ProdutoForm({
           temporada: periodo,
           imagemUrls,
           imagemUrlsFeminina: feminino ? imagemUrlsFeminina : [],
-          yupooUrl,
           destaque,
           feminino,
           peca,
@@ -616,7 +640,6 @@ export default function ProdutoForm({
     setTipo(fp.tipo);
     setImagemUrls(fp.imagemUrls.length > 0 ? [...fp.imagemUrls] : [""]);
     setImagemUrlsFeminina(parseImageUrls(p.imagem_urls_feminina).length > 0 ? [...parseImageUrls(p.imagem_urls_feminina)] : [""]);
-    setYupooUrl(fp.yupooUrl);
     setDestaque(p.destaque);
     setFeminino(p.feminino);
     setPeca(p.peca ?? "camisa");
@@ -625,6 +648,20 @@ export default function ProdutoForm({
     setPromocaoValor(p.promocao_valor != null ? String(p.promocao_valor) : "");
     setPrecoCustomizado(p.preco_customizado != null ? String(p.preco_customizado) : "");
     setEditandoId(fp.id);
+
+    if (fp.tipo === "NBA") {
+      const player = nbaPlayer(fp);
+      const baseName = player?.model ?? fp.nome;
+      const prefix = `${p.peca === "regata" ? "Regata" : "Camisa"} ${fp.time} ${fp.temporada} `;
+      const edition = baseName.startsWith(prefix) ? baseName.slice(prefix.length) : "";
+      const knownEdition = EDICOES_NBA.some(([value]) => value === edition) || edition === "NBA";
+      setEdicaoNba(knownEdition && edition !== "NBA" ? edition : "");
+      setJogadorNba(player?.label.replace(/ #\d+$/, "") ?? "");
+      setNumeroNba(player?.label.match(/ #(\d+)$/)?.[1] ?? "");
+      setLocalizacao("");
+      setNomeCustom(knownEdition ? "" : baseName);
+      return;
+    }
 
     const locMatch = fp.nome.match(/\((Casa|Fora|Terceira|Quarta)\)/);
     const loc = locMatch ? locMatch[1] : "";
@@ -635,7 +672,11 @@ export default function ProdutoForm({
   }
 
   async function handleSave() {
-    const nome = nomeCustom || montarNome(time, tipo, periodo, "", localizacao, peca);
+    const nome = nomeFinal;
+    if (isNBA && Boolean(jogadorNba.trim()) !== Boolean(numeroNba.trim())) {
+      alert("Preencha jogador e número juntos, ou deixe os dois vazios.");
+      return;
+    }
     if (!nome || !editandoId || saving) return;
     setSaving(true);
 
@@ -650,7 +691,7 @@ export default function ProdutoForm({
           temporada: periodo,
           imagemUrls,
           imagemUrlsFeminina: feminino ? imagemUrlsFeminina : [],
-          yupooUrl,
+          yupooUrl: produtos.find((p) => p.id === editandoId)?.yupoo_url ?? "",
           destaque,
           feminino,
           peca,
@@ -722,6 +763,10 @@ export default function ProdutoForm({
           onChange={(e) => {
             setLiga(e.target.value);
             setTime("");
+            setEdicaoNba("");
+            setJogadorNba("");
+            setNumeroNba("");
+            setPeca(e.target.value === "NBA" ? "regata" : "camisa");
           }}
           className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
         >
@@ -765,7 +810,7 @@ export default function ProdutoForm({
       <div className="flex flex-col gap-1">
         <label className="text-sm font-semibold text-text-muted">
           Tipo{" "}
-          {retro &&
+          {retro && !isNBA &&
             (isAno
               ? "(apenas Retrô para 2022 ou anterior)"
               : "(apenas Retrô para 2021/2022 ou anterior)")}
@@ -783,7 +828,7 @@ export default function ProdutoForm({
         </select>
       </div>
 
-      <div className="flex flex-col gap-1">
+      {!isNBA && <div className="flex flex-col gap-1">
         <label className="text-sm font-semibold text-text-muted">Localização (opcional)</label>
         <select
           value={localizacao}
@@ -796,17 +841,38 @@ export default function ProdutoForm({
           <option value="Terceira">Terceira</option>
           <option value="Quarta">Quarta</option>
         </select>
-      </div>
+      </div>}
+
+      {isNBA && <>
+        <label className="flex flex-col gap-1 text-sm font-semibold text-text-muted">
+          Edição NBA
+          <select value={edicaoNba} onChange={(e) => setEdicaoNba(e.target.value)} className="px-3 py-2.5 text-base font-normal text-text-main border border-border rounded-md bg-card-bg">
+            {EDICOES_NBA.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <p className="-mt-2 text-xs text-text-muted">Na NBA, branca e cor principal não significam necessariamente casa e fora. Use o nome livre para informar cor, coleção ou colaboração.</p>
+        <div className="grid grid-cols-[1fr_100px] gap-3">
+          <label className="flex flex-col gap-1 text-sm font-semibold text-text-muted">
+            Jogador das fotos (opcional)
+            <input value={jogadorNba} onChange={(e) => setJogadorNba(e.target.value)} placeholder="Ex.: Dončić" maxLength={40} className="min-w-0 px-3 py-2.5 text-base font-normal text-text-main border border-border rounded-md bg-card-bg" />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-semibold text-text-muted">
+            Número
+            <input value={numeroNba} onChange={(e) => setNumeroNba(e.target.value.replace(/\D/g, "").slice(0, 2))} inputMode="numeric" placeholder="77" className="min-w-0 px-3 py-2.5 text-base font-normal text-text-main border border-border rounded-md bg-card-bg" />
+          </label>
+        </div>
+      </>}
 
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-semibold text-text-muted">Nome personalizado (opcional)</label>
+        <label className="text-sm font-semibold text-text-muted">{isNBA ? "Nome específico do modelo (opcional)" : "Nome personalizado (opcional)"}</label>
         <input
           type="text"
           value={nomeCustom}
           onChange={(e) => setNomeCustom(e.target.value)}
-          placeholder="Sobrescreve o nome gerado"
+          placeholder={isNBA ? "Ex.: Regata Heat × GTA VI" : "Sobrescreve o nome gerado"}
           className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
         />
+        {isNBA && <p className="text-xs text-text-muted">Substitui o nome do modelo. Se preenchidos, jogador e número são acrescentados no final.</p>}
       </div>
 
       <div className="flex flex-col gap-2">
@@ -843,17 +909,6 @@ export default function ProdutoForm({
         >
           + Adicionar imagem
         </button>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-semibold text-text-muted">Link da loja Yupoo</label>
-        <input
-          type="text"
-          value={yupooUrl}
-          onChange={(e) => setYupooUrl(e.target.value)}
-          placeholder="https://..."
-          className="px-3 py-2.5 text-base border border-border rounded-md bg-card-bg"
-        />
       </div>
 
       <div className="flex items-center gap-2">

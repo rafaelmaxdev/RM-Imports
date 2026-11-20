@@ -734,7 +734,6 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
               </span>
               <span className="mt-2 text-xs font-bold leading-tight text-text-main">{showAllTimes ? "Ocultar times" : "Ver todos"}</span>
             </button>
-            <span aria-hidden="true" className="w-full shrink-0" />
           </nav>
           {timesCanScrollLeft && (
             <button

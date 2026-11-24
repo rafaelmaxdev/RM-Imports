@@ -21,6 +21,7 @@ import {
 import usePromotionClock from "./hooks/usePromotionClock";
 import PromotionCountdown from "./PromotionCountdown";
 import { nbaPlayer, nbaPlayerOptions } from "../server/lib/nba-jerseys";
+import { fixedPrint } from "../server/lib/fixed-print";
 
 const OG_PROPERTIES = ["og:title", "og:description", "og:image"] as const;
 
@@ -99,6 +100,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
       produto.promocao_valor,
       produto.time,
       produto.temporada,
+      produto.id,
     );
     const structuredData = (document.getElementById("product-structured-data") as HTMLScriptElement | null)
       ?? document.createElement("script");
@@ -253,13 +255,15 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
   const tamanhosTipo = tamanhosDisponiveis(produto.tipo, genero === "Feminino");
   const jogadorPronto = nbaPlayer(produto);
   const opcoesJogador = nbaPlayerOptions(produto, produtos);
-  const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo) || Boolean(jogadorPronto);
+  const estampaFixa = fixedPrint(produto.id);
+  const adicionalEstampaFixa = estampaFixa?.price ?? 0;
+  const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo) || Boolean(jogadorPronto || estampaFixa);
   const imagensFemininas = parseImageUrls(produto.imagem_urls_feminina);
   const modeloFemininoComImagens = genero === "Feminino" && imagensFemininas.length > 0;
   const imagensDoModelo = modeloFemininoComImagens ? imagensFemininas : images;
   const personalizacaoAtiva = personalizado && !semPersonalizacao;
   const adicionalTam = ADICIONAL_TAMANHO[tamanho] || 0;
-  const adicionalPers = personalizacaoAtiva ? precoPersonalizacao(produto.tipo) : 0;
+  const adicionalPers = personalizacaoAtiva ? precoPersonalizacao(produto.tipo) : adicionalEstampaFixa;
   const precoFinal = (priceInfo.promo ?? priceInfo.base) + adicionalTam + adicionalPers;
   const hasRealDiscount = priceInfo.promo != null && priceInfo.promo < priceInfo.base;
   const hasTimedPromotion = Boolean(priceInfo.endsAt && hasRealDiscount);
@@ -293,6 +297,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
       preco: precoFinal,
       precoBase: priceInfo.base + adicionalTam + adicionalPers,
       cachedImageUrls: modeloFemininoComImagens ? null : produtoAtual.cached_image_urls,
+      ...(estampaFixa && { precoIncluiEstampaFixa: true }),
     };
 
     addToCart(item);
@@ -397,7 +402,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
             <div className="min-w-0">
               {hasRealDiscount && (
                 <div className="mb-0.5 flex items-center gap-2">
-                  <span className="text-sm leading-none text-text-muted line-through">{formatarMoeda(priceInfo.base)}</span>
+                  <span className="text-sm leading-none text-text-muted line-through">{formatarMoeda(priceInfo.base + adicionalEstampaFixa)}</span>
                   {priceInfo.discountLabel && (
                     <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
                       {priceInfo.discountLabel}
@@ -407,7 +412,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
               )}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-3xl leading-none font-black tracking-tight text-accent">
-                  {formatarMoeda(priceInfo.promo ?? priceInfo.base)}
+                  {formatarMoeda((priceInfo.promo ?? priceInfo.base) + adicionalEstampaFixa)}
                 </span>
                 <span className="inline-flex items-center gap-1.5 text-sm leading-none font-semibold text-text-muted">
                   no Pix
@@ -429,6 +434,12 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
           </div>
 
           <div className="space-y-5">
+            {estampaFixa && (
+              <div>
+                <p className="mb-2 text-sm font-semibold text-text-muted">Estampa</p>
+                <span className="inline-block rounded-md bg-primary px-4 py-2 text-sm text-white">{estampaFixa.label}</span>
+              </div>
+            )}
             {jogadorPronto && (
               <fieldset>
                 <legend className="mb-2 block text-sm font-semibold text-text-muted">Jogador</legend>
@@ -565,7 +576,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
               )}
               {adicionalPers > 0 && (
                 <>
-                  <span>Personalização:</span>
+                  <span>{estampaFixa ? `Estampa ${estampaFixa.label}` : "Personalização"}:</span>
                   <span>+{formatarMoeda(adicionalPers)}</span>
                 </>
               )}
@@ -662,6 +673,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
                 related.promocao_valor,
                 related.time,
                 related.temporada,
+                related.id,
               );
               return (
                 <Link

@@ -20,6 +20,7 @@ import { TIPO_SHORT } from "./lib/status";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import usePromotionClock from "./hooks/usePromotionClock";
 import PromotionCountdown from "./PromotionCountdown";
+import { fixedPrint } from "../server/lib/fixed-print";
 
 // ── Grouped product ──
 
@@ -194,7 +195,9 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
     product.promocaoValor,
     product.time,
     product.temporada,
+    product.produto_id,
   );
+  const estampaFixa = fixedPrint(product.produto_id);
   const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
   const peMarkup = config.pronta_entrega_markup ?? 20;
 
@@ -202,7 +205,7 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
     const add = ADICIONAL_TAMANHO[s.tamanho] || 0;
     const pers = s.personalizado ? precoPersonalizacao(product.tipo) : 0;
     const pb = Math.round((base + add + pers + peMarkup) * 100) / 100;
-    const pf = promo !== null ? Math.round((pb * promo / base)) : pb;
+    const pf = promo === null ? pb : estampaFixa ? promo + add + peMarkup : Math.round((pb * promo / base));
     return { precoBase: pb, precoFinal: pf };
   });
   const minPrecoBase = Math.min(...allPrices.map(p => p.precoBase));
@@ -216,7 +219,9 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
   const adicionalTam = ADICIONAL_TAMANHO[selectedTam] || 0;
   const adicionalPers = selectedSizeInfo?.personalizado ? precoPersonalizacao(product.tipo) : 0;
   const precoBaseMarcado = Math.round((base + adicionalTam + adicionalPers + peMarkup) * 100) / 100;
-  const precoPromoMarcado = promo !== null ? Math.round((precoBaseMarcado * promo / base)) : null;
+  const precoPromoMarcado = promo === null ? null : estampaFixa
+    ? promo + adicionalTam + peMarkup
+    : Math.round((precoBaseMarcado * promo / base));
   const prontaEntregaPrice = precoPromoMarcado ?? precoBaseMarcado;
   const prontaEntregaBasePrice = precoBaseMarcado;
 
@@ -244,6 +249,7 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
       prontaEntrega: true,
       peMarkup,
       cachedImageUrls: product.cachedImageUrls,
+      ...(estampaFixa && { precoIncluiEstampaFixa: true, precoBase: prontaEntregaBasePrice }),
     };
 
     addToCart(item);
@@ -721,14 +727,18 @@ export default function ProntaEntrega() {
                 p.promocaoValor,
                 p.time,
                 p.temporada,
+                p.produto_id,
               );
+              const estampaFixa = fixedPrint(p.produto_id);
               const peMarkup = config!.pronta_entrega_markup ?? 20;
               const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
               const prices = p.sizes.map(s => {
                 const adicionalTam = ADICIONAL_TAMANHO[s.tamanho] || 0;
                 const adicionalPers = s.personalizado ? precoPersonalizacao(p.tipo) : 0;
                 const precoBase = Math.round((base + adicionalTam + adicionalPers + peMarkup) * 100) / 100;
-                const precoFinal = promo !== null ? Math.round((precoBase * promo / base)) : precoBase;
+                const precoFinal = promo === null ? precoBase : estampaFixa
+                  ? promo + adicionalTam + peMarkup
+                  : Math.round((precoBase * promo / base));
                 return { precoBase, precoFinal };
               });
               const minPrecoBase = Math.min(...prices.map(p => p.precoBase));

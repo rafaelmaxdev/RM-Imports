@@ -52,17 +52,17 @@ interface Liga {
 }
 
 const SELECOES = [
-  "Alemanha", "Arábia Saudita", "Argentina", "Argélia", "Austrália", "Áustria",
+  "África do Sul", "Alemanha", "Arábia Saudita", "Argentina", "Argélia", "Austrália", "Áustria",
   "Bélgica", "Bolívia", "Bósnia e Herzegovina", "Brasil", "Bulgária",
-  "Cabo Verde", "Camarões", "Canadá", "Chile", "China", "Colômbia",
-  "Coreia do Sul", "Costa do Marfim", "Costa Rica", "Croácia", "Dinamarca",
-  "Equador", "Egito", "Escócia", "Eslováquia", "Eslovênia", "Espanha", "EUA",
-  "Finlândia", "França", "Gana", "Grécia", "Guatemala", "Holanda",
-  "Honduras", "Inglaterra", "Irã", "Irlanda", "Islândia", "Itália",
-  "Jamaica", "Japão", "Mali", "Marrocos", "México", "Nigéria", "Noruega",
+  "Cabo Verde", "Camarões", "Canadá", "Catar", "Chile", "China", "Colômbia",
+  "Coreia do Sul", "Costa do Marfim", "Costa Rica", "Croácia", "Curaçao", "Dinamarca",
+  "Equador", "Egito", "Escócia", "Eslováquia", "Eslovênia", "Espanha", "Estados Unidos", "EUA",
+  "Finlândia", "França", "Gana", "Grécia", "Guatemala", "Haiti", "Holanda",
+  "Honduras", "Inglaterra", "Irã", "Iraque", "Irlanda", "Islândia", "Itália",
+  "Jamaica", "Japão", "Jordânia", "Mali", "Marrocos", "México", "Nigéria", "Noruega",
   "Nova Zelândia", "País de Gales", "Panamá", "Paraguai", "Peru", "Polônia",
-  "Portugal", "Qatar", "República Tcheca", "Romênia", "Rússia", "Senegal",
-  "Sérvia", "Suécia", "Suíça", "Tunísia", "Turquia", "Ucrânia", "Uruguai",
+  "Portugal", "Qatar", "República Democrática do Congo", "República Tcheca", "Romênia", "Rússia", "Senegal",
+  "Sérvia", "Suécia", "Suíça", "Tunísia", "Turquia", "Ucrânia", "Uruguai", "Uzbequistão",
 ].sort((a, b) => a.localeCompare(b));
 
 const NBA_FRANQUIAS = [

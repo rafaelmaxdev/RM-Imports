@@ -13,6 +13,7 @@ import {
   isMissingCreditReleasePeriodColumn,
   mapMercadoPagoPaymentType,
 } from "../../server/lib/payment-reconciliation";
+import { DEFAULT_CONFIG, getPrecoProduto } from "../types";
 
 const config: ServerCheckoutConfig = {
   precos_base: { Torcedor: 129.90, Jogador: 169.90, NBA: 189.90 },
@@ -58,6 +59,22 @@ describe("limitarDescontoCupom", () => {
 });
 
 describe("calculateServerItemPrice", () => {
+  it("adds the fixed Messi print once in the catalog and at checkout, including during promotions", () => {
+    const id = "f9f2a258-ee87-56f3-af71-670f7d7d9c92";
+    const localConfig = { ...DEFAULT_CONFIG, precos_base: { Torcedor: 149.90 } };
+    const catalog = getPrecoProduto("Torcedor", localConfig, null, "porcentagem", 10, "Argentina", "2026", id);
+    expect(catalog).toMatchObject({ base: 169.90, promo: 154.91 });
+
+    const product = { id, tipo: "Torcedor", temporada: "2026" };
+    const options = { tamanho: "M", personalizado: false };
+    expect(calculateServerItemPrice(product, options, localConfig)).toEqual({ preco: 169.90, precoBase: 169.90 });
+    expect(calculateServerItemPrice(
+      { ...product, promocao_tipo: "porcentagem", promocao_valor: 10 },
+      { ...options, tamanho: "G2" },
+      localConfig,
+    )).toEqual({ preco: 164.91, precoBase: 179.90 });
+  });
+
   it("matches client seasonal launch and previous-season prices", () => {
     const seasonalConfig = {
       ...config,
@@ -247,6 +264,18 @@ describe("validateProductVariant", () => {
       { tipo: "Polo", feminino: false },
       { tamanho: "M", genero: "Masculino", personalizado: true },
     )).toThrow();
+  });
+
+  it("accepts the fixed Messi print and rejects custom lettering for that shirt", () => {
+    const product = {
+      id: "f9f2a258-ee87-56f3-af71-670f7d7d9c92",
+      tipo: "Torcedor",
+      feminino: false,
+    };
+    const options = { tamanho: "M", genero: "Masculino", personalizado: false };
+
+    expect(() => validateProductVariant(product, options)).not.toThrow();
+    expect(() => validateProductVariant(product, { ...options, personalizado: true })).toThrow();
   });
 
   it("rejects G2 for Manga Longa Torcedor", () => {

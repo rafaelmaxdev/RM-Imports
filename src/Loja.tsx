@@ -9,6 +9,7 @@ import type { LojaConfig, PromocaoTipo } from "./types";
 import { formatarPreco, getCachedImageUrl, getPrecoProduto } from "./types";
 import { normalizeNome, normalizarBusca, parseAnoTemporada, slugify } from "./lib/utils";
 import { promotionLabels } from "./lib/promotionLabels";
+import { getTeamLogo } from "./lib/teamLogos";
 import { TIPO_SHORT } from "./lib/status";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import usePromotionClock from "./hooks/usePromotionClock";
@@ -29,6 +30,19 @@ const CATEGORIAS = [
   "Seleções",
   "Serie A",
 ];
+
+const GRUPOS_DE_TIMES = ["Clubes de futebol", "Seleções", "NBA"] as const;
+
+function TeamLogo({ nome, esporte }: { nome: string; esporte: "Futebol" | "NBA" }) {
+  const [falhou, setFalhou] = useState(false);
+  const logo = getTeamLogo(nome, esporte);
+
+  if (!logo || falhou) {
+    return <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center rounded bg-bg-base text-[10px] font-bold">{nome.slice(0, 2).toLocaleUpperCase("pt-BR")}</span>;
+  }
+
+  return <img src={logo} alt="" width={24} height={24} loading="lazy" className="size-6 shrink-0 object-contain" onError={() => setFalhou(true)} />;
+}
 
 function produtoNaCategoria(produto: Pick<DbProduto, "liga" | "temporada">, categoria: string) {
   if (categoria === "Todas") return true;
@@ -54,7 +68,14 @@ const TIMES_PRINCIPAIS = [
 ];
 const ORDEM_TIMES_PRINCIPAIS = new Map(TIMES_PRINCIPAIS.map(({ nome }, index) => [normalizeNome(nome), index]));
 
-type Ordenacao = "time" | "preco-asc" | "preco-desc" | "categoria" | "temporada-asc" | "temporada-desc";
+type Ordenacao = "padrao" | "time" | "preco-asc" | "preco-desc" | "categoria" | "temporada-asc" | "temporada-desc";
+
+function grupoDoCatalogo(tipo: string): number {
+  if (tipo === "Torcedor") return 0;
+  if (tipo === "Jogador") return 1;
+  if (tipo === "Retrô" || tipo === "Manga Longa Retrô") return 3;
+  return 2;
+}
 
 export default function Loja({ produtos, config }: { produtos: DbProduto[]; config: LojaConfig }) {
   const location = useLocation();
@@ -79,7 +100,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     ordemParam === "temporada-asc" ||
     ordemParam === "temporada-desc"
       ? ordemParam
-      : filtroTime ? "temporada-desc" : "time";
+      : "padrao";
   const precoMinParam = searchParams.get("precoMin");
   const precoMaxParam = searchParams.get("precoMax");
   const precoMin =
@@ -101,7 +122,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     Boolean(filtroTime) ||
     Boolean(filtroTipo) ||
     Boolean(filtroBusca) ||
-    ordenacao !== "time" ||
+    ordenacao !== "padrao" ||
     precoMin !== undefined ||
     precoMax !== undefined;
 
@@ -270,8 +291,25 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   }, [produtos]);
 
   const todosTimes = useMemo(() => {
-    const times = produtosNormalizados.map((p) => p.time.trim()).filter(Boolean);
-    return Array.from(new Set(times)).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const times = {
+      "Clubes de futebol": new Set<string>(),
+      Seleções: new Set<string>(),
+      NBA: new Set<string>(),
+    };
+    for (const produto of produtosNormalizados) {
+      const time = produto.time.trim();
+      if (!time) continue;
+      const grupo = produto.liga === "NBA" || produto.tipo === "NBA"
+        ? "NBA"
+        : produto.liga === "Seleções" ? "Seleções" : "Clubes de futebol";
+      times[grupo].add(time);
+    }
+
+    return GRUPOS_DE_TIMES.map((grupo) => ({
+      grupo,
+      tituloId: `todos-times-${slugify(grupo)}`,
+      times: [...times[grupo]].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    })).filter(({ times }) => times.length > 0);
   }, [produtosNormalizados]);
 
   // Cache prices per product — avoids recomputing on every filter/sort change
@@ -279,7 +317,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     void now;
     const map = new Map<string, number>();
     for (const p of produtosNormalizados) {
-      const info = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time, p.temporada);
+      const info = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time, p.temporada, p.id);
       map.set(p.id, info.promo ?? info.base);
     }
     return map;
@@ -364,53 +402,17 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     const precos = priceCache;
 
     switch (ordenacao) {
+      case "padrao":
+        res.sort((a, b) => grupoDoCatalogo(a.tipo) - grupoDoCatalogo(b.tipo)
+          || parseAnoTemporada(b.temporada) - parseAnoTemporada(a.temporada)
+          || (ORDEM_TIMES_PRINCIPAIS.get(a.time) ?? TIMES_PRINCIPAIS.length)
+            - (ORDEM_TIMES_PRINCIPAIS.get(b.time) ?? TIMES_PRINCIPAIS.length)
+          || a.time.localeCompare(b.time, "pt-BR")
+          || (precos.get(a.id) ?? 0) - (precos.get(b.id) ?? 0)
+          || a.nome.localeCompare(b.nome, "pt-BR"));
+        break;
       case "time":
-        if (
-          (categoriaSelecionada !== "Todas" && categoriaSelecionada !== "2026") ||
-          filtroTime ||
-          filtroTipo ||
-          filtroBusca ||
-          precoMin !== undefined ||
-          precoMax !== undefined ||
-          ordemParam !== null
-        ) {
-          res.sort((a, b) => a.time.localeCompare(b.time, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR"));
-          break;
-        }
-        if (categoriaSelecionada === "Todas") {
-          const idsRepresentativos = new Set<string>();
-          for (const { nome } of TIMES_PRINCIPAIS) {
-            const candidatos = res.filter((p) => p.time === normalizeNome(nome) && parseAnoTemporada(p.temporada) === config.ano_temporada_lancamento);
-            if (candidatos.length === 0) continue;
-            const representante = candidatos.reduce((menor, produto) => {
-              const nomeCompare = produto.nome.localeCompare(menor.nome, "pt-BR");
-              return nomeCompare < 0 || (nomeCompare === 0 && produto.id.localeCompare(menor.id, "pt-BR") < 0) ? produto : menor;
-            });
-            idsRepresentativos.add(representante.id);
-          }
-          res.sort((a, b) => {
-            const aRepresentativo = idsRepresentativos.has(a.id);
-            const bRepresentativo = idsRepresentativos.has(b.id);
-            if (aRepresentativo !== bRepresentativo) return aRepresentativo ? -1 : 1;
-            if (aRepresentativo) return (ORDEM_TIMES_PRINCIPAIS.get(a.time) ?? TIMES_PRINCIPAIS.length) - (ORDEM_TIMES_PRINCIPAIS.get(b.time) ?? TIMES_PRINCIPAIS.length);
-            return a.time.localeCompare(b.time, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR") || parseAnoTemporada(b.temporada) - parseAnoTemporada(a.temporada);
-          });
-        } else {
-          res.sort((a, b) => {
-            const anoA = parseAnoTemporada(a.temporada);
-            const anoB = parseAnoTemporada(b.temporada);
-            const rankA = anoA === config.ano_temporada_lancamento
-              ? ORDEM_TIMES_PRINCIPAIS.get(a.time) ?? TIMES_PRINCIPAIS.length
-              : TIMES_PRINCIPAIS.length;
-            const rankB = anoB === config.ano_temporada_lancamento
-              ? ORDEM_TIMES_PRINCIPAIS.get(b.time) ?? TIMES_PRINCIPAIS.length
-              : TIMES_PRINCIPAIS.length;
-            return rankA - rankB
-              || (rankA < TIMES_PRINCIPAIS.length && rankB < TIMES_PRINCIPAIS.length
-                ? a.nome.localeCompare(b.nome, "pt-BR") || anoB - anoA
-                : a.time.localeCompare(b.time, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR") || anoB - anoA);
-          });
-        }
+        res.sort((a, b) => a.time.localeCompare(b.time, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR"));
         break;
       case "preco-asc":
         res.sort((a, b) => (precos.get(a.id) ?? 0) - (precos.get(b.id) ?? 0));
@@ -430,7 +432,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     }
 
     return res;
-  }, [produtosNormalizados, categoriaSelecionada, filtroTime, filtroTipo, filtroBusca, ordenacao, ordemParam, precoMin, precoMax, config.ano_temporada_lancamento, priceCache]);
+  }, [produtosNormalizados, categoriaSelecionada, filtroTime, filtroTipo, filtroBusca, ordenacao, precoMin, precoMax, priceCache]);
 
   const timesDisponiveis = useMemo(() => {
     let res = [...produtosNormalizados];
@@ -501,14 +503,14 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     ? getCachedImageUrl(heroImageSource, heroProduct.cached_image_urls, 0, "large")
     : "";
   const heroPrice = heroProduct
-    ? getPrecoProduto(heroProduct.tipo, config, heroProduct.preco_customizado, (heroProduct.promocao_tipo as PromocaoTipo) ?? undefined, heroProduct.promocao_valor, heroProduct.time, heroProduct.temporada)
+    ? getPrecoProduto(heroProduct.tipo, config, heroProduct.preco_customizado, (heroProduct.promocao_tipo as PromocaoTipo) ?? undefined, heroProduct.promocao_valor, heroProduct.time, heroProduct.temporada, heroProduct.id)
     : null;
   const heroPreviousImageSource = heroPreviousProduct ? parseImageUrls(heroPreviousProduct.imagem_urls)[0] : "";
   const heroPreviousImage = heroPreviousProduct && heroPreviousImageSource
     ? getCachedImageUrl(heroPreviousImageSource, heroPreviousProduct.cached_image_urls, 0, "large")
     : "";
   const heroPreviousPrice = heroPreviousProduct
-    ? getPrecoProduto(heroPreviousProduct.tipo, config, heroPreviousProduct.preco_customizado, (heroPreviousProduct.promocao_tipo as PromocaoTipo) ?? undefined, heroPreviousProduct.promocao_valor, heroPreviousProduct.time, heroPreviousProduct.temporada)
+    ? getPrecoProduto(heroPreviousProduct.tipo, config, heroPreviousProduct.preco_customizado, (heroPreviousProduct.promocao_tipo as PromocaoTipo) ?? undefined, heroPreviousProduct.promocao_valor, heroPreviousProduct.time, heroPreviousProduct.temporada, heroPreviousProduct.id)
     : null;
 
   useEffect(() => {
@@ -763,18 +765,24 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
         {showAllTimes && (
           <div id="todos-times-panel" className="mt-4 rounded-2xl border border-border bg-bg-base p-4" aria-labelledby="todos-times-title">
             <h3 id="todos-times-title" className="text-sm font-semibold text-primary">Todos os times</h3>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-              {todosTimes.map((time) => (
-                <Link
-                  key={time}
-                  to={`/?time=${encodeURIComponent(time)}#catalogo`}
-                  onClick={() => setShowAllTimes(false)}
-                  className="rounded-xl border border-border bg-card-bg px-3 py-2 text-sm font-medium text-text-main transition-colors hover:border-primary/30 hover:bg-primary/5"
-                >
-                  {time}
-                </Link>
-              ))}
-            </div>
+            {todosTimes.map(({ grupo, tituloId, times }) => (
+              <section key={grupo} className="mt-4 border-t border-border pt-3" aria-labelledby={tituloId}>
+                <h4 id={tituloId} className="mb-2 text-sm font-bold text-primary">{grupo}</h4>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                  {times.map((time) => (
+                    <Link
+                      key={time}
+                      to={`/?time=${encodeURIComponent(time)}#catalogo`}
+                      onClick={() => setShowAllTimes(false)}
+                      className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-card-bg px-2 py-1.5 text-sm font-medium leading-tight text-text-main transition-colors hover:border-primary/30 hover:bg-primary/5 sm:px-3"
+                    >
+                      <TeamLogo nome={time} esporte={grupo === "NBA" ? "NBA" : "Futebol"} />
+                      <span className="min-w-0 wrap-break-word">{time}</span>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
         )}
       </section>
@@ -1014,7 +1022,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                 const value = e.target.value;
                 setSearchParams((current) => {
                   const next = new URLSearchParams(current);
-                  if (value === "time") next.delete("ordem");
+                  if (value === "padrao") next.delete("ordem");
                   else next.set("ordem", value);
                   return next;
                 });
@@ -1022,7 +1030,8 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
               className="h-11 w-full rounded-lg border border-border bg-bg-base px-3 text-sm"
               aria-label="Ordenar produtos"
             >
-              <option value="time">Times em destaque</option>
+              <option value="padrao">Ordem recomendada</option>
+              <option value="time">Time (A–Z)</option>
               <option value="preco-asc">Menor preço</option>
               <option value="preco-desc">Maior preço</option>
               <option value="categoria">Categoria</option>
@@ -1121,7 +1130,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
       ) : (
         <div key={filterKey} className="grid grid-cols-2 items-stretch gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))] sm:gap-5">
           {produtosFiltrados.slice(0, visibleCount).map((p, index) => {
-            const priceInfo = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time, p.temporada);
+            const priceInfo = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time, p.temporada, p.id);
             const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
             const productImages = parseImageUrls(p.imagem_urls);
             const productImage = productImages.length > 0

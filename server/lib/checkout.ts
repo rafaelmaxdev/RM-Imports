@@ -1,7 +1,9 @@
 import { isPromotionActive } from "./promotions.js";
 import { nbaPlayer } from "./nba-jerseys.js";
+import { fixedPrint } from "./fixed-print.js";
 
 export interface ServerProductPricing {
+  id?: string;
   tipo: string;
   time?: string | null;
   temporada?: string | null;
@@ -11,6 +13,7 @@ export interface ServerProductPricing {
 }
 
 export interface ServerProductVariantProduct {
+  id?: string;
   tipo: string;
   nome?: string;
   feminino: boolean;
@@ -89,7 +92,7 @@ export function validateProductVariant(
   if (
     !validGender ||
     !availableSizes.includes(options.tamanho) ||
-    ((product.tipo === "Polo" || nbaPlayer(product)) && options.personalizado)
+    (options.personalizado && (product.tipo === "Polo" || nbaPlayer(product) || fixedPrint(product.id)))
   ) {
     throw new Error(INVALID_PRODUCT_VARIANT_MESSAGE);
   }
@@ -241,7 +244,8 @@ export function calculateServerItemPrice(
   }
 
   const sizeMarkup = options.tamanho === "G2" ? 10 : options.tamanho === "G3" ? 20 : 0;
-  const personalizationMarkup = options.personalizado ? (product.tipo === "Torcedor" ? 20 : 25) : 0;
+  const print = fixedPrint(product.id);
+  const personalizationMarkup = print?.price ?? (options.personalizado ? (product.tipo === "Torcedor" ? 20 : 25) : 0);
   const peMarkup = options.prontaEntrega
     ? configuredMarkup(config.pronta_entrega_markup)
     : 0;

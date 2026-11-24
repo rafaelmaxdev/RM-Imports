@@ -5,6 +5,7 @@ import { saveOrderAccessToken } from "./lib/orderAccess";
 import { track } from "@vercel/analytics";
 import { getMPDeviceSessionId } from "./lib/mpDevice";
 import { normalizeBuyerIdentity } from "../server/lib/buyer-identity";
+import { fixedPrint } from "../server/lib/fixed-print";
 
 interface CartContextType {
   cart: CartItem[];
@@ -24,7 +25,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
       const saved = localStorage.getItem("ul_cart");
-      return saved ? JSON.parse(saved) : [];
+      const items: CartItem[] = saved ? JSON.parse(saved) : [];
+      return items.map((item) => {
+        const estampa = fixedPrint(item.productId);
+        if (!estampa || item.precoIncluiEstampaFixa) return item;
+
+        // Existing personalized entries already include the customization price.
+        const adicional = item.personalizado ? 0 : estampa.price;
+        return {
+          ...item,
+          personalizado: false,
+          nomePersonalizado: undefined,
+          numeroPersonalizado: undefined,
+          preco: Math.round((item.preco + adicional) * 100) / 100,
+          precoBase: Math.round(((item.precoBase ?? item.preco) + adicional) * 100) / 100,
+          precoIncluiEstampaFixa: true,
+        };
+      });
     } catch {
       return [];
     }

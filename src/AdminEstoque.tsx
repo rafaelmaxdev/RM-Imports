@@ -213,6 +213,7 @@ export default function AdminEstoque({ produtos, config }: AdminEstoqueProps) {
         p?.promocao_valor ?? null,
         p?.time,
         p?.temporada ?? vendaItem.produto_temporada ?? "",
+        vendaItem.produto_id,
       );
       const basePrice = priceInfo.promo ?? priceInfo.base;
       const adicionalTam = ADICIONAL_TAMANHO[vendaItem.tamanho] || 0;

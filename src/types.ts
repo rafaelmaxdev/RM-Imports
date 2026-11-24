@@ -1,4 +1,5 @@
 import { isPromotionActive } from "../server/lib/promotions";
+import { fixedPrint } from "../server/lib/fixed-print";
 
 export interface CartItem {
   productId: string;
@@ -18,6 +19,7 @@ export interface CartItem {
   prontaEntrega?: boolean; // True when buying from stock
   peMarkup?: number;       // PE markup value used when added to cart
   cachedImageUrls?: CachedImageMap | null;
+  precoIncluiEstampaFixa?: boolean;
 }
 
 export interface OrderItem {
@@ -258,6 +260,27 @@ function getPrecoBaseSazonal(
 }
 
 export function getPrecoProduto(
+  tipo: string,
+  config: LojaConfig,
+  precoCustomizado?: number | null,
+  promocaoTipo?: PromocaoTipo,
+  promocaoValor?: number | null,
+  time?: string,
+  temporada?: string,
+  produtoId?: string,
+): PromocaoInfo {
+  const preco = getPrecoProdutoSemEstampa(tipo, config, precoCustomizado, promocaoTipo, promocaoValor, time, temporada);
+  const estampa = fixedPrint(produtoId);
+  if (!estampa) return preco;
+
+  return {
+    ...preco,
+    base: Math.round((preco.base + estampa.price) * 100) / 100,
+    promo: preco.promo === null ? null : Math.round((preco.promo + estampa.price) * 100) / 100,
+  };
+}
+
+function getPrecoProdutoSemEstampa(
   tipo: string,
   config: LojaConfig,
   precoCustomizado?: number | null,

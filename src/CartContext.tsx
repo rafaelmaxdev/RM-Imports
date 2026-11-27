@@ -1,11 +1,13 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
-import type { CartItem, Order, OrderAddress, PaymentMethod } from "./types";
+import type { CartItem, LojaConfig, Order, OrderAddress, PaymentMethod } from "./types";
+import type { DbProduto } from "./lib/db";
 import { gerarId } from "./types";
 import { saveOrderAccessToken } from "./lib/orderAccess";
 import { track } from "@vercel/analytics";
 import { getMPDeviceSessionId } from "./lib/mpDevice";
 import { normalizeBuyerIdentity } from "../server/lib/buyer-identity";
 import { fixedPrint } from "../server/lib/fixed-print";
+import { calculateServerItemPrice } from "../server/lib/checkout";
 
 interface CartContextType {
   cart: CartItem[];
@@ -14,6 +16,7 @@ interface CartContextType {
   dismissAddedItem: () => void;
   removeFromCart: (index: number) => void;
   clearCart: () => void;
+  syncBlackFridayPrices: (products: readonly DbProduto[], config: LojaConfig, active: boolean) => void;
   total: number;
   createOrder: (endereco: OrderAddress, paymentMethod: PaymentMethod, cupom?: { codigo: string; desconto: number }) => Promise<Order | null>;
   createMPPreference: (orderId: string, orderAccessToken: string) => Promise<{ preferenceId: string; initPoint: string } | null>;
@@ -68,6 +71,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clearCart = useCallback(() => {
     setCart([]);
     setLastAddedItem(null);
+  }, []);
+
+  const syncBlackFridayPrices = useCallback((products: readonly DbProduto[], config: LojaConfig, active: boolean) => {
+    function reprice(item: CartItem): CartItem {
+      if (!active && !item.blackFriday) return item;
+      const product = products.find(({ id }) => String(id) === item.productId);
+      if (!product) return item;
+      const price = calculateServerItemPrice(product, item, config);
+      if (item.blackFriday === active && item.preco === price.preco && item.precoBase === price.precoBase) return item;
+      return { ...item, ...price, blackFriday: active };
+    }
+
+    setCart((items) => {
+      const updated = items.map(reprice);
+      return updated.some((item, index) => item !== items[index]) ? updated : items;
+    });
+    setLastAddedItem((item) => item ? reprice(item) : null);
   }, []);
 
   const total = useMemo(() => cart.reduce((sum, item) => sum + item.preco, 0), [cart]);
@@ -127,6 +147,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           buyer,
           paymentMethod,
           couponCode: cupom?.codigo,
+          expectedBlackFriday: cart.some((item) => item.blackFriday),
           items,
         }),
       });
@@ -165,8 +186,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const contextValue = useMemo(
-    () => ({ cart, lastAddedItem, addToCart, dismissAddedItem, removeFromCart, clearCart, total, createOrder, createMPPreference }),
-    [cart, lastAddedItem, addToCart, dismissAddedItem, removeFromCart, clearCart, total, createOrder, createMPPreference]
+    () => ({ cart, lastAddedItem, addToCart, dismissAddedItem, removeFromCart, clearCart, syncBlackFridayPrices, total, createOrder, createMPPreference }),
+    [cart, lastAddedItem, addToCart, dismissAddedItem, removeFromCart, clearCart, syncBlackFridayPrices, total, createOrder, createMPPreference]
   );
 
   return (

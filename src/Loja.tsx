@@ -14,7 +14,7 @@ import { TIPO_SHORT } from "./lib/status";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import usePromotionClock from "./hooks/usePromotionClock";
 import PromotionCountdown from "./PromotionCountdown";
-import { isPromotionActive } from "../server/lib/promotions";
+import { BLACK_FRIDAY_DISCOUNT, isBlackFridayActive, isPromotionActive } from "../server/lib/promotions";
 
 const CATEGORIAS = [
   "Todas",
@@ -81,6 +81,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const now = usePromotionClock();
+  const blackFriday = isBlackFridayActive(config.black_friday, now);
 
   useEffect(() => {
     document.title = "RM Imports";
@@ -537,27 +538,41 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
     <div id="main-content">
       <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 sm:pt-7 lg:px-8">
         <section
-          className="relative isolate overflow-hidden rounded-[24px] bg-primary text-white shadow-[0_28px_80px_rgba(17,20,41,.22)] sm:rounded-[32px]"
+          className={`relative isolate overflow-hidden rounded-[24px] text-white shadow-[0_28px_80px_rgba(17,20,41,.22)] sm:rounded-[32px] ${blackFriday ? "bg-[#12100e] ring-1 ring-[#f2cd6b]/35" : "bg-primary"}`}
           aria-labelledby="hero-title"
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,.1),transparent_28%),radial-gradient(circle_at_80%_85%,rgba(240,68,85,.18),transparent_30%)]" aria-hidden="true" />
+          {blackFriday && (
+            <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,#a5782633,transparent_66%)]" />
+              <div className="absolute -right-24 -top-28 size-[32rem] rotate-[-24deg] bg-[repeating-linear-gradient(90deg,transparent_0px,transparent_13px,#e8bf4e17_13px,#e8bf4e17_14px)]" />
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#f9d676] via-[#ffe8a6] to-transparent" />
+            </div>
+          )}
           <div className="relative grid min-h-[470px] items-center lg:grid-cols-[1.05fr_.95fr]">
             <div className="px-6 py-10 sm:px-10 sm:py-14 lg:px-16 lg:py-20">
               <h1 id="hero-title" className="max-w-2xl text-4xl font-black leading-[1.02] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
-                Vista o jogo.<br /><span className="text-white/55">Carregue a história.</span>
+                {blackFriday ? <>Black Friday<br /><span className="text-[#f9d676]">{BLACK_FRIDAY_DISCOUNT}% de desconto</span></>
+                  : <>Vista o jogo.<br /><span className="text-white/55">Carregue a história.</span></>}
               </h1>
               <p className="mt-5 max-w-lg text-sm leading-6 text-white/70 sm:text-base sm:leading-7">
-                Camisas atuais e retrô escolhidas para quem leva o time além dos 90 minutos.
+                {blackFriday ? "Em todo o catálogo, com personalização grátis nas camisas que aceitam nome e número."
+                  : "Camisas atuais e retrô escolhidas para quem leva o time além dos 90 minutos."}
               </p>
+              {blackFriday && config.black_friday && config.black_friday !== "manual" && (
+                <div className="mt-4 inline-flex rounded-xl border border-[#f9d676]/30 bg-black/35 px-3 py-2">
+                  <PromotionCountdown endsAt={config.black_friday} now={now} compact />
+                </div>
+              )}
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Link to="/#catalogo" className="inline-flex min-h-12 items-center justify-center rounded-full bg-accent px-6 text-sm font-bold text-white transition-transform hover:-translate-y-0.5 hover:bg-[#ff5364]">
-                  Explorar coleção
+                <Link to="/#catalogo" className={`inline-flex min-h-12 items-center justify-center rounded-full px-6 text-sm font-bold transition-transform hover:-translate-y-0.5 ${blackFriday ? "bg-[#f9d676] text-[#17130a] hover:bg-[#ffe8a6]" : "bg-accent text-white hover:bg-[#ff5364]"}`}>
+                  {blackFriday ? "Ver ofertas da Black Friday" : "Explorar coleção"}
                 </Link>
                 <Link to="/pronta-entrega" className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/20 px-6 text-sm font-bold text-white transition-colors hover:bg-white/10">
                   Ver pronta entrega
                 </Link>
               </div>
-              {(ofertas.global || ofertas.times.length > 0) && (
+              {!blackFriday && (ofertas.global || ofertas.times.length > 0) && (
                 <section className="mt-6 min-w-0 border-t border-white/15 pt-5" aria-labelledby="ofertas-title">
                   <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <h2 id="ofertas-title" className="text-xs font-bold text-white/80 sm:text-sm">Promoções ativas</h2>
@@ -637,7 +652,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                     <div className="absolute inset-0 bg-gradient-to-t from-primary via-primary/5 to-transparent" />
                   </div>
                   <div className="animate-hero-product-info absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5 sm:p-7">
-                    <div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/55">Em destaque</p><p className="mt-1 max-w-[15rem] text-lg font-bold leading-tight text-white sm:text-xl">{heroProduct.nome}</p></div>
+                    <div><p className={`text-[11px] font-bold uppercase tracking-[0.16em] ${blackFriday ? "text-[#f9d676]" : "text-white/55"}`}>{blackFriday ? "Na Black Friday" : "Em destaque"}</p><p className="mt-1 max-w-[15rem] text-lg font-bold leading-tight text-white sm:text-xl">{heroProduct.nome}</p></div>
                     {heroPrice && <span className="shrink-0 rounded-full bg-white px-3 py-2 text-sm font-black text-primary">{formatarPreco(heroPrice.promo ?? heroPrice.base)}</span>}
                   </div>
                 </Link>

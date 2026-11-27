@@ -1,4 +1,4 @@
-import { isPromotionActive } from "../server/lib/promotions";
+import { blackFridayPrice, BLACK_FRIDAY_DISCOUNT, isBlackFridayActive, isPromotionActive } from "../server/lib/promotions";
 import { fixedPrint } from "../server/lib/fixed-print";
 
 export interface CartItem {
@@ -20,6 +20,7 @@ export interface CartItem {
   peMarkup?: number;       // PE markup value used when added to cart
   cachedImageUrls?: CachedImageMap | null;
   precoIncluiEstampaFixa?: boolean;
+  blackFriday?: boolean;
 }
 
 export interface OrderItem {
@@ -134,6 +135,7 @@ export interface LojaConfig {
   desconto_global?: number | null;
   desconto_global_ends_at?: string | null;
   desconto_global_nome?: string | null;
+  black_friday?: string | null;
   promocoes_time?: Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null; substituir_nome_time?: boolean }>;
   pronta_entrega_markup: number;
   custo_base: Record<string, number>;
@@ -271,7 +273,7 @@ export function getPrecoProduto(
 ): PromocaoInfo {
   const preco = getPrecoProdutoSemEstampa(tipo, config, precoCustomizado, promocaoTipo, promocaoValor, time, temporada);
   const estampa = fixedPrint(produtoId);
-  if (!estampa) return preco;
+  if (!estampa || isBlackFridayActive(config.black_friday)) return preco;
 
   return {
     ...preco,
@@ -290,6 +292,21 @@ function getPrecoProdutoSemEstampa(
   temporada?: string,
 ): PromocaoInfo {
   const basePrice = getPrecoBaseSazonal(tipo, config.precos_base[tipo] ?? 89.90, config, temporada);
+
+  if (isBlackFridayActive(config.black_friday)) {
+    const base = promocaoTipo !== "novo_preco" && precoCustomizado != null && Number.isFinite(precoCustomizado) && precoCustomizado > 0
+      ? precoCustomizado : basePrice;
+    return {
+      base,
+      promo: blackFridayPrice(base),
+      emPromocao: true,
+      promocaoTipo: "porcentagem",
+      promocaoValor: BLACK_FRIDAY_DISCOUNT,
+      badge: "PROMO",
+      discountLabel: `${BLACK_FRIDAY_DISCOUNT}% OFF`,
+      endsAt: config.black_friday === "manual" ? null : config.black_friday,
+    };
+  }
 
   // 1. Individual product promo takes priority
   if (promocaoTipo === "porcentagem" && promocaoValor) {
@@ -560,8 +577,8 @@ export function calcularPreco(
   const { promo, base } = getPrecoProduto(tipo, config ?? DEFAULT_CONFIG, precoCustomizado, promocaoTipo, promocaoValor, time, temporada);
   let preco = promo ?? base;
   if (ADICIONAL_TAMANHO[tamanho]) preco += ADICIONAL_TAMANHO[tamanho];
-  if (personalizado) preco += precoPersonalizacao(tipo);
-  return preco;
+  if (personalizado && !isBlackFridayActive(config?.black_friday)) preco += precoPersonalizacao(tipo);
+  return Math.round(preco * 100) / 100;
 }
 
 export function formatarMoeda(valor: number): string {

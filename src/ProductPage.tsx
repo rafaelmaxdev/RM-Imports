@@ -22,6 +22,7 @@ import usePromotionClock from "./hooks/usePromotionClock";
 import PromotionCountdown from "./PromotionCountdown";
 import { nbaPlayer, nbaPlayerOptions } from "../server/lib/nba-jerseys";
 import { fixedPrint } from "../server/lib/fixed-print";
+import { isBlackFridayActive } from "../server/lib/promotions";
 
 const OG_PROPERTIES = ["og:title", "og:description", "og:image"] as const;
 
@@ -256,14 +257,15 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
   const jogadorPronto = nbaPlayer(produto);
   const opcoesJogador = nbaPlayerOptions(produto, produtos);
   const estampaFixa = fixedPrint(produto.id);
-  const adicionalEstampaFixa = estampaFixa?.price ?? 0;
+  const blackFriday = isBlackFridayActive(config.black_friday, now);
+  const adicionalEstampaFixa = blackFriday ? 0 : estampaFixa?.price ?? 0;
   const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo) || Boolean(jogadorPronto || estampaFixa);
   const imagensFemininas = parseImageUrls(produto.imagem_urls_feminina);
   const modeloFemininoComImagens = genero === "Feminino" && imagensFemininas.length > 0;
   const imagensDoModelo = modeloFemininoComImagens ? imagensFemininas : images;
   const personalizacaoAtiva = personalizado && !semPersonalizacao;
   const adicionalTam = ADICIONAL_TAMANHO[tamanho] || 0;
-  const adicionalPers = personalizacaoAtiva ? precoPersonalizacao(produto.tipo) : adicionalEstampaFixa;
+  const adicionalPers = personalizacaoAtiva && !blackFriday ? precoPersonalizacao(produto.tipo) : adicionalEstampaFixa;
   const precoFinal = (priceInfo.promo ?? priceInfo.base) + adicionalTam + adicionalPers;
   const hasRealDiscount = priceInfo.promo != null && priceInfo.promo < priceInfo.base;
   const hasTimedPromotion = Boolean(priceInfo.endsAt && hasRealDiscount);
@@ -298,6 +300,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
       precoBase: priceInfo.base + adicionalTam + adicionalPers,
       cachedImageUrls: modeloFemininoComImagens ? null : produtoAtual.cached_image_urls,
       ...(estampaFixa && { precoIncluiEstampaFixa: true }),
+      ...(blackFriday && { blackFriday: true }),
     };
 
     addToCart(item);
@@ -522,7 +525,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
                   onChange={(event) => setPersonalizado(event.target.checked)}
                   className="m-0 h-4 w-4 cursor-pointer accent-primary"
                 />
-                Personalizar (+{formatarMoeda(precoPersonalizacao(produto.tipo))})
+                {blackFriday ? "Personalizar grátis" : `Personalizar (+${formatarMoeda(precoPersonalizacao(produto.tipo))})`}
               </label>
             )}
 
@@ -574,10 +577,10 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
                   <span>+{formatarMoeda(adicionalTam)}</span>
                 </>
               )}
-              {adicionalPers > 0 && (
+              {(adicionalPers > 0 || (blackFriday && (personalizacaoAtiva || estampaFixa))) && (
                 <>
                   <span>{estampaFixa ? `Estampa ${estampaFixa.label}` : "Personalização"}:</span>
-                  <span>+{formatarMoeda(adicionalPers)}</span>
+                  <span>{blackFriday ? "Grátis" : `+${formatarMoeda(adicionalPers)}`}</span>
                 </>
               )}
               <div className="col-span-2 mt-1 flex justify-between border-t border-border pt-2 text-base font-bold">

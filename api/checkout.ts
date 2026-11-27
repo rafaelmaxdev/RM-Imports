@@ -12,6 +12,7 @@ import {
   validateProductVariant,
 } from "../server/lib/checkout.js";
 import { normalizeBuyerIdentity } from "../server/lib/buyer-identity.js";
+import { isBlackFridayActive } from "../server/lib/promotions.js";
 import { clientIp, consumeRateLimit, createOrderAccessToken } from "../server/lib/security.js";
 
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -209,6 +210,9 @@ function buildConfig(rows: unknown): ServerCheckoutConfig {
       case "desconto_global_ends_at":
         if (rawRow.value === null || typeof rawRow.value === "string") config.desconto_global_ends_at = rawRow.value;
         break;
+      case "black_friday":
+        if (typeof rawRow.value === "string") config.black_friday = rawRow.value;
+        break;
       case "pronta_entrega_markup":
         if (typeof rawRow.value === "number") config.pronta_entrega_markup = rawRow.value;
         break;
@@ -330,6 +334,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const config = buildConfig(configResult.data);
+    const pricingTime = Date.now();
+    const blackFriday = isBlackFridayActive(config.black_friday, pricingTime);
+    if (typeof req.body.expectedBlackFriday === "boolean" && req.body.expectedBlackFriday !== blackFriday) {
+      return res.status(409).json({ error: "A promoção mudou. Confira os preços atualizados no carrinho antes de continuar." });
+    }
     const orderItems = items.map((item) => {
       const product = productsById.get(item.productId)!;
       try {
@@ -337,7 +346,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch {
         throw new ValidationError(INVALID_PRODUCT_VARIANT_MESSAGE);
       }
-      const price = calculateServerItemPrice(product, item, config);
+      const price = calculateServerItemPrice(product, item, config, pricingTime);
       const feminine = item.genero === "Feminino";
       const peMarkup = item.prontaEntrega ? config.pronta_entrega_markup ?? 0 : undefined;
       return {
@@ -367,7 +376,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const promotionType = productsById.get(item.productId)?.promocao_tipo;
       return promotionType === "leve_pague" || promotionType === "leve_3_pague_2";
     });
-    if (couponCode && (hasPromotionalDiscount(orderItems) || hasIndividualQuantityPromotion)) {
+    if (couponCode && (blackFriday || hasPromotionalDiscount(orderItems) || hasIndividualQuantityPromotion)) {
       return res.status(400).json({ error: PROMOTION_COUPON_ERROR });
     }
 

@@ -129,12 +129,12 @@ export async function deleteProduto(id: string): Promise<void> {
 
 // ── Loja Config ──
 
-export async function getLojaConfig(): Promise<LojaConfig> {
+export async function getLojaConfig(refresh = false): Promise<LojaConfig> {
   const CACHE_KEY = "loja_config";
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
   const cached = getCached<LojaConfig>(CACHE_KEY);
-  if (cached && !isCacheStale(CACHE_KEY, CACHE_TTL)) {
+  if (!refresh && cached && !isCacheStale(CACHE_KEY, CACHE_TTL)) {
     return cached;
   }
 
@@ -170,6 +170,8 @@ function configFromRows(data: { key: string; value: unknown }[]): LojaConfig {
       config.desconto_global_ends_at = row.value;
     } else if (row.key === "desconto_global_nome" && (row.value === null || typeof row.value === "string")) {
       config.desconto_global_nome = row.value;
+    } else if (row.key === "black_friday" && typeof row.value === "string") {
+      config.black_friday = row.value;
     } else if (row.key === "promocoes_time" && typeof row.value === "object") {
       config.promocoes_time = row.value as Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null; substituir_nome_time?: boolean }>;
     } else if (row.key === "pronta_entrega_markup") {
@@ -194,7 +196,7 @@ export async function getAdminLojaConfig(): Promise<LojaConfig> {
 }
 
 export async function updateLojaConfig(
-  key: "precos_base" | "precos_promocao" | "promocao_ativa" | "desconto_global" | "desconto_global_ends_at" | "desconto_global_nome" | "promocoes_time" | "pronta_entrega_markup" | "custo_base" | "personalizacao_custo" | "ano_temporada_lancamento" | "desconto_temporada_anterior",
+  key: "precos_base" | "precos_promocao" | "promocao_ativa" | "desconto_global" | "desconto_global_ends_at" | "desconto_global_nome" | "black_friday" | "promocoes_time" | "pronta_entrega_markup" | "custo_base" | "personalizacao_custo" | "ano_temporada_lancamento" | "desconto_temporada_anterior",
   value: Record<string, number> | Record<string, boolean> | number | string | null | Record<string, { tipo: string; valor: number | null; preco: number | null; ends_at?: string | null; nome?: string | null; substituir_nome_time?: boolean }>,
 ): Promise<void> {
   const { error } = await supabase

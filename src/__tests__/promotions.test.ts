@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateServerItemPrice, type ServerCheckoutConfig } from "../../server/lib/checkout";
-import { isPromotionActive, promotionEndFromDate } from "../../server/lib/promotions";
-import { DEFAULT_CONFIG, getPrecoProduto, type LojaConfig } from "../types";
+import { isBlackFridayActive, isPromotionActive, promotionEndFromDate } from "../../server/lib/promotions";
+import { calcularPreco, DEFAULT_CONFIG, getPrecoProduto, type LojaConfig } from "../types";
 
 const endOfOctober = promotionEndFromDate("2026-10-31")!;
 const expiredEndsAt = "2000-11-02T03:00:00.000Z";
@@ -120,5 +120,39 @@ describe("expiring team and global promotions", () => {
       { tamanho: "M", personalizado: false },
       { ...serverConfig, promocoes_time: { "Time A": { tipo: "porcentagem", valor: 10, ends_at: activeEndsAt } } },
     )).toEqual({ preco: 90, precoBase: 100 });
+  });
+});
+
+describe("Black Friday", () => {
+  it("activates manually or until the selected cutoff", () => {
+    const cutoff = Date.parse(endOfOctober);
+    expect(isBlackFridayActive(null, cutoff)).toBe(false);
+    expect(isBlackFridayActive("manual", cutoff)).toBe(true);
+    expect(isBlackFridayActive(endOfOctober, cutoff - 1)).toBe(true);
+    expect(isBlackFridayActive(endOfOctober, cutoff)).toBe(false);
+    expect(getPrecoProduto("Torcedor", config({ black_friday: expiredEndsAt, desconto_global: 10 })).promo).toBe(90);
+  });
+
+  it("uses the campaign price and waives personalization in the storefront and checkout", () => {
+    const campaign = config({ black_friday: "manual", desconto_global: 30 });
+    expect(getPrecoProduto("Torcedor", campaign, 149.90)).toMatchObject({ base: 149.90, promo: 119.92 });
+    expect(calcularPreco("Torcedor", "G2", true, campaign, 149.90)).toBe(129.92);
+    expect(calculateServerItemPrice(
+      { tipo: "Torcedor", preco_customizado: 149.90 },
+      { tamanho: "G2", personalizado: true },
+      campaign,
+    )).toEqual({ preco: 129.92, precoBase: 159.90 });
+  });
+
+  it("replaces individual sale prices and waives a fixed print fee, keeping stock and size add-ons", () => {
+    const campaign = config({ black_friday: "manual", pronta_entrega_markup: 20 });
+    const id = "f9f2a258-ee87-56f3-af71-670f7d7d9c92";
+    expect(getPrecoProduto("Torcedor", campaign, 60, "novo_preco", null, undefined, undefined, id))
+      .toMatchObject({ base: 100, promo: 80 });
+    expect(calculateServerItemPrice(
+      { id, tipo: "Torcedor", preco_customizado: 60, promocao_tipo: "novo_preco" },
+      { tamanho: "G2", personalizado: false, prontaEntrega: true },
+      campaign,
+    )).toEqual({ preco: 110, precoBase: 130 });
   });
 });

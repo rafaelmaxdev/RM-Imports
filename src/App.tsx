@@ -9,6 +9,7 @@ import { getProdutos, getLojaConfig, getAdminLojaConfig } from "./lib/db";
 import type { DbProduto } from "./lib/db";
 import type { OrderAddress, LojaConfig, PaymentMethod } from "./types";
 import { DEFAULT_CONFIG, formatarMoeda } from "./types";
+import { isBlackFridayActive } from "../server/lib/promotions";
 import { clearCache } from "./lib/cache";
 import { supabase } from "./lib/supabase";
 import rmImportsLogo from "./assets/rm-imports-logo-transparent.png";
@@ -81,7 +82,7 @@ function AppContent() {
   const [showCart, setShowCart] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const navigate = useNavigate();
-  const { cart, createOrder, lastAddedItem, dismissAddedItem, total } = useCart();
+  const { cart, createOrder, lastAddedItem, dismissAddedItem, total, syncBlackFridayPrices } = useCart();
   const location = useLocation();
   const closeAddedItemButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -120,12 +121,42 @@ function AppContent() {
   useEffect(() => {
     Promise.all([
       getProdutos().then(setProdutos).catch(console.error),
-      getLojaConfig().then(setConfig).catch(console.error),
+      getLojaConfig(true).then(setConfig).catch(console.error),
     ]).finally(() => setLoading(false));
   }, []);
 
+  const isAdmin = location.pathname === "/admin";
+  useEffect(() => {
+    if (loading || isAdmin) return;
+    function refresh() {
+      getLojaConfig(true).then(setConfig).catch(console.error);
+    }
+    if (showCart) refresh();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [isAdmin, loading, showCart]);
+
+  useEffect(() => {
+    if (loading) return;
+    let timer: number | undefined;
+    function syncPrices() {
+      const now = Date.now();
+      const active = isBlackFridayActive(config.black_friday, now);
+      syncBlackFridayPrices(produtos, config, active);
+      if (active && config.black_friday && config.black_friday !== "manual") {
+        const remaining = Date.parse(config.black_friday) - now;
+        timer = window.setTimeout(syncPrices, Math.min(remaining, 2_147_483_647));
+      }
+    }
+    syncPrices();
+    return () => window.clearTimeout(timer);
+  }, [config, loading, produtos, syncBlackFridayPrices]);
+
   async function handleCheckout(endereco: OrderAddress, paymentMethod: PaymentMethod, cupom?: { codigo: string; desconto: number }): Promise<void> {
-    const order = await createOrder(endereco, paymentMethod, cupom);
+    const order = await createOrder(endereco, paymentMethod, cupom).catch((error: unknown) => {
+      void getLojaConfig(true).then(setConfig).catch(console.error);
+      throw error;
+    });
     if (!order) throw new Error("Não foi possível criar o pedido.");
     setShowCart(false);
     navigate(`/pedido/${order.id}`);
@@ -223,7 +254,7 @@ function AppContent() {
                 />
                 <Route path="/pedido/:id" element={<OrderConfirmation />} />
                 <Route path="/tamanhos" element={<SizeChart />} />
-                <Route path="/pronta-entrega" element={<ProntaEntrega />} />
+                <Route path="/pronta-entrega" element={<ProntaEntrega config={config} />} />
                 <Route path="/meu-pedido" element={<MeusPedidos />} />
                 <Route path="/politica-de-entrega" element={<Policies kind="frete" />} />
                 <Route path="/politica-de-reembolso" element={<Policies kind="reembolso" />} />

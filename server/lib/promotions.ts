@@ -1,3 +1,13 @@
+export const BLACK_FRIDAY_DISCOUNT = 20;
+
+export function isBlackFridayActive(value?: string | null, now = Date.now()): boolean {
+  return value === "manual" || (typeof value === "string" && value !== "" && isPromotionActive(value, now));
+}
+
+export function blackFridayPrice(base: number): number {
+  return Math.round(base * (100 - BLACK_FRIDAY_DISCOUNT)) / 100;
+}
+
 export function isPromotionActive(endsAt?: string | null, now = Date.now()): boolean {
   if (endsAt == null || endsAt === "") return true;
   if (typeof endsAt !== "string") return false;

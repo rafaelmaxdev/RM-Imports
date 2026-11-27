@@ -4,7 +4,7 @@ import type { DbProduto } from "./lib/db";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { TIPOS_CATEGORIA, DEFAULT_CONFIG, formatarMoeda, getCachedImageUrl } from "./types";
 import { normalizarBusca } from "./lib/utils";
-import { isPromotionActive, promotionEndFromDate } from "../server/lib/promotions";
+import { BLACK_FRIDAY_DISCOUNT, isBlackFridayActive, isPromotionActive, promotionEndFromDate } from "../server/lib/promotions";
 
 const RECIFE_TIME_ZONE = "America/Recife";
 
@@ -101,6 +101,10 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
   const [sitewideEndDate, setSitewideEndDate] = useState(() => dateInputFromEndsAt(config.desconto_global_ends_at));
   const [sitewideName, setSitewideName] = useState(config.desconto_global_nome ?? "");
   const [savingSitewide, setSavingSitewide] = useState(false);
+  const [blackFridayDate, setBlackFridayDate] = useState(() => dateInputFromEndsAt(config.black_friday));
+  const [savingBlackFriday, setSavingBlackFriday] = useState(false);
+  const [blackFridayError, setBlackFridayError] = useState("");
+  const blackFriday = isBlackFridayActive(config.black_friday);
   const [globalMessage, setGlobalMessage] = useState("");
   const [globalError, setGlobalError] = useState("");
 
@@ -141,6 +145,7 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
     setPersonalizacaoCusto(pc);
     setSitewideEndDate(dateInputFromEndsAt(config.desconto_global_ends_at));
     setSitewideName(config.desconto_global_nome ?? "");
+    setBlackFridayDate(dateInputFromEndsAt(config.black_friday));
   }, [config]);
 
   function selectTeam(time: string) {
@@ -300,6 +305,20 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
       setGlobalError("Erro ao aplicar desconto.");
     } finally {
       setSavingSitewide(false);
+    }
+  }
+
+  async function handleBlackFriday(active: boolean) {
+    setBlackFridayError("");
+    setSavingBlackFriday(true);
+    try {
+      const value = active ? getPromotionEnd(blackFridayDate) ?? "manual" : null;
+      await updateLojaConfig("black_friday", value);
+      setConfig((prev) => ({ ...prev, black_friday: value }));
+    } catch (err) {
+      setBlackFridayError(getErrorMessage(err));
+    } finally {
+      setSavingBlackFriday(false);
     }
   }
 
@@ -775,6 +794,33 @@ export default function AdminPromocoes({ produtos, setProdutos, config, setConfi
           {saving ? "Salvando..." : "Salvar Preços"}
         </button>
       </div>
+
+      <section className="mb-8 rounded-lg border border-border bg-bg-base p-4" aria-labelledby="black-friday-settings">
+        <h4 id="black-friday-settings" className="text-lg font-bold text-primary">Black Friday</h4>
+        <p className="mt-1 text-sm text-text-muted">{BLACK_FRIDAY_DISCOUNT}% de desconto geral e personalização grátis nos modelos elegíveis.</p>
+        <p className="mt-1 text-xs text-text-muted">Durante a Black Friday, o desconto da campanha substitui as outras ofertas e os cupons ficam suspensos.</p>
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="text-xs font-semibold text-text-muted">
+            Último dia da promoção (opcional)
+            <input type="date" value={blackFridayDate} onChange={(e) => setBlackFridayDate(e.target.value)}
+              className="mt-1 block rounded-md border border-border bg-card-bg px-3 py-2 text-sm" />
+          </label>
+          <button type="button" onClick={() => void handleBlackFriday(true)} disabled={savingBlackFriday}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            {blackFriday ? "Salvar validade" : "Ativar Black Friday"}
+          </button>
+          {blackFriday && (
+            <button type="button" onClick={() => void handleBlackFriday(false)} disabled={savingBlackFriday}
+              className="rounded-md border border-border bg-card-bg px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">
+              Desativar
+            </button>
+          )}
+        </div>
+        <p role="status" className="mt-2 text-xs text-text-muted">
+          {savingBlackFriday ? "Salvando…" : blackFriday ? `Ativa · ${formatPromoDeadline(config.black_friday === "manual" ? null : config.black_friday)}` : "Inativa"}
+        </p>
+        {blackFridayError && <p role="alert" className="mt-2 text-sm text-red-700">{blackFridayError}</p>}
+      </section>
 
       {/* ── Site-wide promotion ── */}
       <div className="border-t border-border pt-6 mb-8">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { getEstoquePublico, getProdutosByIds, getLojaConfig, parseImageUrls } from "./lib/db";
+import { getEstoquePublico, getProdutosByIds, parseImageUrls } from "./lib/db";
 import { supabase } from "./lib/supabase";
 import type { DbProduto } from "./lib/db";
 import type { EstoqueItem, LojaConfig, PromocaoTipo, CachedImageMap, CartItem } from "./types";
@@ -21,6 +21,7 @@ import useBodyScrollLock from "./hooks/useBodyScrollLock";
 import usePromotionClock from "./hooks/usePromotionClock";
 import PromotionCountdown from "./PromotionCountdown";
 import { fixedPrint } from "../server/lib/fixed-print";
+import { isBlackFridayActive } from "../server/lib/promotions";
 
 // ── Grouped product ──
 
@@ -198,14 +199,15 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
     product.produto_id,
   );
   const estampaFixa = fixedPrint(product.produto_id);
+  const blackFriday = isBlackFridayActive(config.black_friday, now);
   const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
   const peMarkup = config.pronta_entrega_markup ?? 20;
 
   const allPrices = availableSizes.map(s => {
     const add = ADICIONAL_TAMANHO[s.tamanho] || 0;
-    const pers = s.personalizado ? precoPersonalizacao(product.tipo) : 0;
+    const pers = s.personalizado && !blackFriday ? precoPersonalizacao(product.tipo) : 0;
     const pb = Math.round((base + add + pers + peMarkup) * 100) / 100;
-    const pf = promo === null ? pb : estampaFixa ? promo + add + peMarkup : Math.round((pb * promo / base));
+    const pf = promo === null ? pb : (estampaFixa || blackFriday) ? promo + add + peMarkup : Math.round((pb * promo / base));
     return { precoBase: pb, precoFinal: pf };
   });
   const minPrecoBase = Math.min(...allPrices.map(p => p.precoBase));
@@ -217,9 +219,9 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
   const selectedSizeInfo = selectedIdx !== null ? availableSizes[selectedIdx] ?? null : null;
   const selectedTam = selectedSizeInfo?.tamanho ?? "";
   const adicionalTam = ADICIONAL_TAMANHO[selectedTam] || 0;
-  const adicionalPers = selectedSizeInfo?.personalizado ? precoPersonalizacao(product.tipo) : 0;
+  const adicionalPers = selectedSizeInfo?.personalizado && !blackFriday ? precoPersonalizacao(product.tipo) : 0;
   const precoBaseMarcado = Math.round((base + adicionalTam + adicionalPers + peMarkup) * 100) / 100;
-  const precoPromoMarcado = promo === null ? null : estampaFixa
+  const precoPromoMarcado = promo === null ? null : estampaFixa || blackFriday
     ? promo + adicionalTam + peMarkup
     : Math.round((precoBaseMarcado * promo / base));
   const prontaEntregaPrice = precoPromoMarcado ?? precoBaseMarcado;
@@ -250,6 +252,7 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
       peMarkup,
       cachedImageUrls: product.cachedImageUrls,
       ...(estampaFixa && { precoIncluiEstampaFixa: true, precoBase: prontaEntregaBasePrice }),
+      ...(blackFriday && { blackFriday: true, precoBase: prontaEntregaBasePrice }),
     };
 
     addToCart(item);
@@ -416,10 +419,10 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
                     <span>+{formatarMoeda(adicionalTam)}</span>
                   </>
                 )}
-                {adicionalPers > 0 && (
+                {(adicionalPers > 0 || (blackFriday && (selectedSizeInfo?.personalizado || estampaFixa))) && (
                   <>
                     <span>Personalização:</span>
-                    <span>+{formatarMoeda(adicionalPers)}</span>
+                    <span>{blackFriday ? "Grátis" : `+${formatarMoeda(adicionalPers)}`}</span>
                   </>
                 )}
                 <span className="text-green-600">Taxa Pronta Entrega:</span>
@@ -481,7 +484,7 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
 
 // ── Page component ──
 
-export default function ProntaEntrega() {
+export default function ProntaEntrega({ config }: { config: LojaConfig }) {
   const now = usePromotionClock();
 
   useEffect(() => {
@@ -490,7 +493,6 @@ export default function ProntaEntrega() {
   }, []);
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [produtos, setProdutos] = useState<DbProduto[]>([]);
-  const [config, setConfig] = useState<LojaConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtroBusca, setFiltroBusca] = useState("");
@@ -518,16 +520,12 @@ export default function ProntaEntrega() {
         setLoading(true);
         setError(null);
 
-        const [estoqueData, lojaConfig] = await Promise.all([
-          getEstoquePublico(),
-          getLojaConfig(),
-        ]);
+        const estoqueData = await getEstoquePublico();
+        const ids = [...new Set(estoqueData.map((e) => e.produto_id))];
+        const produtosData = await getProdutosByIds(ids);
 
         if (!cancelled) {
           setEstoque(estoqueData);
-          setConfig(lojaConfig);
-          const ids = [...new Set(estoqueData.map((e) => e.produto_id))];
-          const produtosData = await getProdutosByIds(ids);
           setProdutos(produtosData);
         }
       } catch (err) {
@@ -721,7 +719,7 @@ export default function ProntaEntrega() {
             {paginated.map((p) => {
               const priceInfo = getPrecoProduto(
                 p.tipo,
-                config!,
+                config,
                 p.precoCustomizado,
                 p.promocaoTipo,
                 p.promocaoValor,
@@ -730,13 +728,14 @@ export default function ProntaEntrega() {
                 p.produto_id,
               );
               const estampaFixa = fixedPrint(p.produto_id);
-              const peMarkup = config!.pronta_entrega_markup ?? 20;
+              const blackFriday = isBlackFridayActive(config.black_friday, now);
+              const peMarkup = config.pronta_entrega_markup ?? 20;
               const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
               const prices = p.sizes.map(s => {
                 const adicionalTam = ADICIONAL_TAMANHO[s.tamanho] || 0;
-                const adicionalPers = s.personalizado ? precoPersonalizacao(p.tipo) : 0;
+                const adicionalPers = s.personalizado && !blackFriday ? precoPersonalizacao(p.tipo) : 0;
                 const precoBase = Math.round((base + adicionalTam + adicionalPers + peMarkup) * 100) / 100;
-                const precoFinal = promo === null ? precoBase : estampaFixa
+                const precoFinal = promo === null ? precoBase : estampaFixa || blackFriday
                   ? promo + adicionalTam + peMarkup
                   : Math.round((precoBase * promo / base));
                 return { precoBase, precoFinal };
@@ -914,7 +913,7 @@ export default function ProntaEntrega() {
       </div>
 
       {/* Product detail modal */}
-      {produtoSelecionado && config && (
+      {produtoSelecionado && (
         <ProntaEntregaDetailModal
           product={produtoSelecionado}
           config={config}

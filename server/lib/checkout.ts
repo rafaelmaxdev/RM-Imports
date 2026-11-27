@@ -1,4 +1,4 @@
-import { isPromotionActive } from "./promotions.js";
+import { blackFridayPrice, isBlackFridayActive, isPromotionActive } from "./promotions.js";
 import { nbaPlayer } from "./nba-jerseys.js";
 import { fixedPrint } from "./fixed-print.js";
 
@@ -44,6 +44,7 @@ export interface ServerCheckoutConfig {
   promocao_ativa?: Record<string, boolean>;
   desconto_global?: number | null;
   desconto_global_ends_at?: string | null;
+  black_friday?: string | null;
   promocoes_time?: Record<string, ServerTeamPromotion>;
   pronta_entrega_markup?: number | null;
   ano_temporada_lancamento?: number;
@@ -183,6 +184,7 @@ export function calculateServerItemPrice(
   product: ServerProductPricing,
   options: ServerItemPricingOptions,
   config: ServerCheckoutConfig,
+  now = Date.now(),
 ): { preco: number; precoBase: number } {
   const basePrice = getServerSeasonalBasePrice(
     product.tipo,
@@ -191,6 +193,12 @@ export function calculateServerItemPrice(
     config,
   );
   const customPrice = configuredPositiveNumber(product.preco_customizado);
+  const sizeMarkup = options.tamanho === "G2" ? 10 : options.tamanho === "G3" ? 20 : 0;
+  const peMarkup = options.prontaEntrega ? configuredMarkup(config.pronta_entrega_markup) : 0;
+  if (isBlackFridayActive(config.black_friday, now)) {
+    const base = product.promocao_tipo !== "novo_preco" ? customPrice ?? basePrice : basePrice;
+    return { preco: roundCents(blackFridayPrice(base) + sizeMarkup + peMarkup), precoBase: roundCents(base + sizeMarkup + peMarkup) };
+  }
   let unitPrice = basePrice;
   let priceBase = basePrice;
   let resolved = false;
@@ -243,12 +251,8 @@ export function calculateServerItemPrice(
     unitPrice = basePrice;
   }
 
-  const sizeMarkup = options.tamanho === "G2" ? 10 : options.tamanho === "G3" ? 20 : 0;
   const print = fixedPrint(product.id);
   const personalizationMarkup = print?.price ?? (options.personalizado ? (product.tipo === "Torcedor" ? 20 : 25) : 0);
-  const peMarkup = options.prontaEntrega
-    ? configuredMarkup(config.pronta_entrega_markup)
-    : 0;
   const addOns = sizeMarkup + personalizationMarkup + peMarkup;
   const fallbackPrice = roundCents(89.90 + addOns);
   const price = roundCents(unitPrice + addOns);

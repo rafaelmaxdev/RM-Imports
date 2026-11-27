@@ -7,7 +7,7 @@ import { montarMensagemItem, formatarMoeda, getCachedImageUrl } from "./types";
 import type { LojaConfig } from "./types";
 import { PAYMENT_LABELS_SHORT, PACKAGE_STATUS_PIPELINE, PACKAGE_STATUS_LABELS, PACKAGE_NEXT_STATUS, PACKAGE_PREV_STATUS, PACKAGE_PREV_ACTION_LABELS, PACKAGE_STATUS_ACTION_LABELS, getMPFeeRate } from "./lib/status";
 import { getPackageStatusAfterOrderAdvance } from "./lib/packageProgress";
-import { calculatePackageCosts } from "./lib/packageCosts";
+import { calculatePackageCosts, getPackageHistoryCosts } from "./lib/packageCosts";
 import { prepareSupplierImage, shareSupplierItem } from "./lib/supplierShare";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
 
@@ -1017,7 +1017,7 @@ export default function AdminPacotes({ config }: { config: LojaConfig }) {
           ) : (
             <>
               {/* Profit summary at top */}
-              <ProfitSummary pacotes={deliveredPacotes} allOrders={allOrders} />
+              <ProfitSummary pacotes={deliveredPacotes} allOrders={allOrders} config={config} />
 
               {/* Delivered packages list */}
               <div className="flex flex-col gap-4 mt-6">
@@ -1378,7 +1378,17 @@ function CustosForm({
 }
 
 // ── Profit Summary Component ──
-function ProfitSummary({ pacotes, allOrders }: { pacotes: Pacote[]; allOrders: Order[] }) {
+function getHistoryLines(orders: Order[], config: LojaConfig) {
+  return orders.flatMap((order) => order.itens.map((item, index) => ({
+    orderId: order.id,
+    index,
+    item,
+    admin: !!order.admin_order,
+    estimatedUsd: (config.custo_base[item.tipo] ?? 0) + (item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0),
+  })));
+}
+
+function ProfitSummary({ pacotes, allOrders, config }: { pacotes: Pacote[]; allOrders: Order[]; config: LojaConfig }) {
   let totalVendido = 0;
   let totalCamisas = 0;
   let totalCusto = 0;
@@ -1387,9 +1397,12 @@ function ProfitSummary({ pacotes, allOrders }: { pacotes: Pacote[]; allOrders: O
   let totalTaxasMP = 0;
 
   for (const pacote of pacotes) {
-    const orders = pacote.pedido_ids
+    const packageOrders = pacote.pedido_ids
       .map((id) => allOrders.find((o) => o.id === id))
-      .filter((o): o is Order => !!o && !o.admin_order);
+      .filter((o): o is Order => !!o);
+    const orders = packageOrders.filter((o) => !o.admin_order);
+    const { customer } = getPackageHistoryCosts(getHistoryLines(packageOrders, config), pacote.custos_itens_usd,
+      pacote.dolar_rate ?? 0, pacote.custo, pacote.frete ?? 0, pacote.taxa_importacao ?? 0);
 
     const vendido = orders.reduce((sum, o) => sum + o.total, 0);
     const camisas = orders.reduce((sum, o) => sum + o.itens.length, 0);
@@ -1400,9 +1413,9 @@ function ProfitSummary({ pacotes, allOrders }: { pacotes: Pacote[]; allOrders: O
 
     totalVendido += vendido;
     totalCamisas += camisas;
-    totalCusto += pacote.custo ?? 0;
-    totalFrete += pacote.frete ?? 0;
-    totalTaxaImportacao += pacote.taxa_importacao ?? 0;
+    totalCusto += customer.product / 100;
+    totalFrete += customer.shipping / 100;
+    totalTaxaImportacao += customer.importation / 100;
     totalTaxasMP += taxas;
   }
 
@@ -1427,7 +1440,7 @@ function ProfitSummary({ pacotes, allOrders }: { pacotes: Pacote[]; allOrders: O
         </div>
         <div className="border-t border-border pt-2 mt-2" />
         <div className="flex justify-between">
-          <span className="text-text-muted">Custo total dos pacotes:</span>
+          <span className="text-text-muted">Custo das camisas vendidas:</span>
           <span>{formatarMoeda(totalCusto)}</span>
         </div>
         <div className="flex justify-between">
@@ -1477,7 +1490,7 @@ function DeliveredPacoteCard({
   const [localCusto, setLocalCusto] = useState(pacote.custo?.toString() ?? "");
   const [localFrete, setLocalFrete] = useState(pacote.frete?.toString() ?? "");
   const [localTaxa, setLocalTaxa] = useState(pacote.taxa_importacao?.toString() ?? "");
-  const [localDolar, setLocalDolar] = useState("");
+  const [localDolar, setLocalDolar] = useState(pacote.dolar_rate?.toString() ?? "");
   const [creditReleasePeriod, setCreditReleasePeriod] = useState<"immediate" | "14_days" | "30_days">("immediate");
 
   const orders = pacote.pedido_ids
@@ -1489,19 +1502,14 @@ function DeliveredPacoteCard({
   const totalCamisas = orders.reduce((sum, o) => sum + o.itens.length, 0);
   const totalCamisasVendidas = nonAdminOrders.reduce((sum, o) => sum + o.itens.length, 0);
 
-  // Auto-calculate custo from categories
-  const custoCalculadoUSD = orders.reduce((sum, o) => {
-    return sum + o.itens.reduce((s, item) => {
-      const custoCat = config.custo_base[item.tipo] ?? 0;
-      const custoPers = item.personalizado ? (config.personalizacao_custo[item.tipo] ?? 0) : 0;
-      return s + custoCat + custoPers;
-    }, 0);
-  }, 0);
-  const dolarRate = parseFloat(localDolar) || 0;
+  const lines = getHistoryLines(orders, config);
+  const dolarRate = Number(localDolar) || 0;
+  const freteValue = Number(localFrete) || 0;
+  const taxaValue = Number(localTaxa) || 0;
+  const { totalUsd: custoCalculadoUSD, subtotal: custoValue, shares, customer, estimated } = getPackageHistoryCosts(
+    lines, pacote.custos_itens_usd, dolarRate, localCusto === "" ? null : Number(localCusto), freteValue, taxaValue,
+  );
   const custoCalculadoBRL = custoCalculadoUSD * dolarRate;
-  const custoValue = localCusto ? (parseFloat(localCusto) || 0) : custoCalculadoBRL;
-  const freteValue = parseFloat(localFrete) || 0;
-  const taxaValue = parseFloat(localTaxa) || 0;
 
   const hasCreditCard = orders.some((o) => o.payment_method === "credit_card");
 
@@ -1509,7 +1517,8 @@ function DeliveredPacoteCard({
     const rate = getMPFeeRate(o.payment_method, o.credit_release_period || creditReleasePeriod);
     return sum + o.total * rate;
   }, 0);
-  const lucro = totalVendido - custoValue - freteValue - taxaValue - totalTaxas;
+  const custoVendas = (customer.product + customer.shipping + customer.importation) / 100;
+  const lucro = totalVendido - custoVendas - totalTaxas;
 
   return (
     <div className="bg-card-bg rounded-md shadow-card overflow-hidden">
@@ -1570,7 +1579,7 @@ function DeliveredPacoteCard({
                 />
               </div>
               <p className="text-[11px] text-green-600">
-                Custo calculado: <strong>${custoCalculadoUSD.toFixed(2)} USD</strong>
+                {estimated ? "Custo estimado" : "Custo dos itens salvos"}: <strong>${custoCalculadoUSD.toFixed(2)} USD</strong>
                 {dolarRate > 0 && <> → <strong>R$ {custoCalculadoBRL.toFixed(2)}</strong></>}
                 {dolarRate > 0 && !localCusto && <span className="ml-1">(preenchido automaticamente)</span>}
               </p>
@@ -1650,26 +1659,22 @@ function DeliveredPacoteCard({
               </div>
 
               {/* Per-shirt cost + tax/frete breakdown */}
-              {orders.length > 0 && (
+              {lines.length > 0 && (
                 <div className="pt-2 space-y-2">
                   <span className="text-xs font-semibold text-green-700 block">Rateio por camisa:</span>
-                  {orders.map((o) =>
-                    o.itens.map((item, i) => {
-                      const taxaCamisa = taxaValue > 0 ? (taxaValue / totalCamisas) : 0;
-                      const custoCamisa = custoValue > 0 ? (custoValue / totalCamisas) : 0;
-                      const freteCamisa = freteValue > 0 ? (freteValue / totalCamisas) : 0;
-                      return (
-                        <div key={`${o.id}-${i}`} className="flex justify-between text-xs text-green-600 border-b border-green-100 pb-1 last:border-b-0">
-                          <span className="truncate max-w-[200px]">
-                            {o.admin_order ? "👤 " : ""}{item.nome} ({item.tamanho}){item.feminino && <span className="ml-1 text-[9px] font-extrabold px-1 py-0.5 bg-pink-100 text-pink-700 rounded-sm uppercase">Fem</span>}
-                          </span>
-                          <span className="whitespace-nowrap">
-                            Taxa: {formatarMoeda(taxaCamisa)} | Custo: {formatarMoeda(custoCamisa)} | Frete: {formatarMoeda(freteCamisa)}
-                          </span>
-                        </div>
-                      );
-                    })
-                  )}
+                  {lines.map(({ orderId, index, item, admin }, i) => {
+                    const { product, shipping, importation } = shares[i];
+                    return (
+                      <div key={`${orderId}-${index}`} className="flex justify-between text-xs text-green-600 border-b border-green-100 pb-1 last:border-b-0">
+                        <span className="truncate max-w-[200px]">
+                          {admin ? "👤 " : ""}{item.nome} ({item.tamanho}){item.feminino && <span className="ml-1 text-[9px] font-extrabold px-1 py-0.5 bg-pink-100 text-pink-700 rounded-sm uppercase">Fem</span>}
+                        </span>
+                        <span className="whitespace-nowrap">
+                          Taxa: {formatarMoeda(importation / 100)} | Custo: {formatarMoeda(product / 100)} | Frete: {formatarMoeda(shipping / 100)}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -1691,8 +1696,12 @@ function DeliveredPacoteCard({
                 <span className="text-green-700">Taxa de importação:</span>
                 <span>{formatarMoeda(taxaValue)}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-green-700">Custo das vendas com frete e importação:</span>
+                <span>{formatarMoeda(custoVendas)}</span>
+              </div>
               <div className="flex justify-between font-bold text-base pt-2 border-t border-green-200">
-                <span>Lucro:</span>
+                <span>Lucro das vendas:</span>
                 <span className={lucro >= 0 ? "text-green-700" : "text-red-600"}>{formatarMoeda(lucro)}</span>
               </div>
             </div>

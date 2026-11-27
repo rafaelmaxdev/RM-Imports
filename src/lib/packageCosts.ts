@@ -40,3 +40,28 @@ export function calculatePackageCosts(costsUsd: number[], exchangeRate: number |
     items,
   };
 }
+
+export function getPackageHistoryCosts(
+  lines: readonly { orderId: string; index: number; admin: boolean; estimatedUsd: number }[],
+  stored: unknown,
+  exchangeRate: number,
+  subtotal: number | null,
+  shipping: number,
+  tax: number,
+) {
+  const saved = getSavedPackageItemCosts(stored, lines);
+  const costs = saved ?? lines.map((line) => line.estimatedUsd);
+  const totalUsd = costs.reduce((sum, cost) => sum + Math.round(cost * 100), 0) / 100;
+  const subtotalCents = Math.round((subtotal ?? totalUsd * exchangeRate) * 100);
+  const shares = allocatePackageCostShares(costs, subtotalCents, Math.round(shipping * 100), Math.round(tax * 100));
+  const customer = { product: 0, shipping: 0, importation: 0 };
+
+  for (const [index, share] of shares.entries()) {
+    if (lines[index].admin) continue;
+    customer.product += share.product;
+    customer.shipping += share.shipping;
+    customer.importation += share.importation;
+  }
+
+  return { totalUsd, subtotal: subtotalCents / 100, shares, customer, estimated: saved === null };
+}

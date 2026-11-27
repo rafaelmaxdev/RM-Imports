@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculatePackageCosts } from "../lib/packageCosts";
+import { calculatePackageCosts, getPackageHistoryCosts } from "../lib/packageCosts";
 
 describe("package costs", () => {
   it("converts shirt costs and adds the saved import tax without treating zero freight as a charge", () => {
@@ -20,5 +20,26 @@ describe("package costs", () => {
     expect(calculatePackageCosts([17, 0], null, 0, 50.12)).toMatchObject({
       totalUsd: 17, subtotal: null, final: null,
     });
+  });
+
+  it("uses individual saved costs in package history and excludes admin shares from sales costs", () => {
+    const costs = [15, 12, 13, 13, 12, 9, 9, 13];
+    const lines = costs.map((_, index) => ({
+      orderId: `order-${index}`,
+      index: 0,
+      admin: index < 3,
+      estimatedUsd: 10,
+    }));
+    const saved = Object.fromEntries(costs.map((cost, index) => [`order-${index}-0`, cost]));
+    const result = getPackageHistoryCosts(lines, saved, 5.08, 487.68, 0, 50.12);
+
+    expect(result).toMatchObject({
+      estimated: false,
+      totalUsd: 96,
+      subtotal: 487.68,
+      customer: { product: 28448, shipping: 0, importation: 2924 },
+    });
+    expect(result.shares.map(({ product }) => product)).toEqual([7620, 6096, 6604, 6604, 6096, 4572, 4572, 6604]);
+    expect(result.shares.reduce((sum, share) => sum + share.importation, 0)).toBe(5012);
   });
 });

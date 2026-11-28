@@ -195,9 +195,13 @@ export function calculateServerItemPrice(
   const customPrice = configuredPositiveNumber(product.preco_customizado);
   const sizeMarkup = options.tamanho === "G2" ? 10 : options.tamanho === "G3" ? 20 : 0;
   const peMarkup = options.prontaEntrega ? configuredMarkup(config.pronta_entrega_markup) : 0;
+  const print = fixedPrint(product.id);
   if (isBlackFridayActive(config.black_friday, now)) {
     const base = product.promocao_tipo !== "novo_preco" ? customPrice ?? basePrice : basePrice;
-    return { preco: roundCents(blackFridayPrice(base) + sizeMarkup + peMarkup), precoBase: roundCents(base + sizeMarkup + peMarkup) };
+    return {
+      preco: roundCents(blackFridayPrice(base) + sizeMarkup + peMarkup),
+      precoBase: roundCents(base + sizeMarkup + peMarkup + (print?.price ?? 0)),
+    };
   }
   let unitPrice = basePrice;
   let priceBase = basePrice;
@@ -251,7 +255,6 @@ export function calculateServerItemPrice(
     unitPrice = basePrice;
   }
 
-  const print = fixedPrint(product.id);
   const personalizationMarkup = print?.price ?? (options.personalizado ? (product.tipo === "Torcedor" ? 20 : 25) : 0);
   const addOns = sizeMarkup + personalizationMarkup + peMarkup;
   const fallbackPrice = roundCents(89.90 + addOns);

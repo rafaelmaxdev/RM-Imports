@@ -200,6 +200,7 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
   );
   const estampaFixa = fixedPrint(product.produto_id);
   const blackFriday = isBlackFridayActive(config.black_friday, now);
+  const valorEstampaGratis = blackFriday ? estampaFixa?.price ?? 0 : 0;
   const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
   const peMarkup = config.pronta_entrega_markup ?? 20;
 
@@ -412,7 +413,7 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
             {selectedIdx !== null ? (
               <>
                 <span>Base:</span>
-                <span>{formatarMoeda(base)}</span>
+                <span>{formatarMoeda(base - valorEstampaGratis)}</span>
                 {adicionalTam > 0 && (
                   <>
                     <span>Adicional ({selectedTam}):</span>
@@ -422,7 +423,14 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
                 {(adicionalPers > 0 || (blackFriday && (selectedSizeInfo?.personalizado || estampaFixa))) && (
                   <>
                     <span>Personalização:</span>
-                    <span>{blackFriday ? "Grátis" : `+${formatarMoeda(adicionalPers)}`}</span>
+                    {valorEstampaGratis > 0 ? (
+                      <div className="text-right">
+                        <s className="text-text-muted">+{formatarMoeda(valorEstampaGratis)}</s>
+                        <span className="block text-[11px] font-medium text-text-muted">Grátis na Black Friday</span>
+                      </div>
+                    ) : (
+                      <span>{blackFriday ? "Grátis" : `+${formatarMoeda(adicionalPers)}`}</span>
+                    )}
                   </>
                 )}
                 <span className="text-green-600">Taxa Pronta Entrega:</span>
@@ -430,7 +438,7 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
                 {emPromocao && promo !== null && (
                   <>
                     <span className="text-accent font-semibold">Desconto:</span>
-                    <span className="text-accent font-semibold">-{formatarMoeda(prontaEntregaBasePrice - prontaEntregaPrice)}</span>
+                    <span className="text-accent font-semibold">-{formatarMoeda(prontaEntregaBasePrice - prontaEntregaPrice - valorEstampaGratis)}</span>
                   </>
                 )}
                 <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">

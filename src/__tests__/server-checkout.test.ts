@@ -76,7 +76,7 @@ describe("calculateServerItemPrice", () => {
     )).toEqual({ preco: 164.91, precoBase: 179.90 });
   });
 
-  it("includes the fixed Rogério Ceni print at the listed price", () => {
+  it("charges the fixed Rogério Ceni print outside Black Friday and shows its full reference price", () => {
     const product = {
       id: "5927aa08-1f30-5093-8189-597b4c9d1db6",
       tipo: "Manga Longa Retrô",
@@ -86,12 +86,15 @@ describe("calculateServerItemPrice", () => {
     const options = { tamanho: "M", genero: "Masculino", personalizado: false };
     const localConfig = { ...DEFAULT_CONFIG, precos_base: { "Manga Longa Retrô": 209.90 } };
 
-    expect(fixedPrint(product.id)).toEqual({ label: "Rogério Ceni #1", price: 0 });
+    expect(fixedPrint(product.id)).toEqual({ label: "Rogério Ceni #1", price: 20 });
     expect(getPrecoProduto(product.tipo, localConfig, null, undefined, null, undefined, product.temporada, product.id))
-      .toMatchObject({ base: 209.90, promo: null });
-    expect(calculateServerItemPrice(product, options, localConfig)).toEqual({ preco: 209.90, precoBase: 209.90 });
-    expect(calculateServerItemPrice(product, options, { ...localConfig, black_friday: "manual" }))
-      .toEqual({ preco: 167.92, precoBase: 209.90 });
+      .toMatchObject({ base: 229.90, promo: null });
+    expect(calculateServerItemPrice(product, options, localConfig)).toEqual({ preco: 229.90, precoBase: 229.90 });
+    const campaign = { ...localConfig, black_friday: "manual" };
+    expect(getPrecoProduto(product.tipo, campaign, null, undefined, null, undefined, product.temporada, product.id))
+      .toMatchObject({ base: 229.90, promo: 167.92 });
+    expect(calculateServerItemPrice(product, options, campaign))
+      .toEqual({ preco: 167.92, precoBase: 229.90 });
     expect(() => validateProductVariant(product, options)).not.toThrow();
     expect(() => validateProductVariant(product, { ...options, personalizado: true })).toThrow();
   });

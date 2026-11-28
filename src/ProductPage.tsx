@@ -258,7 +258,9 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
   const opcoesJogador = nbaPlayerOptions(produto, produtos);
   const estampaFixa = fixedPrint(produto.id);
   const blackFriday = isBlackFridayActive(config.black_friday, now);
-  const adicionalEstampaFixa = blackFriday ? 0 : estampaFixa?.price ?? 0;
+  const precoNormalEstampaFixa = estampaFixa?.price ?? 0;
+  const adicionalEstampaFixa = blackFriday ? 0 : precoNormalEstampaFixa;
+  const estampaGratisNaBlackFriday = blackFriday && precoNormalEstampaFixa > 0;
   const semPersonalizacao = TIPOS_SEM_PERSONALIZACAO.includes(produto.tipo) || Boolean(jogadorPronto || estampaFixa);
   const imagensFemininas = parseImageUrls(produto.imagem_urls_feminina);
   const modeloFemininoComImagens = genero === "Feminino" && imagensFemininas.length > 0;
@@ -297,7 +299,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
       nomePersonalizado: personalizacaoAtiva ? nomePersonalizado.trim() : undefined,
       numeroPersonalizado: personalizacaoAtiva ? numeroPersonalizado.trim() : undefined,
       preco: precoFinal,
-      precoBase: priceInfo.base + adicionalTam + adicionalPers,
+      precoBase: priceInfo.base + adicionalTam + (estampaGratisNaBlackFriday ? precoNormalEstampaFixa : adicionalPers),
       cachedImageUrls: modeloFemininoComImagens ? null : produtoAtual.cached_image_urls,
       ...(estampaFixa && { precoIncluiEstampaFixa: true }),
       ...(blackFriday && { blackFriday: true }),
@@ -405,7 +407,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
             <div className="min-w-0">
               {hasRealDiscount && (
                 <div className="mb-0.5 flex items-center gap-2">
-                  <span className="text-sm leading-none text-text-muted line-through">{formatarMoeda(priceInfo.base + adicionalEstampaFixa)}</span>
+                  <s className="text-sm leading-none text-text-muted">{formatarMoeda(priceInfo.base + precoNormalEstampaFixa)}</s>
                   {priceInfo.discountLabel && (
                     <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
                       {priceInfo.discountLabel}
@@ -580,7 +582,14 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
               {(adicionalPers > 0 || (blackFriday && (personalizacaoAtiva || estampaFixa))) && (
                 <>
                   <span>{estampaFixa ? `Estampa ${estampaFixa.label}` : "Personalização"}:</span>
-                  <span>{blackFriday ? "Grátis" : `+${formatarMoeda(adicionalPers)}`}</span>
+                  {estampaGratisNaBlackFriday ? (
+                    <div className="text-right">
+                      <s className="text-text-muted">+{formatarMoeda(precoNormalEstampaFixa)}</s>
+                      <span className="block text-[11px] font-medium text-text-muted">Grátis na Black Friday</span>
+                    </div>
+                  ) : (
+                    <span>{blackFriday ? "Grátis" : `+${formatarMoeda(adicionalPers)}`}</span>
+                  )}
                 </>
               )}
               <div className="col-span-2 mt-1 flex justify-between border-t border-border pt-2 text-base font-bold">

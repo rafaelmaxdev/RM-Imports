@@ -273,12 +273,14 @@ export function getPrecoProduto(
 ): PromocaoInfo {
   const preco = getPrecoProdutoSemEstampa(tipo, config, precoCustomizado, promocaoTipo, promocaoValor, time, temporada);
   const estampa = fixedPrint(produtoId);
-  if (!estampa || isBlackFridayActive(config.black_friday)) return preco;
+  if (!estampa) return preco;
 
   return {
     ...preco,
     base: Math.round((preco.base + estampa.price) * 100) / 100,
-    promo: preco.promo === null ? null : Math.round((preco.promo + estampa.price) * 100) / 100,
+    promo: preco.promo === null || isBlackFridayActive(config.black_friday)
+      ? preco.promo
+      : Math.round((preco.promo + estampa.price) * 100) / 100,
   };
 }
 

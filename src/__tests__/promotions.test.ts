@@ -148,11 +148,11 @@ describe("Black Friday", () => {
     const campaign = config({ black_friday: "manual", pronta_entrega_markup: 20 });
     const id = "f9f2a258-ee87-56f3-af71-670f7d7d9c92";
     expect(getPrecoProduto("Torcedor", campaign, 60, "novo_preco", null, undefined, undefined, id))
-      .toMatchObject({ base: 100, promo: 80 });
+      .toMatchObject({ base: 120, promo: 80 });
     expect(calculateServerItemPrice(
       { id, tipo: "Torcedor", preco_customizado: 60, promocao_tipo: "novo_preco" },
       { tamanho: "G2", personalizado: false, prontaEntrega: true },
       campaign,
-    )).toEqual({ preco: 110, precoBase: 130 });
+    )).toEqual({ preco: 110, precoBase: 150 });
   });
 });

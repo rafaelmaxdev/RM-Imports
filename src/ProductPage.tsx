@@ -7,6 +7,7 @@ import ImageCarousel from "./ImageCarousel";
 import ImageLightbox from "./ImageLightbox";
 import pixLogo from "./assets/pix.svg";
 import { slugify } from "./lib/utils";
+import { blackFridayPrintLabel } from "./lib/promotionLabels";
 import type { CartItem, LojaConfig, PromocaoTipo } from "./types";
 import { track } from "@vercel/analytics";
 import {
@@ -258,6 +259,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
   const opcoesJogador = nbaPlayerOptions(produto, produtos);
   const estampaFixa = fixedPrint(produto.id);
   const blackFriday = isBlackFridayActive(config.black_friday, now);
+  const printLabel = blackFriday ? blackFridayPrintLabel(produto) : null;
   const precoNormalEstampaFixa = estampaFixa?.price ?? 0;
   const adicionalEstampaFixa = blackFriday ? 0 : precoNormalEstampaFixa;
   const estampaGratisNaBlackFriday = blackFriday && precoNormalEstampaFixa > 0;
@@ -406,13 +408,14 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
           <div className="mb-5">
             <div className="min-w-0">
               {hasRealDiscount && (
-                <div className="mb-0.5 flex items-center gap-2">
+                <div className="mb-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <s className="text-sm leading-none text-text-muted">{formatarMoeda(priceInfo.base + precoNormalEstampaFixa)}</s>
                   {priceInfo.discountLabel && (
                     <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
                       {priceInfo.discountLabel}
                     </span>
                   )}
+                  {printLabel && <span className="text-[11px] font-medium text-text-muted">{printLabel}</span>}
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-2">

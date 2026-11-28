@@ -8,7 +8,7 @@ import { parseImageUrls } from "./lib/db";
 import type { LojaConfig, PromocaoTipo } from "./types";
 import { formatarPreco, getCachedImageUrl, getPrecoProduto } from "./types";
 import { normalizeNome, normalizarBusca, parseAnoTemporada, slugify } from "./lib/utils";
-import { promotionLabels } from "./lib/promotionLabels";
+import { blackFridayPrintLabel, promotionLabels } from "./lib/promotionLabels";
 import { getTeamLogo } from "./lib/teamLogos";
 import { TIPO_SHORT } from "./lib/status";
 import useBodyScrollLock from "./hooks/useBodyScrollLock";
@@ -1147,6 +1147,7 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
           {produtosFiltrados.slice(0, visibleCount).map((p, index) => {
             const priceInfo = getPrecoProduto(p.tipo, config, p.preco_customizado, (p.promocao_tipo as PromocaoTipo) ?? undefined, p.promocao_valor, p.time, p.temporada, p.id);
             const { base, promo, emPromocao, badge, discountLabel } = priceInfo;
+            const printLabel = blackFriday ? blackFridayPrintLabel(p) : null;
             const productImages = parseImageUrls(p.imagem_urls);
             const productImage = productImages.length > 0
               ? getCachedImageUrl(productImages[0], p.cached_image_urls, 0, "medium")
@@ -1217,10 +1218,11 @@ export default function Loja({ produtos, config }: { produtos: DbProduto[]; conf
                           <span className="text-text-muted text-[10px] sm:text-sm line-through">{formatarPreco(base)}</span>
                       )}
                     </div>
-                    <div className="min-h-[1rem] sm:min-h-[1.25rem]">
+                    <div className="flex min-h-[1rem] flex-wrap items-center gap-x-1.5 gap-y-0.5 sm:min-h-[1.25rem]">
                       {emPromocao && badge && (
                         <span className="inline-block text-[9px] sm:text-[10px] font-extrabold px-1.5 py-0.5 bg-accent/15 text-accent rounded-sm uppercase tracking-wider">{discountLabel || badge}</span>
                       )}
+                      {printLabel && <span className="text-[10px] font-medium text-text-muted sm:text-xs">{printLabel}</span>}
                     </div>
                   </div>
 

@@ -409,15 +409,15 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
           {erro && <div className="text-accent text-sm mb-3 text-center">{erro}</div>}
 
           {/* Price breakdown */}
-          <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 p-3 bg-bg-base rounded-md mb-3 text-sm">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 gap-y-1 p-3 bg-bg-base rounded-md mb-3 text-sm tabular-nums">
             {selectedIdx !== null ? (
               <>
                 <span>Base:</span>
-                <span>{formatarMoeda(base - valorEstampaGratis)}</span>
+                <span className="text-right">{formatarMoeda(base - valorEstampaGratis)}</span>
                 {adicionalTam > 0 && (
                   <>
                     <span>Adicional ({selectedTam}):</span>
-                    <span>+{formatarMoeda(adicionalTam)}</span>
+                    <span className="text-right">+{formatarMoeda(adicionalTam)}</span>
                   </>
                 )}
                 {(adicionalPers > 0 || (blackFriday && (selectedSizeInfo?.personalizado || estampaFixa))) && (
@@ -429,16 +429,16 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
                         <span className="block text-[11px] font-medium text-text-muted">Grátis na Black Friday</span>
                       </div>
                     ) : (
-                      <span>{blackFriday ? "Grátis" : `+${formatarMoeda(adicionalPers)}`}</span>
+                      <span className="text-right">{blackFriday ? "Grátis" : `+${formatarMoeda(adicionalPers)}`}</span>
                     )}
                   </>
                 )}
                 <span className="text-green-600">Taxa Pronta Entrega:</span>
-                <span className="text-green-600">+{formatarMoeda(peMarkup)}</span>
+                <span className="text-right text-green-600">+{formatarMoeda(peMarkup)}</span>
                 {emPromocao && promo !== null && (
                   <>
                     <span className="text-accent font-semibold">Desconto:</span>
-                    <span className="text-accent font-semibold">-{formatarMoeda(prontaEntregaBasePrice - prontaEntregaPrice - valorEstampaGratis)}</span>
+                    <span className="text-right text-accent font-semibold">-{formatarMoeda(prontaEntregaBasePrice - prontaEntregaPrice - valorEstampaGratis)}</span>
                   </>
                 )}
                 <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">
@@ -449,13 +449,13 @@ function ProntaEntregaDetailModal({ product, config, now, onClose }: DetailModal
             ) : (
               <>
                 <span>Base:</span>
-                <span>{formatarMoeda(base)}</span>
+                <span className="text-right">{formatarMoeda(base)}</span>
                 <span className="text-green-600">Taxa Pronta Entrega:</span>
-                <span className="text-green-600">+{formatarMoeda(peMarkup)}</span>
+                <span className="text-right text-green-600">+{formatarMoeda(peMarkup)}</span>
                 {emPromocao && promo !== null && (
                   <>
                     <span className="text-accent font-semibold">Desconto:</span>
-                    <span className="text-accent font-semibold">-{formatarMoeda(minPrecoBase - minPrecoFinal)}</span>
+                    <span className="text-right text-accent font-semibold">-{formatarMoeda(minPrecoBase - minPrecoFinal)}</span>
                   </>
                 )}
                 <div className="col-span-2 flex justify-between font-bold text-base pt-2 border-t border-border mt-1">

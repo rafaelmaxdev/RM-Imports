@@ -559,24 +559,24 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
               </div>
             )}
 
-            <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 rounded-md bg-bg-base p-3 text-sm" aria-label="Resumo do total">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 gap-y-1 rounded-md bg-bg-base p-3 text-sm tabular-nums" aria-label="Resumo do total">
               {priceInfo.promo != null ? (
                 <>
                   <span className="text-text-muted line-through">Preço base:</span>
-                  <span className="text-text-muted line-through">{formatarMoeda(priceInfo.base)}</span>
+                  <span className="text-right text-text-muted line-through">{formatarMoeda(priceInfo.base)}</span>
                   <span className="font-semibold text-accent">Preço promocional:</span>
-                  <span className="font-semibold text-accent">{formatarMoeda(priceInfo.promo)}</span>
+                  <span className="text-right font-semibold text-accent">{formatarMoeda(priceInfo.promo)}</span>
                 </>
               ) : (
                 <>
                   <span>Preço base:</span>
-                  <span>{formatarMoeda(priceInfo.base)}</span>
+                  <span className="text-right">{formatarMoeda(priceInfo.base)}</span>
                 </>
               )}
               {adicionalTam > 0 && (
                 <>
                   <span>Tamanho {tamanho}:</span>
-                  <span>+{formatarMoeda(adicionalTam)}</span>
+                  <span className="text-right">+{formatarMoeda(adicionalTam)}</span>
                 </>
               )}
               {(adicionalPers > 0 || (blackFriday && (personalizacaoAtiva || estampaFixa))) && (
@@ -588,7 +588,7 @@ export default function ProductPage({ produtos, config }: { produtos: DbProduto[
                       <span className="block text-[11px] font-medium text-text-muted">Grátis na Black Friday</span>
                     </div>
                   ) : (
-                    <span>{blackFriday ? "Grátis" : `+${formatarMoeda(adicionalPers)}`}</span>
+                    <span className="text-right">{blackFriday ? "Grátis" : `+${formatarMoeda(adicionalPers)}`}</span>
                   )}
                 </>
               )}

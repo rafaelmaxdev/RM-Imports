@@ -14,6 +14,7 @@ import {
   mapMercadoPagoPaymentType,
 } from "../../server/lib/payment-reconciliation";
 import { DEFAULT_CONFIG, getPrecoProduto } from "../types";
+import { fixedPrint } from "../../server/lib/fixed-print";
 
 const config: ServerCheckoutConfig = {
   precos_base: { Torcedor: 129.90, Jogador: 169.90, NBA: 189.90 },
@@ -73,6 +74,26 @@ describe("calculateServerItemPrice", () => {
       { ...options, tamanho: "G2" },
       localConfig,
     )).toEqual({ preco: 164.91, precoBase: 179.90 });
+  });
+
+  it("includes the fixed Rogério Ceni print at the listed price", () => {
+    const product = {
+      id: "5927aa08-1f30-5093-8189-597b4c9d1db6",
+      tipo: "Manga Longa Retrô",
+      temporada: "2005",
+      feminino: false,
+    };
+    const options = { tamanho: "M", genero: "Masculino", personalizado: false };
+    const localConfig = { ...DEFAULT_CONFIG, precos_base: { "Manga Longa Retrô": 209.90 } };
+
+    expect(fixedPrint(product.id)).toEqual({ label: "Rogério Ceni #1", price: 0 });
+    expect(getPrecoProduto(product.tipo, localConfig, null, undefined, null, undefined, product.temporada, product.id))
+      .toMatchObject({ base: 209.90, promo: null });
+    expect(calculateServerItemPrice(product, options, localConfig)).toEqual({ preco: 209.90, precoBase: 209.90 });
+    expect(calculateServerItemPrice(product, options, { ...localConfig, black_friday: "manual" }))
+      .toEqual({ preco: 167.92, precoBase: 209.90 });
+    expect(() => validateProductVariant(product, options)).not.toThrow();
+    expect(() => validateProductVariant(product, { ...options, personalizado: true })).toThrow();
   });
 
   it("matches client seasonal launch and previous-season prices", () => {

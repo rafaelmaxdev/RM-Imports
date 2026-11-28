@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import type { CartItem, LojaConfig, Order, OrderAddress, PaymentMethod } from "./types";
 import type { DbProduto } from "./lib/db";
-import { gerarId } from "./types";
+import { gerarId, precoPersonalizacao } from "./types";
 import { saveOrderAccessToken } from "./lib/orderAccess";
 import { track } from "@vercel/analytics";
 import { getMPDeviceSessionId } from "./lib/mpDevice";
@@ -33,8 +33,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const estampa = fixedPrint(item.productId);
         if (!estampa || item.precoIncluiEstampaFixa) return item;
 
-        // Existing personalized entries already include the customization price.
-        const adicional = item.personalizado ? 0 : estampa.price;
+        const adicional = item.blackFriday ? 0
+          : estampa.price - (item.personalizado ? precoPersonalizacao(item.tipo) : 0);
         return {
           ...item,
           personalizado: false,
